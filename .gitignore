@@ -1,0 +1,88 @@
+# Local tooling and agent state
+.agents/
+.codex/
+.claude/
+
+# Environment files and local credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.local
+*.pem
+*.key
+*.p12
+*.pfx
+.aws_credentials
+aws_credentials.txt
+
+# Java, Maven, Gradle, and Android build output
+**/target/
+**/build/
+**/.gradle/
+**/.externalNativeBuild/
+**/.cxx/
+**/local.properties
+*.class
+*.jar
+*.war
+*.ear
+*.apk
+*.aab
+
+# Runtime state, logs, and temporary files
+**/logs/
+*.log
+*.pid
+.attach_pid*
+hs_err_pid*
+*.seed
+*.tmp
+*.temp
+*.backup
+*.swp
+*.swo
+*~
+clippy-offline-clipboard.json
+
+# Screen/audio recordings and capture output
+**/recordings/
+**/captures/
+*.mp4
+*.webm
+*.wav
+*.m4a
+
+# Terraform local state and plans
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!*.tfvars.json.example
+*.tfplan
+.terraformrc
+terraform.rc
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+!example_override.tf
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+Thumbs.db
+
+# Optional tooling caches
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.coverage
