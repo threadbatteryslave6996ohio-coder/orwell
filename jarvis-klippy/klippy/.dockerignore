@@ -1,0 +1,36 @@
+# Build context hygiene — keep the image small and keep local secrets out.
+
+# Local secrets / config (root .env carries real credentials — never bake it in)
+.env
+.env.*
+!combined-server/docker-combined.env
+
+# Maven / Java build output
+**/target/
+*.class
+
+# Logs & runtime files
+**/logs/
+*.log
+*.pid
+
+# Android / Gradle client output (clients are not built in the image)
+**/build/
+**/.gradle/
+**/.cxx/
+**/.externalNativeBuild/
+
+# VCS & IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+
+# Infra / misc
+devops/
+*.tfstate
+*.tfstate.*
+*.backup
+*.deb
+clippy-offline-clipboard.json

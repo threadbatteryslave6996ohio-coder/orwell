@@ -1,0 +1,40 @@
+# Local configuration and runtime state
+.env
+.env.*
+!.env.example
+!.env.*.example
+**/logs/
+*.log
+*.pid
+*.seed
+*.tmp
+*.temp
+clippy-offline-clipboard.json
+
+# Java and Android build output
+**/target/
+**/.gradle/
+**/build/
+**/local.properties
+*.class
+*.jar
+*.war
+*.ear
+
+# Terraform local state
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+*.tfplan
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

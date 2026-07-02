@@ -1,0 +1,5 @@
+AUTH_DATASOURCE_URL=jdbc:postgresql://your-postgres-host.postgres.database.azure.com:5432/auth?sslmode=require
+AUTH_DATASOURCE_USERNAME=your-db-username
+AUTH_DATASOURCE_PASSWORD=replace-with-your-db-password
+AUTH_SERVER_PORT=8081
+AUTH_LOGGING_FILE_NAME=logs/clippy-auth-server.log

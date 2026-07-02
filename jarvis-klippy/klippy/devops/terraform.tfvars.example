@@ -1,0 +1,32 @@
+postgres_admin_password = "replace-with-a-strong-password"
+
+# Add your public IPv4 address to allow local app connections.
+# Example:
+# allowed_ip_addresses = ["203.0.113.10"]
+allowed_ip_addresses = []
+
+# Optional named IPv4 ranges. Country-wide allowlists are usually too large for
+# database firewall rules; prefer specific office/VPN/static ISP ranges.
+# Example:
+# allowed_ip_ranges = {
+#   office = {
+#     start_ip_address = "203.0.113.10"
+#     end_ip_address   = "203.0.113.20"
+#   }
+# }
+allowed_ip_ranges = {}
+
+# Optional Azure VM that acts like an EC2 alternative for running the server.
+# Set create_server_vm to true, set this repo URL, and provide your SSH public key.
+create_server_vm = false
+server_repo_url  = "https://github.com/replace-me/clippy.git"
+server_repo_ref  = "main"
+server_port      = 8080
+
+# Restrict these in real deployments.
+server_allowed_cidrs = ["0.0.0.0/0"]
+vm_ssh_allowed_cidrs = ["0.0.0.0/0"]
+
+# Example:
+# vm_admin_ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... you@example"
+vm_admin_ssh_public_key = ""

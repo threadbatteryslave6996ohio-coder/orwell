@@ -1,0 +1,21 @@
+TODOS
+
+# Server
+## logs
+Add extensive logging to the server and user and password authentication, an uploader authenticates the,selves with a user and password and recieve a token which it sends with each request and when an authenticator recieves unathorized it sends login a new to receive a new token, laso save that to a log file, save each sending on the client and on the server, also each auth attempt and return should be saved in the logs as well
+
+confirm there is logging on client and on server for each req sent and the response that it got also except the raw request log also log each auth attempt and what it returned if a request returned unathenticated except the raw req-res log also log that there was auth failure and when we get a succseful token response from login make it so that except the raw response log we also get a log for succesfull auth attempt and the token
+
+also make it so that except locally it stores the logs to a db also so that agents can access the logs and monitor them from another place, or search for other tools to make this possible
+
+make mcp for azure which an agent constantly monitors logs for suspicous or other activity like that, like make it like an app in which you can have multiple triggers which is just an md file and for each md file an agent is deploye and does what the md file says it to monitor the cluster
+
+
+
+also add another client called file syncer which has a config json from which it reads the username and password for the user by which we want to send things and sees if the file we are tring to upload has already been uploaded by the user
+
+
+we need support for wayland
+
+
+make these to use the env utility

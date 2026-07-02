@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="810" viewBox="0 0 1180 810" font-family="-apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1180" height="810" fill="#f8fafc"/>
+  <text x="40" y="46" font-size="24" font-weight="700" fill="#0f172a">Clippy — Maven module dependency graph</text>
+  <text x="40" y="70" font-size="13" fill="#64748b">Arrows mean “depends on”. Transitively-implied edges (e.g. every app also reaches clippy-utils) are omitted for clarity.</text>
+
+  <!-- tier labels -->
+  <g font-size="11" font-weight="700" fill="#94a3b8" letter-spacing="1">
+    <text x="18" y="114">APPS</text>
+    <text x="18" y="304">SERVICES</text>
+    <text x="18" y="494">INFRA</text>
+    <text x="18" y="684">CORE</text>
+  </g>
+  <g stroke="#e2e8f0" stroke-width="1">
+    <line x1="100" y1="175" x2="1140" y2="175"/>
+    <line x1="100" y1="365" x2="1140" y2="365"/>
+    <line x1="100" y1="555" x2="1140" y2="555"/>
+  </g>
+
+  <!-- ================= EDGES ================= -->
+  <g stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#arrow)" opacity="0.85">
+    <!-- apps -> services -->
+    <line x1="180" y1="137" x2="180" y2="273"/>            <!-- combined -> auth-server -->
+    <line x1="200" y1="137" x2="372" y2="273"/>            <!-- combined -> server -->
+    <line x1="500" y1="137" x2="690" y2="273"/>            <!-- mac -> client-core -->
+    <line x1="680" y1="137" x2="705" y2="273"/>            <!-- linux -> client-core -->
+    <line x1="860" y1="137" x2="715" y2="273"/>            <!-- offline-sync -> client-core -->
+    <line x1="1040" y1="137" x2="722" y2="273"/>           <!-- dummy -> client-core -->
+    <!-- services -> infra / core -->
+    <line x1="180" y1="327" x2="180" y2="653"/>            <!-- auth-server -> server-bootstrap -->
+    <line x1="212" y1="327" x2="372" y2="653"/>            <!-- auth-server -> auth-api -->
+    <path d="M150,327 V600 H558 V651"/>                    <!-- auth-server -> utils -->
+    <line x1="380" y1="327" x2="380" y2="463"/>            <!-- server -> auth-client -->
+    <line x1="350" y1="327" x2="188" y2="653"/>            <!-- server -> server-bootstrap -->
+    <line x1="410" y1="327" x2="608" y2="653"/>            <!-- server -> utils -->
+    <line x1="680" y1="327" x2="440" y2="463"/>            <!-- client-core -> auth-client -->
+    <line x1="700" y1="327" x2="620" y2="653"/>            <!-- client-core -> utils -->
+    <line x1="715" y1="327" x2="795" y2="463"/>            <!-- client-core -> file-locker -->
+    <!-- infra -> core -->
+    <line x1="380" y1="517" x2="380" y2="653"/>            <!-- auth-client -> auth-api -->
+    <line x1="795" y1="517" x2="638" y2="653"/>            <!-- file-locker -> utils -->
+  </g>
+
+  <!-- ================= NODES ================= -->
+  <!-- helper visual: blue=server side, green=client side, slate=shared foundation, dashed=auth/ git submodule -->
+
+  <!-- APPS tier (cy=110) -->
+  <g>
+    <rect x="105" y="83" width="150" height="54" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="0"/>
+    <text x="180" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">combined-server</text>
+    <text x="180" y="123" text-anchor="middle" font-size="10.5" fill="#3b5bdb">auth + clipboard in 1 JVM</text>
+
+    <rect x="425" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <text x="500" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">client (mac)</text>
+    <text x="500" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">macOS desktop app</text>
+
+    <rect x="605" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <text x="680" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">linux-client</text>
+    <text x="680" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">Linux desktop app</text>
+
+    <rect x="785" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <text x="860" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">offline-sync-client</text>
+    <text x="860" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">drains log → server</text>
+
+    <rect x="965" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <text x="1040" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">dummy-client</text>
+    <text x="1040" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">CLI sender / tests</text>
+  </g>
+
+  <!-- SERVICES tier (cy=300) -->
+  <g>
+    <rect x="105" y="273" width="150" height="54" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="5 3"/>
+    <text x="180" y="296" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">auth-server</text>
+    <text x="180" y="313" text-anchor="middle" font-size="10.5" fill="#3b5bdb">token issue / verify</text>
+
+    <rect x="305" y="273" width="150" height="54" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+    <text x="380" y="296" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">server</text>
+    <text x="380" y="313" text-anchor="middle" font-size="10.5" fill="#3b5bdb">clipboard REST API</text>
+
+    <rect x="625" y="273" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <text x="700" y="296" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">client-core</text>
+    <text x="700" y="313" text-anchor="middle" font-size="10.5" fill="#15803d">shared desktop engine</text>
+  </g>
+
+  <!-- INFRA tier (cy=490) -->
+  <g>
+    <rect x="305" y="463" width="150" height="54" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6" stroke-dasharray="5 3"/>
+    <text x="380" y="486" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">auth-client</text>
+    <text x="380" y="503" text-anchor="middle" font-size="10.5" fill="#475569">HTTP client → auth</text>
+
+    <rect x="725" y="463" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <text x="800" y="486" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">file-locker</text>
+    <text x="800" y="503" text-anchor="middle" font-size="10.5" fill="#15803d">offline-log locking</text>
+  </g>
+
+  <!-- CORE / FOUNDATION tier (cy=680) -->
+  <g>
+    <rect x="105" y="653" width="150" height="54" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+    <text x="180" y="676" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">server-bootstrap</text>
+    <text x="180" y="693" text-anchor="middle" font-size="10.5" fill="#475569">Spring launch shell</text>
+
+    <rect x="305" y="653" width="150" height="54" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6" stroke-dasharray="5 3"/>
+    <text x="380" y="676" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">auth-api</text>
+    <text x="380" y="693" text-anchor="middle" font-size="10.5" fill="#475569">shared auth DTOs</text>
+
+    <rect x="545" y="653" width="150" height="54" rx="9" fill="#e2e8f0" stroke="#475569" stroke-width="1.6"/>
+    <text x="620" y="676" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">utils</text>
+    <text x="620" y="693" text-anchor="middle" font-size="10.5" fill="#475569">env · logging · limits</text>
+  </g>
+
+  <!-- ================= LEGEND ================= -->
+  <g transform="translate(760,735)" font-size="11.5" fill="#334155">
+    <rect x="0" y="-14" width="16" height="12" rx="3" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="22" y="-4">server side</text>
+    <rect x="120" y="-14" width="16" height="12" rx="3" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="142" y="-4">client side</text>
+    <rect x="240" y="-14" width="16" height="12" rx="3" fill="#e2e8f0" stroke="#475569"/>
+    <text x="262" y="-4">shared foundation</text>
+    <rect x="0" y="8" width="16" height="12" rx="3" fill="#ffffff" stroke="#475569" stroke-dasharray="4 2"/>
+    <text x="22" y="18">dashed = part of the auth/ git submodule</text>
+  </g>
+
+  <text x="40" y="792" font-size="11" fill="#94a3b8">Klippy and auth modules · clean DAG (no cycles): CORE → INFRA → SERVICES → APPS</text>
+</svg>

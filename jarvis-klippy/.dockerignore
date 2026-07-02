@@ -1,0 +1,14 @@
+.git
+**/target
+**/.gradle
+**/build
+**/logs
+**/.terraform
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
