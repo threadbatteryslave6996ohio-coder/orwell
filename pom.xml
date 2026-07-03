@@ -1,0 +1,21 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>dev.orwell</groupId>
+    <artifactId>orwell</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>packages/logger</module>
+        <module>packages/env</module>
+        <module>packages/server-bootstrap</module>
+        <module>apps/auth</module>
+        <module>apps/klippy</module>
+        <module>apps/jarvis</module>
+        <module>apps/keeboarder</module>
+        <module>apps/combined-server</module>
+    </modules>
+</project>

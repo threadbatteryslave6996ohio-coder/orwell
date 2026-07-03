@@ -1,0 +1,9 @@
+[submodule "server"]
+	path = server
+	url = https://github.com/threadbatteryslave6996ohio-coder/keeboarder-server.git
+[submodule "clients/mac"]
+	path = clients/mac
+	url = https://github.com/threadbatteryslave6996ohio-coder/keeboarder-mac-client.git
+[submodule "auth-server"]
+	path = auth-server
+	url = https://github.com/threadbatteryslave6996ohio-coder/auth-server
