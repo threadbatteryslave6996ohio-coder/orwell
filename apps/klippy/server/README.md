@@ -17,7 +17,7 @@ Run the auth server from the repository root in one terminal:
 
 ```bash
 cd /path/to/jarvis-klippy/klippy
-mvn -pl ../auth/server spring-boot:run
+mvn -pl ../auth/http-based/server spring-boot:run
 ```
 
 Build and run this app server from the repository root in another terminal:

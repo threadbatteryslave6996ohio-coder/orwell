@@ -75,20 +75,20 @@ cmd_up() {
 }
 
 cmd_auth() {
-    local jar="$REPO_ROOT/auth/server/target/auth-server-0.1.0-SNAPSHOT-exec.jar"
+    local jar="$REPO_ROOT/auth/http-based/server/target/auth-http-server-0.1.0-SNAPSHOT-exec.jar"
     if [ ! -f "$jar" ]; then
         log "Building auth server jar..."
-        (cd "$REPO_ROOT" && mvn -q -Pservers -pl auth/server -am package -DskipTests) || die "auth build failed"
+        (cd "$REPO_ROOT" && mvn -q -Pservers -pl auth/http-based/server -am package -DskipTests) || die "auth build failed"
     fi
     log "Running auth server on :$AUTH_PORT (Ctrl-C to stop)"
     AUTH_SERVER_PORT="$AUTH_PORT" \
     AUTH_DATASOURCE_URL="jdbc:postgresql://localhost:${PG_PORT}/auth" \
     AUTH_DATASOURCE_USERNAME=auth \
     AUTH_DATASOURCE_PASSWORD=auth \
-    AUTH_LOGGING_FILE_NAME="$REPO_ROOT/auth/server/target/auth-spring.log" \
+    AUTH_LOGGING_FILE_NAME="$REPO_ROOT/auth/http-based/server/target/auth-spring.log" \
     AUTH_JPA_HIBERNATE_DDL_AUTO=update \
     AUTH_JPA_JDBC_TIME_ZONE=UTC \
-    exec java -Dcustom.logger.dir="$REPO_ROOT/auth/server/target" -jar "$jar"
+    exec java -Dcustom.logger.dir="$REPO_ROOT/auth/http-based/server/target" -jar "$jar"
 }
 
 cmd_proxy() {

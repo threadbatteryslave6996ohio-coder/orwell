@@ -51,7 +51,7 @@ Expected result:
 Priority: high
 
 Backend selection, environment probing, executable discovery, command/AWT clipboard
-reading, and desktop-launch sanitization now live in the `dev.clippy.clients.linux.clipboard`
+reading, and desktop-launch sanitization now live in the `dev.orwell.clients.linux.clipboard`
 package (`LinuxClipboardReader`, `LinuxClipboardReaderFactory`, `CommandClipboardReader`,
 `AwtClipboardReader`, `ProcessEnvironmentSanitizer`, package-private `Executables`).
 `LinuxClipboardClientApp.main` now just calls `LinuxClipboardReaderFactory.create(env)`.
@@ -316,11 +316,11 @@ Priority: low
 There are still repeated internal validation patterns:
 
 - duplicate-option detection:
-  - `utils/src/main/java/dev/clippy/utils/envmanager/EnvSchema.java:11-18`
-  - `utils/src/main/java/dev/clippy/utils/envmanager/EnvClassBuilder.java:33-39`
+  - `utils/src/main/java/dev/clippy/env/EnvSchema.java:11-18`
+  - `utils/src/main/java/dev/clippy/env/EnvClassBuilder.java:33-39`
 - non-blank string normalization:
-  - `utils/src/main/java/dev/clippy/utils/envmanager/EnvOption.java:53-60`
-  - `utils/src/main/java/dev/clippy/utils/envmanager/EnvType.java:45-51`
+  - `utils/src/main/java/dev/clippy/env/EnvOption.java:53-60`
+  - `utils/src/main/java/dev/clippy/env/EnvType.java:45-51`
   - `utils/src/main/java/dev/clippy/utils/logger/CustomLogger.java:24-28`
 
 Refactor target:

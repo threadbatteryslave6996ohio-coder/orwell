@@ -48,7 +48,7 @@ Client connects → Register with clientId, name, token
 
 ```bash
 cd /home/kamina_goat/Desktop/keeboarder-parent
-mvn -f ../../pom.xml -pl apps/auth/client -am install
+mvn -f ../../pom.xml -pl apps/auth/http-based/client -am install
 cd server
 mvn -DskipTests package
 ```

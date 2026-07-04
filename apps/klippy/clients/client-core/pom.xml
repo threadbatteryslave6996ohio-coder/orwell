@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>dev.clippy</groupId>
+        <groupId>dev.orwell</groupId>
         <artifactId>clippy</artifactId>
         <version>0.1.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
@@ -14,15 +14,15 @@
 
     <dependencies>
         <dependency>
-            <groupId>dev.clippy</groupId>
-            <artifactId>auth-api</artifactId>
+            <groupId>dev.orwell</groupId>
+            <artifactId>auth-http-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.clippy</groupId>
-            <artifactId>auth-client</artifactId>
+            <groupId>dev.orwell</groupId>
+            <artifactId>auth-http-client</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.clippy</groupId>
+            <groupId>dev.orwell</groupId>
             <artifactId>clippy-file-locker</artifactId>
         </dependency>
         <dependency>

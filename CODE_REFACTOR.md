@@ -2,8 +2,7 @@
 
 ## Deferred architecture work
 
-- Put authentication for every Java server behind a shared authentication service interface. Keep HTTP/auth-server-client adapters for deployed services and allow callers to depend on the interface rather than a concrete client.
 - Replace combined-server package scanning and concrete controller imports with explicit, public module configuration entry points and narrow service interfaces.
-
+- Evaluate whether `streaming` and `proxy` should remain separate modules or be merged — if shared deployment is the common case, make merging trivial (e.g., share config and wiring so they can start in the same process).
 
 

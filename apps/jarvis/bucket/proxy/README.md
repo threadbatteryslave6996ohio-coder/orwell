@@ -34,7 +34,7 @@ The service listens on `http://localhost:5000` by default.
 
 This module now includes a reusable Java client for sending requests to the proxy:
 
-- `dev.clippy.bucket.proxy.client.BucketProxyClient`
+- `dev.orwell.bucket.proxy.client.BucketProxyClient`
 
 It covers:
 

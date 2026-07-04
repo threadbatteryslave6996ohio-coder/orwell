@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>dev.clippy</groupId>
+        <groupId>dev.orwell</groupId>
         <artifactId>clippy</artifactId>
         <version>0.1.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
@@ -13,16 +13,16 @@
     <artifactId>clippy-dummy-client</artifactId>
 
     <properties>
-        <mainClass>dev.clippy.clients.dummy.DummyClientApp</mainClass>
+        <mainClass>dev.orwell.clients.dummy.DummyClientApp</mainClass>
     </properties>
 
     <dependencies>
         <dependency>
-            <groupId>dev.clippy</groupId>
+            <groupId>dev.orwell</groupId>
             <artifactId>clippy-client-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.clippy</groupId>
+            <groupId>dev.orwell</groupId>
             <artifactId>clippy-utils</artifactId>
         </dependency>
         <dependency>

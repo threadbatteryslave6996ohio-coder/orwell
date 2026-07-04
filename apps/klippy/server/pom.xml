@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>dev.clippy</groupId>
+        <groupId>dev.orwell</groupId>
         <artifactId>clippy</artifactId>
         <version>0.1.0-SNAPSHOT</version>
     </parent>
@@ -13,15 +13,19 @@
 
     <dependencies>
         <dependency>
-            <groupId>dev.clippy</groupId>
+            <groupId>dev.orwell</groupId>
             <artifactId>clippy-server-bootstrap</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.clippy</groupId>
-            <artifactId>auth-client</artifactId>
+            <groupId>dev.orwell</groupId>
+            <artifactId>auth-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.clippy</groupId>
+            <groupId>dev.orwell</groupId>
+            <artifactId>auth-http-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
             <artifactId>clippy-utils</artifactId>
         </dependency>
         <dependency>
@@ -65,7 +69,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <classifier>exec</classifier>
-                    <mainClass>dev.clippy.server.ClippyServerLauncher</mainClass>
+                    <mainClass>dev.orwell.server.ClippyServerLauncher</mainClass>
                 </configuration>
                 <executions>
                     <execution>

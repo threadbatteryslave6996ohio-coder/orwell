@@ -2,7 +2,7 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.keeboarder</groupId>
+    <groupId>dev.orwell</groupId>
     <artifactId>websocket-redis-server</artifactId>
     <version>0.1.0</version>
     <packaging>jar</packaging>
@@ -20,19 +20,19 @@
             <version>4.1.0</version>
         </dependency>
         <dependency>
-            <groupId>javax.websocket</groupId>
-            <artifactId>javax.websocket-api</artifactId>
-            <version>1.1</version>
+            <groupId>jakarta.websocket</groupId>
+            <artifactId>jakarta.websocket-api</artifactId>
+            <version>2.2.0</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.tyrus</groupId>
             <artifactId>tyrus-server</artifactId>
-            <version>2.1.4</version>
+            <version>2.2.0</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.tyrus</groupId>
             <artifactId>tyrus-container-grizzly-server</artifactId>
-            <version>2.1.4</version>
+            <version>2.2.0</version>
         </dependency>
         <dependency>
             <groupId>redis.clients</groupId>
@@ -45,8 +45,13 @@
             <version>2.10.1</version>
         </dependency>
         <dependency>
-            <groupId>dev.clippy</groupId>
-            <artifactId>auth-client</artifactId>
+            <groupId>dev.orwell</groupId>
+            <artifactId>auth-core</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>auth-http-client</artifactId>
             <version>0.1.0-SNAPSHOT</version>
         </dependency>
 
@@ -54,13 +59,13 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
-            <version>5.10.0</version>
+            <version>5.11.4</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
-            <version>5.10.0</version>
+            <version>5.11.4</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -92,7 +97,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>com.keeboarder.server.ChatServer</mainClass>
+                            <mainClass>dev.orwell.keeboarder.server.ChatServer</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

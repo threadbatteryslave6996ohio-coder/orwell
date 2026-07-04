@@ -25,7 +25,7 @@ the auth server configured through `CLIPPY_AUTH_BASE_URL`. HTTP callers send
 2. **Install the auth client locally if building this module on its own:**
    ```bash
    cd ..
-   mvn -f ../../pom.xml -pl apps/auth/client -am install
+   mvn -f ../../pom.xml -pl apps/auth/http-based/client -am install
    cd server
    ```
 
@@ -47,7 +47,7 @@ the auth server configured through `CLIPPY_AUTH_BASE_URL`. HTTP callers send
 From the repo root:
 
 ```bash
-mvn -f ../../pom.xml -pl apps/auth/client -am install
+mvn -f ../../pom.xml -pl apps/auth/http-based/client -am install
 mvn -f server/pom.xml test
 ```
 

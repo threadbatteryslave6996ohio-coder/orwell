@@ -12,7 +12,7 @@ startup behavior remain owned by each server.
 
 ```xml
 <dependency>
-    <groupId>dev.clippy</groupId>
+    <groupId>dev.orwell</groupId>
     <artifactId>clippy-server-bootstrap</artifactId>
     <version>${project.version}</version>
 </dependency>

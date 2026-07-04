@@ -6,7 +6,7 @@ system clipboard.
 ## Configure
 
 Start the auth and clipboard servers, create an identity as described in the
-[auth server documentation](../../../auth/server/README.md), then configure the
+[auth server documentation](../../../auth/http-based/server/README.md), then configure the
 repository-root `.env`:
 
 ```dotenv

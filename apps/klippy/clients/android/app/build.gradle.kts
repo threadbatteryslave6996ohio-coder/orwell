@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "dev.clippy.android"
+    namespace = "dev.orwell.android"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "dev.clippy.android"
+        applicationId = "dev.orwell.android"
         minSdk = 26
         targetSdk = 37
         versionCode = 1

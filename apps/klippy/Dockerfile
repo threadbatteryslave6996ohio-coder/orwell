@@ -12,7 +12,7 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -DskipTests \
-        -pl :clippy-server,:auth-server,:combined-server -am \
+        -pl :clippy-server,:auth-http-server,:combined-server -am \
         package
 
 # ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ FROM eclipse-temurin:25-jdk AS runtime
 WORKDIR /app
 
 COPY --from=build /workspace/apps/klippy/server/target/clippy-server-0.1.0-SNAPSHOT-exec.jar /app/clippy-server.jar
-COPY --from=build /workspace/apps/auth/server/target/auth-server-0.1.0-SNAPSHOT-exec.jar /app/auth-server.jar
+COPY --from=build /workspace/apps/auth/http-based/server/target/auth-http-server-0.1.0-SNAPSHOT-exec.jar /app/auth-server.jar
 COPY --from=build /workspace/apps/combined-server/target/combined-server-0.1.0-SNAPSHOT.jar /app/combined-server.jar
 
 # Spring Boot writes to the LOGGING_FILE_NAME path (relative to /app).

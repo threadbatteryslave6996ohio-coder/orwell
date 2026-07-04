@@ -28,7 +28,7 @@ CLIPBOARD_POLL_INTERVAL_MS=1000
 With `CLIENT_SECRET`, the client logs in at startup and refreshes its token after
 a `401`; `AUTH_SERVER_URL` is then required. For static authentication, omit
 `CLIENT_SECRET` and set `CLIENT_TOKEN` to a token returned by the auth server's
-`/login` endpoint. See the [auth server documentation](../../../auth/server/README.md)
+`/login` endpoint. See the [auth server documentation](../../../auth/http-based/server/README.md)
 for identity creation and login requests.
 
 Shell environment variables override `.env` values.

@@ -4,38 +4,38 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>dev.clippy</groupId>
-        <artifactId>clippy</artifactId>
+        <groupId>dev.orwell</groupId>
+        <artifactId>orwell</artifactId>
         <version>0.1.0-SNAPSHOT</version>
-        <relativePath>../klippy/pom.xml</relativePath>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
     <artifactId>combined-server</artifactId>
 
     <dependencies>
         <dependency>
-            <groupId>dev.clippy</groupId>
+            <groupId>dev.orwell</groupId>
             <artifactId>clippy-server-bootstrap</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.clippy</groupId>
+            <groupId>dev.orwell</groupId>
             <artifactId>clippy-server</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.clippy</groupId>
-            <artifactId>auth-server</artifactId>
+            <groupId>dev.orwell</groupId>
+            <artifactId>auth-http-server</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.clippy</groupId>
+            <groupId>dev.orwell</groupId>
             <artifactId>clippy-utils</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.clippy</groupId>
+            <groupId>dev.orwell</groupId>
             <artifactId>bucket-proxy</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.keeboarder</groupId>
+            <groupId>dev.orwell</groupId>
             <artifactId>websocket-redis-server</artifactId>
             <version>0.1.0</version>
         </dependency>
@@ -75,7 +75,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>dev.clippy.combined.CombinedServerLauncher</mainClass>
+                    <mainClass>dev.orwell.combined.CombinedServerLauncher</mainClass>
                 </configuration>
                 <executions>
                     <execution>
