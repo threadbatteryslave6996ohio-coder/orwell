@@ -47,7 +47,9 @@ import static org.assertj.core.api.Assertions.assertThat;
                 "proxy.logging.audit-file=target/combined-audit.log",
                 "clippy.auth.jpa.hibernate.ddl-auto=create-drop",
                 "clippy.clipboard.jpa.hibernate.ddl-auto=create-drop",
-                "clippy.jpa.jdbc-time-zone=UTC"
+                "clippy.jpa.jdbc-time-zone=UTC",
+                "secrets.jpa.hibernate.ddl-auto=create-drop",
+                "secrets.route-prefix=/secrets"
         }
 )
 class CombinedServerHttpIntegrationTest {
@@ -60,6 +62,9 @@ class CombinedServerHttpIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> clipboardPostgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
+    @Container
+    static final PostgreSQLContainer<?> secretsPostgres = new PostgreSQLContainer<>("postgres:16-alpine");
+
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
         registry.add("server.port", () -> SERVER_PORT);
@@ -71,6 +76,9 @@ class CombinedServerHttpIntegrationTest {
         registry.add("spring.datasource.url", clipboardPostgres::getJdbcUrl);
         registry.add("spring.datasource.username", clipboardPostgres::getUsername);
         registry.add("spring.datasource.password", clipboardPostgres::getPassword);
+        registry.add("secrets.datasource.url", secretsPostgres::getJdbcUrl);
+        registry.add("secrets.datasource.username", secretsPostgres::getUsername);
+        registry.add("secrets.datasource.password", secretsPostgres::getPassword);
     }
 
     @LocalServerPort
@@ -193,7 +201,7 @@ class CombinedServerHttpIntegrationTest {
         HttpResponse<String> keeboarder = get("/keeboarder/clients", "keeboarder-admin", token);
 
         assertThat(registry.statusCode()).isEqualTo(200);
-        assertThat(registry.body()).contains("auth", "klippy", "jarvis", "keeboarder");
+        assertThat(registry.body()).contains("auth", "klippy", "jarvis", "keeboarder", "secrets");
         assertThat(jarvis.statusCode()).isEqualTo(200);
         assertThat(keeboarder.statusCode()).isEqualTo(200);
         assertThat(keeboarder.body()).isEqualTo("[]");

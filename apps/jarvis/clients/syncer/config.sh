@@ -13,8 +13,8 @@
 # The syncer only talks to the bucket proxy (it never calls the AWS CLI). The
 # proxy handles the credential exchange with the auth server.
 PROXY_URL="http://localhost:5000"
-PROXY_USERNAME="d"
-PROXY_PASSWORD="d"
+PROXY_USERNAME="tester"
+PROXY_PASSWORD="testsecret"
 
 # Object-key prefix used when building the proxy folder path:
 #   ${S3_PREFIX}${DEVICE_HOSTNAME}/<recording-type>

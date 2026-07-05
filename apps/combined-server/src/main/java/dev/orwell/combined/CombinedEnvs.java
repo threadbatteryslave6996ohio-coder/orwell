@@ -21,6 +21,11 @@ public final class CombinedEnvs {
     public static final EnvOption<String> CLIPPY_SERVER_ROUTE_PREFIX;
     public static final EnvOption<String> JARVIS_SERVER_ROUTE_PREFIX;
     public static final EnvOption<String> KEEBOARDER_SERVER_ROUTE_PREFIX;
+    public static final EnvOption<String> SECRETS_ROUTE_PREFIX;
+    public static final EnvOption<String> SECRETS_DATASOURCE_URL;
+    public static final EnvOption<String> SECRETS_DATASOURCE_USERNAME;
+    public static final EnvOption<String> SECRETS_DATASOURCE_PASSWORD;
+    public static final EnvOption<String> SECRETS_JPA_HIBERNATE_DDL_AUTO;
     public static final EnvOption<String> LOGGING_FILE_NAME;
     public static final EnvOption<String> AUTH_JPA_HIBERNATE_DDL_AUTO;
     public static final EnvOption<String> CLIPBOARD_JPA_HIBERNATE_DDL_AUTO;
@@ -41,6 +46,11 @@ public final class CombinedEnvs {
         CLIPPY_SERVER_ROUTE_PREFIX = builder.required("CLIPPY_SERVER_ROUTE_PREFIX", EnvType.string());
         JARVIS_SERVER_ROUTE_PREFIX = builder.optional("JARVIS_SERVER_ROUTE_PREFIX", EnvType.string(), "/jarvis");
         KEEBOARDER_SERVER_ROUTE_PREFIX = builder.optional("KEEBOARDER_SERVER_ROUTE_PREFIX", EnvType.string(), "/keeboarder");
+        SECRETS_ROUTE_PREFIX = builder.optional("SECRETS_ROUTE_PREFIX", EnvType.string(), "/secrets");
+        SECRETS_DATASOURCE_URL = builder.required("SECRETS_DATASOURCE_URL", EnvType.string());
+        SECRETS_DATASOURCE_USERNAME = builder.required("SECRETS_DATASOURCE_USERNAME", EnvType.string());
+        SECRETS_DATASOURCE_PASSWORD = builder.required("SECRETS_DATASOURCE_PASSWORD", EnvType.string());
+        SECRETS_JPA_HIBERNATE_DDL_AUTO = builder.required("SECRETS_JPA_HIBERNATE_DDL_AUTO", EnvType.string());
         LOGGING_FILE_NAME = builder.required("LOGGING_FILE_NAME", EnvType.string());
         AUTH_JPA_HIBERNATE_DDL_AUTO = builder.required("AUTH_JPA_HIBERNATE_DDL_AUTO", EnvType.string());
         CLIPBOARD_JPA_HIBERNATE_DDL_AUTO = builder.required("CLIPBOARD_JPA_HIBERNATE_DDL_AUTO", EnvType.string());
@@ -73,6 +83,11 @@ public final class CombinedEnvs {
         values.put("clippy.server.route-prefix", env.get(CLIPPY_SERVER_ROUTE_PREFIX));
         values.put("jarvis.server.route-prefix", env.get(JARVIS_SERVER_ROUTE_PREFIX));
         values.put("keeboarder.server.route-prefix", env.get(KEEBOARDER_SERVER_ROUTE_PREFIX));
+        values.put("secrets.route-prefix", env.get(SECRETS_ROUTE_PREFIX));
+        values.put("secrets.datasource.url", env.get(SECRETS_DATASOURCE_URL));
+        values.put("secrets.datasource.username", env.get(SECRETS_DATASOURCE_USERNAME));
+        values.put("secrets.datasource.password", env.get(SECRETS_DATASOURCE_PASSWORD));
+        values.put("secrets.jpa.hibernate.ddl-auto", env.get(SECRETS_JPA_HIBERNATE_DDL_AUTO));
         values.put("proxy.auth-server.base-url", env.get(CLIPPY_AUTH_BASE_URL));
         values.put("logging.file.name", env.get(LOGGING_FILE_NAME));
         values.put("clippy.auth.jpa.hibernate.ddl-auto", env.get(AUTH_JPA_HIBERNATE_DDL_AUTO));

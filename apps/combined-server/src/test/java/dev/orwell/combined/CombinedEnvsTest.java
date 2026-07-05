@@ -26,7 +26,12 @@ class CombinedEnvsTest {
                 .containsEntry("logging.file.name", "logs/combined-server.log")
                 .containsEntry("clippy.auth.jpa.hibernate.ddl-auto", "update")
                 .containsEntry("clippy.clipboard.jpa.hibernate.ddl-auto", "validate")
-                .containsEntry("clippy.jpa.jdbc-time-zone", "UTC");
+                .containsEntry("clippy.jpa.jdbc-time-zone", "UTC")
+                .containsEntry("secrets.route-prefix", "/secrets")
+                .containsEntry("secrets.datasource.url", "jdbc:postgresql://database/secrets")
+                .containsEntry("secrets.datasource.username", "secrets-user")
+                .containsEntry("secrets.datasource.password", "secrets-password")
+                .containsEntry("secrets.jpa.hibernate.ddl-auto", "update");
     }
 
     @Test
@@ -93,7 +98,11 @@ class CombinedEnvsTest {
                 Map.entry("LOGGING_FILE_NAME", "logs/combined-server.log"),
                 Map.entry("AUTH_JPA_HIBERNATE_DDL_AUTO", "update"),
                 Map.entry("CLIPBOARD_JPA_HIBERNATE_DDL_AUTO", "validate"),
-                Map.entry("JPA_JDBC_TIME_ZONE", "UTC")
+                Map.entry("JPA_JDBC_TIME_ZONE", "UTC"),
+                Map.entry("SECRETS_DATASOURCE_URL", "jdbc:postgresql://database/secrets"),
+                Map.entry("SECRETS_DATASOURCE_USERNAME", "secrets-user"),
+                Map.entry("SECRETS_DATASOURCE_PASSWORD", "secrets-password"),
+                Map.entry("SECRETS_JPA_HIBERNATE_DDL_AUTO", "update")
         );
     }
 }

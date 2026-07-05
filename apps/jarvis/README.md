@@ -12,3 +12,13 @@ mvn package
 ```
 
 The recorder clients under `clients/` remain standalone shell applications.
+
+### Syncer (`clients/syncer`)
+
+The syncer drains completed recording segments to the bucket proxy. It merges older completed segments (via ffmpeg concat) and uploads the result, leaving the current in-progress segment untouched. Run it on a timer:
+
+```bash
+bash clients/syncer/syncer.sh
+```
+
+Configure proxy credentials in `clients/syncer/config.sh`.

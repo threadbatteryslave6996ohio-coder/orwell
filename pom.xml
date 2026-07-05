@@ -13,11 +13,14 @@
         <module>packages/env</module>
         <module>packages/server-bootstrap</module>
         <module>packages/primitives</module>
+        <module>packages/server-parent</module>
         <module>apps/auth</module>
         <module>apps/klippy</module>
         <module>apps/jarvis</module>
         <module>apps/keeboarder</module>
         <module>apps/combined-server</module>
+        <module>apps/secrets-manager</module>
+        <module>apps/backup</module>
     </modules>
 
     <properties>
@@ -96,6 +99,16 @@
             <dependency>
                 <groupId>dev.orwell</groupId>
                 <artifactId>clippy-primitives</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.orwell</groupId>
+                <artifactId>secrets-server</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.orwell</groupId>
+                <artifactId>secrets-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

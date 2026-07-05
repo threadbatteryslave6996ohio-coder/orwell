@@ -24,7 +24,9 @@ import java.util.Map;
         CombinedClipboardModuleConfiguration.class,
         CombinedClipboardDatabaseConfiguration.class,
         CombinedJarvisModuleConfiguration.class,
-        CombinedKeeboarderModuleConfiguration.class
+        CombinedKeeboarderModuleConfiguration.class,
+        CombinedSecretsModuleConfiguration.class,
+        CombinedSecretsDatabaseConfiguration.class
 })
 public class CombinedServerApplication {
     /** Starts the core from configuration that has already been fetched by a launcher. */
@@ -41,7 +43,7 @@ public class CombinedServerApplication {
     static void logCombinedModeDisclaimer() {
         try {
             new CustomLogger("combined-server").log(
-                    "Combined mode is active: auth, Klippy, Jarvis, and Keeboarder routes run as sub-apps in one JVM."
+                    "Combined mode is active: auth, Klippy, Jarvis, Keeboarder, and Secrets routes run as sub-apps in one JVM."
             );
         } catch (IllegalStateException exception) {
             System.err.println("Combined server diagnostic log could not be written: " + exception.getMessage());
