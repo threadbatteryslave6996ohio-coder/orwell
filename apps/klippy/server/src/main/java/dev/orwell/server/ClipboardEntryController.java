@@ -1,6 +1,7 @@
 package dev.orwell.server;
 
 import dev.orwell.auth.AuthenticationStrategy;
+import dev.orwell.auth.BearerToken;
 import dev.orwell.logging.CustomLogger;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -42,7 +43,10 @@ public class ClipboardEntryController {
             @Valid @RequestBody ClipboardEntryRequest request,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization
     ) {
-        String token = bearerToken(authorization);
+        String token = BearerToken.extract(authorization);
+        if (token == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token.");
+        }
         if (!authenticationStrategy.isTokenValidForClient(request.clientId(), token)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
         }
@@ -76,7 +80,10 @@ public class ClipboardEntryController {
             @RequestParam(value = "afterId", required = false) Long afterId,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization
     ) {
-        String token = bearerToken(authorization);
+        String token = BearerToken.extract(authorization);
+        if (token == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token.");
+        }
         if (!authenticationStrategy.isTokenValidForClient(clientId, token)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
         }
@@ -120,22 +127,5 @@ public class ClipboardEntryController {
 
     private static ClipboardEntryResponse response(ClipboardEntry entry) {
         return new ClipboardEntryResponse(entry.getId(), entry.getClientId(), entry.getTimestamp());
-    }
-
-    private static String bearerToken(String authorization) {
-        if (authorization == null || authorization.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token.");
-        }
-
-        String prefix = "Bearer ";
-        if (!authorization.regionMatches(true, 0, prefix, 0, prefix.length())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Expected bearer token.");
-        }
-
-        String token = authorization.substring(prefix.length()).trim();
-        if (token.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token.");
-        }
-        return token;
     }
 }

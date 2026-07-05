@@ -1,6 +1,7 @@
 package dev.orwell.keeboarder.server;
 
 import dev.orwell.auth.AuthenticationStrategy;
+import dev.orwell.auth.BearerToken;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -58,11 +59,10 @@ public class KeeboarderController {
     }
 
     private boolean isAuthenticated(String clientId, String authorization) {
-        if (clientId == null || clientId.isBlank() || authorization == null
-                || !authorization.regionMatches(true, 0, "Bearer ", 0, "Bearer ".length())) {
+        if (clientId == null || clientId.isBlank()) {
             return false;
         }
-        String token = authorization.substring("Bearer ".length()).trim();
-        return !token.isBlank() && authenticator.isTokenValidForClient(clientId, token);
+        String token = BearerToken.extract(authorization);
+        return token != null && authenticator.isTokenValidForClient(clientId, token);
     }
 }

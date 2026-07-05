@@ -1,6 +1,7 @@
 package dev.orwell.secrets.service;
 
 import dev.orwell.auth.AuthenticationStrategy;
+import dev.orwell.auth.BearerToken;
 import dev.orwell.secrets.repository.AccessorIdentityRepository;
 import dev.orwell.secrets.repository.AdminIdentityRepository;
 import org.springframework.http.HttpStatus;
@@ -9,8 +10,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Component
 public class AuthValidator {
-    private static final String BEARER_PREFIX = "Bearer ";
-
     private final AuthenticationStrategy authenticationStrategy;
     private final AdminIdentityRepository adminRepo;
     private final AccessorIdentityRepository accessorRepo;
@@ -48,23 +47,12 @@ public class AuthValidator {
     }
 
     private void validateToken(String authorization, String clientId) {
-        String token = extractBearerToken(authorization);
+        String token = BearerToken.extract(authorization);
+        if (token == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token.");
+        }
         if (!authenticationStrategy.isTokenValidForClient(clientId, token)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
         }
-    }
-
-    static String extractBearerToken(String authorization) {
-        if (authorization == null || authorization.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token.");
-        }
-        if (!authorization.regionMatches(true, 0, BEARER_PREFIX, 0, BEARER_PREFIX.length())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Expected bearer token.");
-        }
-        String token = authorization.substring(BEARER_PREFIX.length()).trim();
-        if (token.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token.");
-        }
-        return token;
     }
 }

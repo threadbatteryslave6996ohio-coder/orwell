@@ -1,6 +1,7 @@
 package dev.orwell.bucket.proxy;
 
 import dev.orwell.auth.AuthenticationStrategy;
+import dev.orwell.auth.BearerToken;
 import dev.orwell.bucket.proxy.storage.BucketStorage;
 import dev.orwell.bucket.proxy.storage.ObjectKeys;
 import jakarta.servlet.http.HttpServletRequest;
@@ -226,10 +227,13 @@ public class ProxyController {
     }
 
     private String authenticate(String authorization, String clientId) {
-        if (authorization == null || !authorization.toLowerCase().startsWith("bearer ") || clientId == null || clientId.isBlank()) {
+        if (clientId == null || clientId.isBlank()) {
             return null;
         }
-        String token = authorization.substring("Bearer ".length()).trim();
+        String token = BearerToken.extract(authorization);
+        if (token == null) {
+            return null;
+        }
         return authenticationStrategy.isTokenValidForClient(clientId, token) ? clientId : null;
     }
 
