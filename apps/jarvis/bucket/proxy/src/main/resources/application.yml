@@ -1,36 +1,11 @@
-server:
-  port: 5000
-
 proxy:
-  storage:
-    # Select the object-storage adapter: aws or azure.
-    provider: ${PROXY_STORAGE_PROVIDER:aws}
-    max-file-size: ${PROXY_STORAGE_MAX_FILE_SIZE:5368709120}
   s3:
-    bucket-name: your-bucket-name
-    region: us-east-1
     # Optional S3-compatible endpoint override (e.g. a local MinIO for testing).
     # Leave blank to use real AWS S3.
-    endpoint: ${PROXY_S3_ENDPOINT:}
-    path-style-access: ${PROXY_S3_PATH_STYLE_ACCESS:false}
-    # Server-side encryption applied to uploads. Defaults to AES256 (SSE-S3).
-    # Set blank to disable (needed for a local MinIO without KMS configured).
-    server-side-encryption: ${PROXY_S3_SSE:AES256}
+    endpoint: ""
   azure:
-    account-name: ${AZURE_STORAGE_ACCOUNT:}
-    container-name: ${AZURE_STORAGE_CONTAINER:}
-    endpoint: ${AZURE_STORAGE_ENDPOINT:}
     # Optional. When blank, DefaultAzureCredential is used (managed identity,
     # Azure CLI, environment credentials, and other supported sources).
-    connection-string: ${AZURE_STORAGE_CONNECTION_STRING:}
-  auth-server:
-    base-url: http://localhost:8081
-    identity-provisioning-key: ${AUTH_IDENTITY_PROVISIONING_KEY:}
-  management:
-    username: ""
-    password: ""
-    session-secret: ""
+    connection-string: ""
   cors:
     allowed-origins: []
-  logging:
-    audit-file: logs/audit.log

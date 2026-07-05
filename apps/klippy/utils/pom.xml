@@ -14,7 +14,7 @@
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-env</artifactId>
+            <artifactId>env</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>

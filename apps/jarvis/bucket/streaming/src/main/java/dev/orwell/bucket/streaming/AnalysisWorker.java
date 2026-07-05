@@ -17,8 +17,9 @@ public final class AnalysisWorker {
     }
 
     public static void main(String[] args) throws Exception {
-        String endpoint = getenv("STREAM_ANALYSIS_ENDPOINT", "").trim();
-        if (endpoint.isEmpty()) {
+        var env = StreamingEnvs.from(dev.orwell.env.EnvFiles.load());
+        String endpoint = env.get(StreamingEnvs.STREAM_ANALYSIS_ENDPOINT);
+        if (endpoint.isBlank()) {
             drainJpegFrames(System.in);
             return;
         }
@@ -159,11 +160,6 @@ public final class AnalysisWorker {
         } catch (Exception exception) {
             throw new IllegalStateException("Cannot hash frame.", exception);
         }
-    }
-
-    private static String getenv(String key, String fallback) {
-        String value = System.getenv(key);
-        return value == null ? fallback : value;
     }
 
     private static String toJson(double timestamp, int frameIndex, String sha256, String frameBase64) {

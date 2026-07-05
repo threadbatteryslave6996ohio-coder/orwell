@@ -3,6 +3,7 @@ package dev.orwell.bucket.detection;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import dev.orwell.env.Env;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,12 +40,12 @@ final class DetectionServer {
         this.cooldowns = new CooldownTracker(cooldownSeconds);
     }
 
-    static DetectionServer fromEnvironment() {
-        String host = getenv("DETECTION_SERVER_HOST", "127.0.0.1");
-        int port = Integer.parseInt(getenv("DETECTION_SERVER_PORT", "9001"));
-        String alertUrl = getenv("DETECTION_ALERT_URL", "http://127.0.0.1:9000/alerts");
-        int cooldownSeconds = Integer.parseInt(getenv("DETECTION_ALERT_COOLDOWN_SECONDS", "60"));
-        double minConfidence = Double.parseDouble(getenv("DETECTION_MIN_CONFIDENCE", "0.0"));
+    static DetectionServer fromEnv(Env env) {
+        String host = env.get(DetectionEnvs.DETECTION_SERVER_HOST);
+        int port = env.get(DetectionEnvs.DETECTION_SERVER_PORT);
+        String alertUrl = env.get(DetectionEnvs.DETECTION_ALERT_URL);
+        int cooldownSeconds = env.get(DetectionEnvs.DETECTION_ALERT_COOLDOWN_SECONDS);
+        double minConfidence = env.get(DetectionEnvs.DETECTION_MIN_CONFIDENCE);
         PersonDetector detector = new HogPersonDetector(minConfidence);
         return new DetectionServer(host, port, alertUrl, detector, cooldownSeconds);
     }
@@ -180,8 +181,4 @@ final class DetectionServer {
         }
     }
 
-    private static String getenv(String key, String fallback) {
-        String value = System.getenv(key);
-        return value == null || value.isBlank() ? fallback : value;
-    }
 }

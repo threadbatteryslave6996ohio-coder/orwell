@@ -11,6 +11,7 @@ import jakarta.mail.Transport;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 
+import dev.orwell.env.Env;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -50,18 +51,21 @@ final class AlertServer {
         this.logger = logger;
     }
 
-    static AlertServer fromEnvironment() throws IOException {
-        String host = getenv("ALERT_SERVER_HOST", "127.0.0.1");
-        int port = Integer.parseInt(getenv("ALERT_SERVER_PORT", "9000"));
-        boolean emailEnabled = Boolean.parseBoolean(getenv("ALERT_EMAIL_ENABLED", "false"));
-        String emailTo = getenv("ALERT_EMAIL_TO", "").trim();
-        String emailFrom = getenv("ALERT_EMAIL_FROM", emailTo.isBlank() ? "alerts@localhost" : emailTo).trim();
-        String smtpHost = getenv("SMTP_HOST", "").trim();
-        int smtpPort = Integer.parseInt(getenv("SMTP_PORT", "587"));
-        String smtpUsername = getenv("SMTP_USERNAME", "").trim();
-        String smtpPassword = getenv("SMTP_PASSWORD", "").trim();
-        boolean smtpUseTls = Boolean.parseBoolean(getenv("SMTP_USE_TLS", "true"));
-        JsonLogger logger = new JsonLogger(Path.of(getenv("ALERT_LOG_FILE", "/var/log/streaming/alerts.log")));
+    static AlertServer fromEnv(Env env) throws IOException {
+        String host = env.get(AlertEnvs.ALERT_SERVER_HOST);
+        int port = env.get(AlertEnvs.ALERT_SERVER_PORT);
+        boolean emailEnabled = env.get(AlertEnvs.ALERT_EMAIL_ENABLED);
+        String emailTo = env.get(AlertEnvs.ALERT_EMAIL_TO);
+        String emailFrom = env.get(AlertEnvs.ALERT_EMAIL_FROM);
+        if (emailFrom.isBlank()) {
+            emailFrom = emailTo.isBlank() ? "alerts@localhost" : emailTo;
+        }
+        String smtpHost = env.get(AlertEnvs.SMTP_HOST);
+        int smtpPort = env.get(AlertEnvs.SMTP_PORT);
+        String smtpUsername = env.get(AlertEnvs.SMTP_USERNAME);
+        String smtpPassword = env.get(AlertEnvs.SMTP_PASSWORD);
+        boolean smtpUseTls = env.get(AlertEnvs.SMTP_USE_TLS);
+        JsonLogger logger = new JsonLogger(Path.of(env.get(AlertEnvs.ALERT_LOG_FILE)));
         return new AlertServer(host, port, emailEnabled, emailTo, emailFrom, smtpHost, smtpPort, smtpUsername, smtpPassword, smtpUseTls, logger);
     }
 
@@ -151,8 +155,4 @@ final class AlertServer {
         }
     }
 
-    private static String getenv(String key, String fallback) {
-        String value = System.getenv(key);
-        return value == null || value.isBlank() ? fallback : value;
-    }
 }
