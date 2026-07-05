@@ -2,8 +2,7 @@
 
 A multi-protocol keyboard and communication system.
 
-The Java client wrapper and platform harnesses now live under `app/client`.
-Use those for new development.
+Java clients are in `apps/keeboarder/clients/`. The macOS client is under `apps/keeboarder/clients/mac`.
 
 ## 🎹 WebSocket Server
 
@@ -40,7 +39,7 @@ the auth server configured through `CLIPPY_AUTH_BASE_URL`. HTTP callers send
    ```
 
 5. **Test the server:**
-   - Use one of the Java harnesses in `app/client`
+   - Use the macOS client in `apps/keeboarder/clients/mac`
 
 ### Build And Test
 

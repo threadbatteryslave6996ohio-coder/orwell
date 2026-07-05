@@ -35,16 +35,18 @@ CLIPBOARD_BACKEND=wl-paste
 
 Shell environment variables override values from `.env` when both are set.
 
-Build and start the client with the repository launcher:
+Build and start the file-locker from the repository root:
 
 ```bash
-./scripts/start-file-locker.sh
+mvn -pl clients/file-locker -am package
+java -jar clients/file-locker/target/clippy-file-locker-0.1.0-SNAPSHOT.jar
 ```
 
 Keep the file-locker running, then start the client in another terminal:
 
 ```bash
-./scripts/start-linux-client.sh
+mvn -pl clients/linux -am package
+java -jar clients/linux/target/clippy-linux-client-0.1.0-SNAPSHOT.jar
 ```
 
 The launcher changes to the repository root before starting Java, so the client

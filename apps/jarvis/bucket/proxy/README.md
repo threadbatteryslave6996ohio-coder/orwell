@@ -5,17 +5,16 @@ Azure Blob storage.
 
 ## Contents
 
-- `src/main/java/dev/clippy/bucket/proxy/`: Java source
-- `src/main/java/dev/clippy/bucket/proxy/client/`: reusable Java client for the proxy HTTP API
+- `src/main/java/dev/orwell/bucket/proxy/`: Java source
+- `src/main/java/dev/orwell/bucket/proxy/client/`: reusable Java client for the proxy HTTP API
 - `src/main/resources/application.yml`: configuration
 - `pom.xml`: Maven build
 
 ## Local Run
 
 ```bash
-java -version
-mvn test
-mvn spring-boot:run
+mvn -pl apps/jarvis/bucket/proxy -am test
+mvn -pl apps/jarvis/bucket/proxy spring-boot:run
 ```
 
 The service listens on `http://localhost:5000` by default.
@@ -84,8 +83,8 @@ credentials, Azure CLI login, and the other standard credential sources.
 ## Build
 
 ```bash
-mvn test
-mvn package
+mvn -pl apps/jarvis/bucket/proxy -am test
+mvn -pl apps/jarvis/bucket/proxy -am package
 ```
 
 The deployment script installs the built jar as `/opt/s3-proxy/publish/bucket-proxy.jar` and runs it with `java -jar`.

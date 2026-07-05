@@ -23,7 +23,7 @@ CLIPBOARD_POLL_INTERVAL_MS=1000
 
 `REMOTE_SERVER_URL` is required and may be the server base URL or the full
 `/clipboard` endpoint. `CLIENT_ID` defaults to the machine hostname and
-`CLIPBOARD_POLL_INTERVAL_MS` defaults to `1`.
+`CLIPBOARD_POLL_INTERVAL_MS` defaults to `1000`.
 
 With `CLIENT_SECRET`, the client logs in at startup and refreshes its token after
 a `401`; `AUTH_SERVER_URL` is then required. For static authentication, omit
@@ -38,7 +38,8 @@ Shell environment variables override `.env` values.
 Start the file-locker from the repository root:
 
 ```bash
-./scripts/start-file-locker.sh
+mvn -pl clients/file-locker -am package
+java -jar clients/file-locker/target/clippy-file-locker-0.1.0-SNAPSHOT.jar
 ```
 
 Then build and run the client in another terminal:

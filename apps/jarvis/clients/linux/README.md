@@ -1,6 +1,6 @@
-# Keeboarder Ubuntu GNOME Client - FFmpeg + AWS S3
+# Jarvis Ubuntu GNOME Client - FFmpeg
 
-Shell-based Linux client for Ubuntu GNOME on Wayland or Xorg. It records screen, microphone, and system audio, starts automatically in the user's graphical session with systemd user services, and uploads recordings through the authenticated S3 proxy by default.
+Shell-based Linux client for Ubuntu GNOME on Wayland or Xorg. It records screen, microphone, and system audio, starts automatically in the user's graphical session with systemd user services, and uploads recordings through the Bucket Proxy by default.
 
 ## GNOME Capture Backends
 

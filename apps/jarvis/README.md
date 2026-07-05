@@ -1,14 +1,13 @@
-# Eyes and Ears
+# Jarvis
 
-This repository contains the Jarvis bucket services and macOS/Linux recorder
-clients. It is mounted as `eyes-and-ears/` by the composition repository.
+Surveillance services (bucket proxy, streaming, alerting) and macOS/Linux recorder
+clients. Bucket services are under `apps/jarvis/bucket/`, recorder clients under
+`apps/jarvis/clients/`.
 
-Authentication is supplied by the parent repository's sibling `../auth`
-directory. Build the Java services from the composition root or directly from
-this checkout while it is mounted under that parent:
+Authentication is supplied by `apps/auth`. Build all services from the repository root:
 
 ```bash
-mvn package
+mvn -pl apps/jarvis -am package
 ```
 
 The recorder clients under `clients/` remain standalone shell applications.

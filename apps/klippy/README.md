@@ -13,9 +13,7 @@ separate Kotlin/Gradle project under `clients/android`.
 - Docker with Compose for local databases and integration tests
 - Android Studio or a compatible Android toolchain for the Android client
 
-Authentication is supplied by the parent repository's sibling `../auth`
-directory. Clone this repository through the composition repository when you
-need to build modules that depend on auth.
+Authentication is supplied by the sibling `apps/auth` directory in this repository.
 
 Verify the Java toolchain before troubleshooting Maven compilation errors:
 
@@ -70,15 +68,18 @@ clipboard respectively, and also launches the bucket proxy from the same
 combined env file.
 
 For a host-based Linux development stack, configure the repository-root `.env`
-and run:
+and start each service in its own terminal:
 
 ```bash
-./scripts/start-local-stack-tmux.sh
+# Terminal 1: auth server
+mvn -pl apps/auth/http-based/server spring-boot:run
+# Terminal 2: clipboard server
+mvn -pl apps/klippy/server spring-boot:run
+# Terminal 3: file-locker
+mvn -pl clients/file-locker -am package && java -jar clients/file-locker/target/clippy-file-locker-0.1.0-SNAPSHOT.jar
+# Terminal 4: linux client
+mvn -pl clients/linux -am package && java -jar clients/linux/target/clippy-linux-client-0.1.0-SNAPSHOT.jar
 ```
-
-This starts the auth server, clipboard server, file-locker, Linux client, and
-offline sync client in a `clippy` tmux session. Pass `--detached` to avoid
-attaching immediately.
 
 ## Client Authentication
 

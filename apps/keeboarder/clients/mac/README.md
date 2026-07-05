@@ -5,7 +5,6 @@ This module is a Java client that connects to the Keeboarder WebSocket server an
 ## Build
 
 ```bash
-cd /home/kamina_goat/Desktop/keeboarder-parent
 mvn -f ../../../pom.xml -pl apps/auth/http-based/client -am install
 mvn -f clients/mac/pom.xml package
 ```
@@ -31,9 +30,8 @@ java -jar target/keeboarder-mac-client-0.1.0.jar \
 ## Test
 
 ```bash
-cd /home/kamina_goat/Desktop/keeboarder-parent
 mvn -f ../../../pom.xml -pl apps/auth/http-based/client -am install
-mvn -f clients/mac/pom.xml package
+mvn -f clients/mac/pom.xml test
 ```
 
 ## Notes

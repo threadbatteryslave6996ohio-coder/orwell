@@ -22,7 +22,7 @@ The same Terraform can optionally create an Azure Linux VM as an EC2-style serve
 ## Deploy
 
 ```bash
-cd ~/Desktop/clippy/devops
+cd apps/klippy/devops
 cp terraform.tfvars.example terraform.tfvars
 ```
 
@@ -93,7 +93,7 @@ storing credentials:
 ```bash
 az login --identity
 az storage blob list \
-  --account-name clippyw70lug \
+  --account-name <storage-account> \
   --container-name clippy \
   --auth-mode login \
   --output table
@@ -109,6 +109,6 @@ Server logs are written to `/var/log/clippy/server.log` on the VM. Logrotate kee
 ## Destroy
 
 ```bash
-cd ~/Desktop/clippy/devops
+cd apps/klippy/devops
 terraform destroy
 ```

@@ -36,3 +36,11 @@ Spring process. Configure the WebSocket listener with `WEBSOCKET_HOST` and
 The REST endpoints require `Authorization: Bearer <token>` and
 `X-Client-Id: <clientId>`; credentials are checked against
 `CLIPPY_AUTH_BASE_URL`.
+
+## Build and Test
+
+```bash
+mvn -pl apps/combined-server -am test
+```
+
+Integration tests use Testcontainers and require Docker.

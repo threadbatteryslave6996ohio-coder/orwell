@@ -46,13 +46,15 @@ configured sync interval is used again after a successful pass.
 Run it from the repository root:
 
 ```bash
-./scripts/start-file-locker.sh
+mvn -pl clients/file-locker -am package
+java -jar clients/file-locker/target/clippy-file-locker-0.1.0-SNAPSHOT.jar
 ```
 
 Keep the file-locker running, then sync in another terminal:
 
 ```bash
-./scripts/sync-offline-client.sh
+mvn -pl clients/offline-sync -am package
+java -jar clients/offline-sync/target/clippy-offline-sync-0.1.0-SNAPSHOT.jar
 ```
 
 The default input is `clippy-offline-clipboard.json`. Pass another path as the

@@ -12,3 +12,10 @@ Build and test it with its consumers from the repository root:
 ```bash
 mvn -pl apps/auth/http-based/api,apps/auth/http-based/client,apps/auth/http-based/server -am test
 ```
+
+## Records
+
+- `LoginHttpRequest` / `LoginHttpResponse` — login credentials and token result
+- `CheckTokenHttpRequest` / `CheckTokenHttpResponse` — token validation request and result
+
+See `src/main/java/dev/orwell/auth/http/api/` for the full definition of each record.

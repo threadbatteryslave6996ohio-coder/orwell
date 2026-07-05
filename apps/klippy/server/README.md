@@ -16,24 +16,21 @@ Start the app database on port `5432` and the auth database on port `5433` using
 Run the auth server from the repository root in one terminal:
 
 ```bash
-cd /path/to/jarvis-klippy/klippy
-mvn -pl ../auth/http-based/server spring-boot:run
+mvn -pl apps/auth/http-based/server spring-boot:run
 ```
 
 Build and run this app server from the repository root in another terminal:
 
 ```bash
-cd ~/Desktop/clippy
-mvn -pl server -am package
-java -jar server/target/clippy-server-0.1.0-SNAPSHOT-exec.jar
+mvn -pl apps/klippy/server -am package
+java -jar apps/klippy/server/target/clippy-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
-Or, if your shell is already in `~/Desktop/clippy/server`, invoke Maven from the root POM so it can include the auth client module:
+Or run Maven from the root POM:
 
 ```bash
-cd ~/Desktop/clippy/server
-mvn -f ../pom.xml -pl server -am package
-java -jar target/clippy-server-0.1.0-SNAPSHOT-exec.jar
+mvn -f pom.xml -pl apps/klippy/server -am package
+java -jar apps/klippy/server/target/clippy-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
 The example configuration runs the app server on `http://localhost:8080` and the auth server on `http://localhost:8081`.
@@ -105,8 +102,7 @@ The custom audit log is best-effort. If it cannot be written, the clipboard inse
 ## Tests
 
 ```bash
-cd ~/Desktop/clippy
-mvn -pl server -am test
+mvn -pl apps/klippy/server -am test
 ```
 
 Integration tests use Testcontainers PostgreSQL and require Docker.

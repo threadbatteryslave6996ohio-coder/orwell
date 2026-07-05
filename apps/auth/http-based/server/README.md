@@ -1,6 +1,6 @@
-# Clippy HTTP Auth Server
+# HTTP Auth Server
 
-Spring Boot service that owns Clippy client identities and issues login tokens.
+Spring Boot service that owns client identities and issues login tokens.
 
 The clipboard app server does not store client secrets or token records. It receives a bearer token on clipboard writes and calls this auth server's `/tokens/check` endpoint to verify that the token belongs to the request `clientId`.
 
@@ -31,7 +31,6 @@ The example configuration runs the auth server on `http://localhost:8081`. Its l
 To build a runnable jar instead:
 
 ```bash
-cd ~/Desktop/clippy
 mvn -pl apps/auth/http-based/server -am package
 java -jar apps/auth/http-based/server/target/auth-http-server-0.1.0-SNAPSHOT-exec.jar
 ```
@@ -63,7 +62,7 @@ logged.
 If you run the `CustomLogger` directly elsewhere, you can still redirect it with the JVM system property `custom.logger.dir`, for example:
 
 ```bash
-java -Dcustom.logger.dir=/tmp/clippy-logs -jar apps/auth/http-based/server/target/auth-http-server-0.1.0-SNAPSHOT-exec.jar
+java -Dcustom.logger.dir=/tmp/auth-logs -jar apps/auth/http-based/server/target/auth-http-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
 For Azure, point `AUTH_DATASOURCE_URL` at the `auth` database on the deployed PostgreSQL server.
@@ -222,7 +221,6 @@ The app server passes the clipboard request `clientId` and bearer token to `/tok
 Run the auth server tests from the repository root:
 
 ```bash
-cd ~/Desktop/clippy
 mvn -pl apps/auth/http-based/server -am test
 ```
 
