@@ -26,7 +26,7 @@ class KeeboarderControllerTest {
     @Test
     void rejectsSendWithInvalidToken() {
         var response = controller.send(
-                new KeeboarderController.SendRequest("target", "message", "spoofed-sender"),
+                new KeeboarderController.SendRequest("target", "message"),
                 "Bearer wrong-token",
                 "caller"
         );

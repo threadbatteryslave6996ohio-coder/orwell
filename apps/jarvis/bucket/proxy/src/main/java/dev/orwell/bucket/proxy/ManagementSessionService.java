@@ -31,7 +31,7 @@ public class ManagementSessionService {
 
     public boolean tryValidate(String token, String[] usernameOut) {
         String[] parts = token.split("\\.", 2);
-        if (parts.length != 2 || !constantTimeEquals(parts[1], sign(parts[0]))) {
+        if (parts.length != 2 || !SecureTokenUtils.constantTimeEquals(parts[1], sign(parts[0]))) {
             return false;
         }
 
@@ -55,19 +55,6 @@ public class ManagementSessionService {
         } catch (Exception exception) {
             throw new IllegalStateException("Cannot sign session.", exception);
         }
-    }
-
-    private boolean constantTimeEquals(String left, String right) {
-        byte[] l = left.getBytes(StandardCharsets.UTF_8);
-        byte[] r = right.getBytes(StandardCharsets.UTF_8);
-        if (l.length != r.length) {
-            return false;
-        }
-        int diff = 0;
-        for (int i = 0; i < l.length; i++) {
-            diff |= l[i] ^ r[i];
-        }
-        return diff == 0;
     }
 
     private record SessionPayload(String sub, long exp) {}

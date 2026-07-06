@@ -1,9 +1,17 @@
-package dev.orwell.auth.http.server;
+package dev.orwell.auth.http.server.controller;
 
 import dev.orwell.auth.http.api.CheckTokenHttpRequest;
 import dev.orwell.auth.http.api.CheckTokenHttpResponse;
 import dev.orwell.auth.http.api.LoginHttpRequest;
 import dev.orwell.auth.http.api.LoginHttpResponse;
+import dev.orwell.auth.http.server.dto.CreateIdentityRequest;
+import dev.orwell.auth.http.server.dto.IdentityResponse;
+import dev.orwell.auth.http.server.entity.ClientIdentity;
+import dev.orwell.auth.http.server.entity.ClientToken;
+import dev.orwell.auth.http.server.repository.ClientIdentityRepository;
+import dev.orwell.auth.http.server.repository.ClientTokenRepository;
+import dev.orwell.auth.http.server.security.CredentialHasher;
+import dev.orwell.auth.http.server.security.TokenGenerator;
 import dev.orwell.logging.CustomLogger;
 import jakarta.validation.Valid;
 import org.springframework.dao.DataIntegrityViolationException;

@@ -55,7 +55,7 @@ public class KeeboarderController {
         return ResponseEntity.ok(Map.of("status", "sent"));
     }
 
-    public record SendRequest(String toClientId, String content, String fromClientId) {
+    public record SendRequest(String toClientId, String content) {
     }
 
     private boolean isAuthenticated(String clientId, String authorization) {

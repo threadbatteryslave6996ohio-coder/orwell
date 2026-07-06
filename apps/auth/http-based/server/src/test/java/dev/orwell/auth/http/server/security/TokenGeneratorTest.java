@@ -1,4 +1,4 @@
-package dev.orwell.auth.http.server;
+package dev.orwell.auth.http.server.security;
 
 import org.junit.jupiter.api.Test;
 

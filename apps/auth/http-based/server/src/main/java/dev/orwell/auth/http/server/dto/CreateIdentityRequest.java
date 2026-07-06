@@ -1,4 +1,4 @@
-package dev.orwell.auth.http.server;
+package dev.orwell.auth.http.server.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

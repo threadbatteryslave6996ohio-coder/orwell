@@ -216,6 +216,48 @@ The app server passes the clipboard request `clientId` and bearer token to `/tok
 - Secrets are never returned by the API.
 - Token values cannot be recovered from the database because only token hashes are stored.
 
+## Known Issues
+
+### Transaction boundaries & OSIV dependency
+
+Controller methods (`login`, `createIdentity`, `checkToken`) lack `@Transactional`. Entity objects passed between repository calls (e.g., `ClientIdentity` from `findByClientId` into `new ClientToken`) rely on Spring Boot's Open Session In View being enabled by default. If OSIV is ever disabled, these calls will fail with detached-entity errors.
+
+### TOCTOU race in identity creation
+
+`createIdentity` checks `existsByClientId` before `save`, but a concurrent request can insert between the two calls. The `DataIntegrityViolationException` catch does recover, but the `existsByClientId` round-trip is redundant — the `UNIQUE` constraint alone is sufficient.
+
+### `PBEKeySpec` secret not cleared from memory
+
+`CredentialHasher.pbkdf2` never calls `PBEKeySpec.clearPassword()` in a `finally` block, leaving the secret char array in heap memory indefinitely.
+
+### No token expiration
+
+`ClientToken` has no `expiresAt` field. Issued tokens are valid forever. There is also no endpoint to revoke a single token or to deactivate an identity (the `active` column on `ClientIdentity` has no setter).
+
+### No rate limiting on `/login`
+
+The login endpoint performs 120k PBKDF2 iterations per request with no throttling, lockout, or CAPTCHA — enabling brute-force attacks and DoS amplification.
+
+### Unbounded `token` input
+
+`CheckTokenHttpRequest.token` has `@NotBlank` but no `@Size` constraint. An attacker can send multi-megabyte tokens, triggering expensive SHA-256 hashing and oversized database query parameters.
+
+### Timing side-channel on inactive identities
+
+The `isActive` filter is checked before PBKDF2 verification, so inactive accounts reject faster than active accounts with wrong passwords — allowing remote timing to infer account status.
+
+### Data corruption not handled in `matches()`
+
+`CredentialHasher.matches()` does not catch `NumberFormatException` or `IllegalArgumentException` from parsing a malformed stored hash, which would surface as a 500 error instead of a graceful 401.
+
+### Test gaps
+
+- `DataIntegrityViolationException` catch path is never exercised.
+- No assertion that `tokens.save()` is never called on failed login.
+- Real PBKDF2 (120k iterations) in unit tests makes them slow.
+- No test for token-not-found in `checkToken`.
+- `CredentialHasherTest` and `TokenGeneratorTest` hardcode literal values (`120000`, `43`) instead of referencing the source constants.
+
 ## Tests
 
 Run the auth server tests from the repository root:

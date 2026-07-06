@@ -1,5 +1,6 @@
 package dev.orwell.keeboarder.server;
 
+import dev.orwell.auth.AuthenticationStrategy;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -52,11 +53,13 @@ public class HttpApiIntegrationTest {
         int httpPort = 8083;
         TestRedisClientCache cache = new TestRedisClientCache();
 
+        AuthenticationStrategy authenticator = (clientId, token) -> "test-client".equals(clientId) && "valid-token".equals(token);
+
         // initialize ChatEndpoint with our in-memory cache
-        ChatEndpoint.initialize(cache, (clientId, token) -> "test-client".equals(clientId) && "valid-token".equals(token));
+        ChatEndpoint.initialize(cache, authenticator);
 
         Server wsServer = new Server("localhost", wsPort, "/ws", null, ChatEndpoint.class);
-        HttpApiServer httpApi = new HttpApiServer("localhost", httpPort);
+        HttpApiServer httpApi = new HttpApiServer("localhost", httpPort, new KeeboarderService(), authenticator);
 
         try {
             wsServer.start();
@@ -89,10 +92,12 @@ public class HttpApiIntegrationTest {
             String clientId = regObj.get("clientId").getAsString();
             assertNotNull(clientId);
 
-            // call HTTP GET /api/clients
+            // call HTTP GET /api/clients with auth headers
             URL clientsUrl = new URL("http://localhost:" + httpPort + "/api/clients");
             HttpURLConnection conn = (HttpURLConnection) clientsUrl.openConnection();
             conn.setRequestMethod("GET");
+            conn.setRequestProperty("Authorization", "Bearer valid-token");
+            conn.setRequestProperty("X-Client-Id", "test-client");
             assertEquals(200, conn.getResponseCode());
             try (BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
                 String body = r.lines().reduce((a,b) -> a+b).orElse("");
@@ -108,12 +113,14 @@ public class HttpApiIntegrationTest {
                 assertTrue(found, "client should be listed by HTTP API");
             }
 
-            // POST /api/send to this client
+            // POST /api/send to this client with auth headers
             URL sendUrl = new URL("http://localhost:" + httpPort + "/api/send");
             HttpURLConnection pconn = (HttpURLConnection) sendUrl.openConnection();
             pconn.setRequestMethod("POST");
             pconn.setDoOutput(true);
             pconn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            pconn.setRequestProperty("Authorization", "Bearer valid-token");
+            pconn.setRequestProperty("X-Client-Id", "test-client");
             JsonObject payload = new JsonObject();
             payload.addProperty("toClientId", clientId);
             payload.addProperty("content", "hello-via-http");

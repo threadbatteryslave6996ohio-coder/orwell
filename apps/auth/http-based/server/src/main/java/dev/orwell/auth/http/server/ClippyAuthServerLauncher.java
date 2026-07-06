@@ -21,7 +21,7 @@ public final class ClippyAuthServerLauncher {
         ClippyAuthServerApplication.start(EnvLoader.load("file"));
     }
 
-    static Map<String, String> resolveEnvironment(Path startDirectory) throws IOException {
+    public static Map<String, String> resolveEnvironment(Path startDirectory) throws IOException {
         return EnvFiles.load(startDirectory);
     }
 }

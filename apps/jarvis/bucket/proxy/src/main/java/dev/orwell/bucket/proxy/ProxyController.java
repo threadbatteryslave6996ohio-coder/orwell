@@ -193,7 +193,7 @@ public class ProxyController {
     public ResponseEntity<String> adminLogin(@RequestParam("username") String username,
                                              @RequestParam("password") String password,
                                              HttpServletResponse response) {
-        if (!constantTimeEquals(username, properties.management().username()) || !constantTimeEquals(password, properties.management().password())) {
+        if (!SecureTokenUtils.constantTimeEquals(username, properties.management().username()) || !SecureTokenUtils.constantTimeEquals(password, properties.management().password())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(adminLoginPage("Invalid username or password."));
         }
         String token = sessions.createSession(username, Instant.now().plusSeconds(8 * 3600));
@@ -244,15 +244,6 @@ public class ProxyController {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> badRequest(IllegalArgumentException exception) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("success", false, "error", exception.getMessage()));
-    }
-
-    private static boolean constantTimeEquals(String left, String right) {
-        byte[] l = left.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        byte[] r = right.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        if (l.length != r.length) return false;
-        int diff = 0;
-        for (int i = 0; i < l.length; i++) diff |= l[i] ^ r[i];
-        return diff == 0;
     }
 
     private static String escapeHtml(String value) {

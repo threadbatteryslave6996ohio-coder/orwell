@@ -172,7 +172,8 @@ public final class MacKeyboardClient {
             currentClientId.set(msg.get("clientId").getAsString());
         }
         registered.set(true);
-        System.out.println("Registered as " + msg.get("name").getAsString() + " (" + currentClientId.get() + ")");
+        String name = msg.has("name") ? msg.get("name").getAsString() : "unknown";
+        System.out.println("Registered as " + name + " (" + currentClientId.get() + ")");
     }
 
     private void sendRegister(Session session) throws IOException {
@@ -340,7 +341,7 @@ public final class MacKeyboardClient {
         Session session = sessionRef.getAndSet(null);
         if (session != null) {
             try {
-                if (session != null && session.isOpen()) {
+                if (session.isOpen()) {
                     session.close();
                 }
             } catch (IOException ignored) {

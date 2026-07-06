@@ -1,6 +1,6 @@
 package dev.orwell.env;
 
-import dev.orwell.logging.Strings;
+import dev.orwell.primitives.NonEmptyString;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -58,6 +58,6 @@ public final class EnvOption<T> {
     }
 
     private static String validateName(String name) {
-        return Strings.requireNonBlank(name, "Environment option name");
+        return new NonEmptyString(name, "Environment option name").value();
     }
 }

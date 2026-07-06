@@ -187,7 +187,9 @@ public class ChatEndpoint {
         }
         if (removedClientId != null) {
             sessions.remove(removedClientId);
-            redisCache.unregisterClient(removedClientId);
+            if (redisCache != null) {
+                redisCache.unregisterClient(removedClientId);
+            }
         }
     }
 
@@ -231,7 +233,8 @@ public class ChatEndpoint {
                     obj.addProperty("connectedAt", info.connectedAt);
                 }
                 // attach whether there's an active WS session
-                obj.addProperty("connected", sessions.containsKey(clientId) && sessions.get(clientId).isOpen());
+                Session session = sessions.get(clientId);
+                obj.addProperty("connected", session != null && session.isOpen());
                 arr.add(obj);
             }
         } catch (Exception e) {

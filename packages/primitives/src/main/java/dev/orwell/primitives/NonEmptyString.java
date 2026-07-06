@@ -7,29 +7,21 @@ public class NonEmptyString {
     private final String value;
 
     public NonEmptyString(String value) {
-        this(value, null);
-    }
-
-    private boolean IsEmpty(String value) {
-        return value == null || value.isEmpty();
+        this(value, "value must not be null or blank");
     }
 
     public NonEmptyString(String value, String errorMessage) {
-        if (IsEmpty(value)) {
-            throw new IllegalArgumentException(
-                    errorMessage != null ? errorMessage : "value must not be null or blank");
-        }
+        requireNonBlank(value, errorMessage);
         this.value = value;
     }
 
-    public NonEmptyString(String value, boolean exit, String errorMessage ) {
-        if (IsEmpty(value)) {
-            if (errorMessage != null) {
-                System.err.println(errorMessage);
-            }
-            System.exit(1);
+    private static void requireNonBlank(String value, String errorMessage) {
+        if (value == null) {
+            throw new IllegalArgumentException(errorMessage);
         }
-        this.value = value;
+        if (value.isBlank()) {
+            throw new IllegalArgumentException(errorMessage);
+        }
     }
 
     public String value() {

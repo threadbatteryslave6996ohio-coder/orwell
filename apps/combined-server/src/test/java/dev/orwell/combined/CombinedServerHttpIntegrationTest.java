@@ -1,7 +1,7 @@
 package dev.orwell.combined;
 
-import dev.orwell.auth.http.server.ClientIdentityRepository;
-import dev.orwell.auth.http.server.ClientTokenRepository;
+import dev.orwell.auth.http.server.repository.ClientIdentityRepository;
+import dev.orwell.auth.http.server.repository.ClientTokenRepository;
 import dev.orwell.server.ClipboardEntry;
 import dev.orwell.server.ClipboardEntryRepository;
 import org.junit.jupiter.api.BeforeEach;

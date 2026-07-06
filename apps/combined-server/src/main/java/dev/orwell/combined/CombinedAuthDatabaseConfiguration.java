@@ -1,8 +1,8 @@
 package dev.orwell.combined;
 
 import com.zaxxer.hikari.HikariDataSource;
-import dev.orwell.auth.http.server.ClientIdentity;
-import dev.orwell.auth.http.server.ClientIdentityRepository;
+import dev.orwell.auth.http.server.entity.ClientIdentity;
+import dev.orwell.auth.http.server.repository.ClientIdentityRepository;
 import jakarta.persistence.EntityManagerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.jdbc.DataSourceBuilder;

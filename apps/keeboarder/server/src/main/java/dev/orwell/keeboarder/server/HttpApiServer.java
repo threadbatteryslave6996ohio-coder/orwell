@@ -1,5 +1,7 @@
 package dev.orwell.keeboarder.server;
 
+import dev.orwell.auth.AuthenticationStrategy;
+import dev.orwell.auth.BearerToken;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
@@ -19,13 +21,17 @@ public class HttpApiServer {
     private static final Gson gson = new Gson();
 
     public HttpApiServer(String host, int port) throws IOException {
-        this(host, port, new KeeboarderService());
+        this(host, port, new KeeboarderService(), null);
     }
 
     public HttpApiServer(String host, int port, KeeboarderService service) throws IOException {
+        this(host, port, service, null);
+    }
+
+    public HttpApiServer(String host, int port, KeeboarderService service, AuthenticationStrategy authenticator) throws IOException {
         server = HttpServer.create(new InetSocketAddress(host, port), 0);
-        server.createContext("/api/clients", new ClientsHandler(service));
-        server.createContext("/api/send", new SendHandler(service));
+        server.createContext("/api/clients", new ClientsHandler(service, authenticator));
+        server.createContext("/api/send", new SendHandler(service, authenticator));
         server.setExecutor(null);
     }
 
@@ -37,17 +43,36 @@ public class HttpApiServer {
         server.stop(0);
     }
 
+    private static boolean isAuthenticated(String clientId, String authorization, AuthenticationStrategy authenticator) {
+        if (authenticator == null) {
+            return true;
+        }
+        if (clientId == null || clientId.isBlank()) {
+            return false;
+        }
+        String token = BearerToken.extract(authorization);
+        return token != null && authenticator.isTokenValidForClient(clientId, token);
+    }
+
     static class ClientsHandler implements HttpHandler {
         private final KeeboarderService service;
+        private final AuthenticationStrategy authenticator;
 
-        ClientsHandler(KeeboarderService service) {
+        ClientsHandler(KeeboarderService service, AuthenticationStrategy authenticator) {
             this.service = service;
+            this.authenticator = authenticator;
         }
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(405, -1);
+                return;
+            }
+            String authorization = exchange.getRequestHeaders().getFirst("Authorization");
+            String clientId = exchange.getRequestHeaders().getFirst("X-Client-Id");
+            if (!isAuthenticated(clientId, authorization, authenticator)) {
+                exchange.sendResponseHeaders(401, -1);
                 return;
             }
             String resp = service.connectedClientsJson();
@@ -62,15 +87,24 @@ public class HttpApiServer {
 
     static class SendHandler implements HttpHandler {
         private final KeeboarderService service;
+        private final AuthenticationStrategy authenticator;
 
-        SendHandler(KeeboarderService service) {
+        SendHandler(KeeboarderService service, AuthenticationStrategy authenticator) {
             this.service = service;
+            this.authenticator = authenticator;
         }
 
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(405, -1);
+                return;
+            }
+
+            String authorization = exchange.getRequestHeaders().getFirst("Authorization");
+            String clientId = exchange.getRequestHeaders().getFirst("X-Client-Id");
+            if (!isAuthenticated(clientId, authorization, authenticator)) {
+                exchange.sendResponseHeaders(401, -1);
                 return;
             }
 

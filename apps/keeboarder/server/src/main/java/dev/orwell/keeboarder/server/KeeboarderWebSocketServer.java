@@ -57,7 +57,7 @@ public final class KeeboarderWebSocketServer implements SmartLifecycle {
 
     @Override
     public synchronized void stop() {
-        if (!running && server == null && cache == null) {
+        if (!running) {
             return;
         }
         releaseResources();

@@ -27,7 +27,8 @@ public final class HttpAuthenticationStrategy implements AuthenticationStrategy 
 
     public LoginHttpResponse login(String clientId, String secret) {
         try {
-            return restClient.post()
+            return restClient
+                    .post()
                     .uri("/login")
                     .body(new LoginHttpRequest(clientId, secret))
                     .retrieve()

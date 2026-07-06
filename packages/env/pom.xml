@@ -15,6 +15,10 @@
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
+            <artifactId>clippy-primitives</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
             <artifactId>clippy-logger</artifactId>
             <version>${project.version}</version>
         </dependency>

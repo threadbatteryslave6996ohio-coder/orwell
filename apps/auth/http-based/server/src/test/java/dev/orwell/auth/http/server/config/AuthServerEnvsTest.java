@@ -1,8 +1,9 @@
-package dev.orwell.auth.http.server;
+package dev.orwell.auth.http.server.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import dev.orwell.auth.http.server.ClippyAuthServerLauncher;
 import dev.orwell.env.Env;
 import dev.orwell.env.EnvValidationException;
 import java.io.IOException;

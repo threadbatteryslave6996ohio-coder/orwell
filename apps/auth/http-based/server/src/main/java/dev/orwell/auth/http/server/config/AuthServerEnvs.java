@@ -1,4 +1,4 @@
-package dev.orwell.auth.http.server;
+package dev.orwell.auth.http.server.config;
 
 import dev.orwell.env.Env;
 import dev.orwell.env.EnvOption;

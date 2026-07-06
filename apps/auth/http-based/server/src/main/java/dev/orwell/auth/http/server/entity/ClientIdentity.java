@@ -1,4 +1,4 @@
-package dev.orwell.auth.http.server;
+package dev.orwell.auth.http.server.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
