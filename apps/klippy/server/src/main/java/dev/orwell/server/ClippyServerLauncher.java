@@ -31,7 +31,7 @@ public final class ClippyServerLauncher {
             String url = args.length > 1 ? args[1] : "http://localhost:8080/v1/env";
             return EnvLoader.fetchRemote(url);
         }
-        return EnvFiles.load();
+        return EnvLoader.load("file");
     }
 
     static Map<String, String> resolveEnvironment(Path startDirectory) throws IOException {

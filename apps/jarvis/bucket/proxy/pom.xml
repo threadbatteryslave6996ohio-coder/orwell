@@ -62,6 +62,11 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
+            <artifactId>env-http</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
             <artifactId>clippy-server-bootstrap</artifactId>
             <version>0.1.0-SNAPSHOT</version>
         </dependency>

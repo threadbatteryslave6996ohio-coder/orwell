@@ -12,12 +12,14 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 
+import dev.orwell.env.http.EnvLoader;
+
 public final class AnalysisWorker {
     private AnalysisWorker() {
     }
 
     public static void main(String[] args) throws Exception {
-        var env = StreamingEnvs.from(dev.orwell.env.EnvFiles.load());
+        var env = StreamingEnvs.from(EnvLoader.load("file"));
         String endpoint = env.get(StreamingEnvs.STREAM_ANALYSIS_ENDPOINT);
         if (endpoint.isBlank()) {
             drainJpegFrames(System.in);

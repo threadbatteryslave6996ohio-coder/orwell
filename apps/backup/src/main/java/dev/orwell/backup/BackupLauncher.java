@@ -1,7 +1,7 @@
 package dev.orwell.backup;
 
 import dev.orwell.env.Env;
-import dev.orwell.env.EnvFiles;
+import dev.orwell.env.http.EnvLoader;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -11,7 +11,7 @@ public final class BackupLauncher {
     }
 
     public static void main(String[] args) throws Exception {
-        var rawEnv = EnvFiles.load();
+        var rawEnv = EnvLoader.load("file");
         Env env = BackupEnvs.from(rawEnv);
         List<ProjectConfig> projects = BackupEnvs.resolveProjects(env, rawEnv);
 

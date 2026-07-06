@@ -26,7 +26,7 @@ public class ChatServer {
             String url = args.length > 1 ? args[1] : "http://localhost:8080/v1/env";
             return EnvLoader.fetchRemote(url);
         }
-        return EnvFiles.load();
+        return EnvLoader.load("file");
     }
 
     static Map<String, String> resolveEnvironment(java.nio.file.Path startDirectory) throws IOException {

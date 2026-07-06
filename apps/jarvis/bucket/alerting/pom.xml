@@ -24,6 +24,11 @@
             <version>0.1.0-SNAPSHOT</version>
         </dependency>
         <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>env-http</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
             <groupId>com.sun.mail</groupId>
             <artifactId>jakarta.mail</artifactId>
             <version>2.0.1</version>
