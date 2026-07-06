@@ -16,27 +16,22 @@
         <dependency>
             <groupId>dev.orwell</groupId>
             <artifactId>clippy-server-bootstrap</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
             <artifactId>env</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
             <artifactId>auth-core</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
             <artifactId>auth-http-client</artifactId>
-            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
             <artifactId>env-http</artifactId>
-            <version>${project.version}</version>
         </dependency>
     </dependencies>
 

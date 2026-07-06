@@ -1,0 +1,75 @@
+# Combined server — testing deployment with local databases.
+#
+#   docker compose -p testing -f docker-compose.testing.yml up --build -d
+#
+# Brings up two Postgres databases, Redis, and the combined server (port 8080).
+# Reads environment from .env.testing.
+
+services:
+  db-clippy:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: clippy
+      POSTGRES_USER: clippy
+      POSTGRES_PASSWORD: clippy
+    ports:
+      - "5432:5432"
+    volumes:
+      - testing-clippy-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clippy -d clippy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  db-auth:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: auth
+    ports:
+      - "5433:5432"
+    volumes:
+      - testing-auth-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth -d auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - testing-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  combined-server:
+    image: clippy-app:local
+    build:
+      context: ../..
+      dockerfile: apps/klippy/Dockerfile
+    command: ["java", "-jar", "/app/combined-server.jar"]
+    environment:
+      COMBINED_SERVER_ENV_FILE: /app/config/combined.env
+    volumes:
+      - ./.env.testing:/app/config/combined.env:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      db-clippy:
+        condition: service_healthy
+      db-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  testing-clippy-pg-data:
+  testing-auth-pg-data:
+  testing-redis-data:

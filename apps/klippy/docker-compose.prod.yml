@@ -1,0 +1,35 @@
+# Clippy — production deployment connecting to external databases.
+#
+#   docker compose -p prod -f docker-compose.prod.yml up -d
+#
+# Reads environment from .env.prod. No local databases are started;
+# the servers connect to the databases configured in .env.prod.
+
+services:
+  auth-server:
+    image: clippy-app:local
+    build:
+      context: ../..
+      dockerfile: apps/klippy/Dockerfile
+    command: ["java", "-jar", "/app/auth-server.jar"]
+    env_file:
+      - .env.prod
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+
+  clipboard-server:
+    image: clippy-app:local
+    build:
+      context: ../..
+      dockerfile: apps/klippy/Dockerfile
+    command: ["java", "-jar", "/app/clippy-server.jar"]
+    env_file:
+      - .env.prod
+    ports:
+      - "8080:8080"
+      - "8025:8025"
+    depends_on:
+      auth-server:
+        condition: service_started
+    restart: unless-stopped
