@@ -1,24 +1,14 @@
-# Clippy — full-stack docker compose.
+# Clippy — separate auth and clipboard server deployment.
 #
-# Pick the deployment shape with a compose PROFILE (this is the flag):
+#   docker compose up --build
 #
-#   Separate deployment (auth server + clipboard server in their own JVMs):
-#       docker compose --profile separate up --build
-#
-#   Combined deployment (auth + clipboard routes in one JVM, proxy launched as child process):
-#       docker compose --profile combined up --build
-#
-#   (equivalently:  COMPOSE_PROFILES=separate docker compose up --build)
-#
-# Both profiles bring up the two Postgres databases. Running without a profile
-# starts nothing, on purpose — you must choose combined or separate.
+# Brings up two Postgres databases, the auth server (port 8081),
+# and the clipboard server (port 8080).
 
 services:
-  # --- Databases (shared by both deployment shapes) ------------------------
   db-clippy:
     image: postgres:16-alpine
     container_name: clippy-postgres
-    profiles: ["separate", "combined"]
     environment:
       POSTGRES_DB: clippy
       POSTGRES_USER: clippy
@@ -36,7 +26,6 @@ services:
   db-auth:
     image: postgres:16-alpine
     container_name: auth-postgres
-    profiles: ["separate", "combined"]
     environment:
       POSTGRES_DB: auth
       POSTGRES_USER: auth
@@ -51,26 +40,12 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    container_name: keeboarder-redis
-    profiles: ["combined"]
-    volumes:
-      - keeboarder-redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  # --- Separate deployment -------------------------------------------------
   auth-server:
     image: clippy-app:local
     build:
       context: ../..
       dockerfile: apps/klippy/Dockerfile
     container_name: auth-server
-    profiles: ["separate"]
     command: ["java", "-jar", "/app/auth-server.jar"]
     environment:
       AUTH_DATASOURCE_URL: jdbc:postgresql://db-auth:5432/auth
@@ -93,7 +68,6 @@ services:
       context: ../..
       dockerfile: apps/klippy/Dockerfile
     container_name: clippy-server
-    profiles: ["separate"]
     command: ["java", "-jar", "/app/clippy-server.jar"]
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db-clippy:5432/clippy
@@ -114,32 +88,6 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # --- Combined deployment -------------------------------------------------
-  combined-server:
-    image: clippy-app:local
-    build:
-      context: ../..
-      dockerfile: apps/klippy/Dockerfile
-    container_name: combined-server
-    profiles: ["combined"]
-    command: ["java", "-jar", "/app/combined-server.jar"]
-    # The combined launcher requires an env file; mount it and point at it.
-    environment:
-      COMBINED_SERVER_ENV_FILE: /app/config/combined.env
-    volumes:
-      - ../combined-server/docker-combined.env:/app/config/combined.env:ro
-    ports:
-      - "8080:8080"
-    depends_on:
-      db-clippy:
-        condition: service_healthy
-      db-auth:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
 volumes:
   clippy-pg-data:
   auth-pg-data:
-  keeboarder-redis-data:

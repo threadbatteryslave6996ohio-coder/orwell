@@ -50,18 +50,17 @@ for the available toolchain and tasks.
 
 ## Run Locally
 
-The simplest complete deployment uses a Docker Compose profile:
+The simplest complete deployment uses Docker Compose:
 
 ```bash
 # Auth server on 8081 and clipboard server on 8080
-docker compose --profile separate up --build
+docker compose up --build
 
-# Auth and clipboard routes in one JVM on 8080, plus the bucket proxy on its configured port
-docker compose --profile combined up --build
+# Combined deployment (auth + clipboard routes in one JVM on 8080)
+docker compose -f ../combined-server/docker-compose.yml up --build
 ```
 
-Running Compose without a profile intentionally starts no services. The
-separate deployment uses `http://localhost:8081` for auth and
+The separate deployment uses `http://localhost:8081` for auth and
 `http://localhost:8080` for clipboard requests. The combined deployment uses
 `http://localhost:8080/auth` and `http://localhost:8080/api` for auth and
 clipboard respectively, and also launches the bucket proxy from the same

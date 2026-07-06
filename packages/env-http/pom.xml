@@ -5,31 +5,25 @@
 
     <parent>
         <groupId>dev.orwell</groupId>
-        <artifactId>secrets-manager</artifactId>
+        <artifactId>orwell</artifactId>
         <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>secrets-client</artifactId>
+    <artifactId>env-http</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>auth-http-client</artifactId>
-            <version>${project.version}</version>
+            <artifactId>env</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>env</artifactId>
-            <version>${project.version}</version>
+            <artifactId>secrets-client</artifactId>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

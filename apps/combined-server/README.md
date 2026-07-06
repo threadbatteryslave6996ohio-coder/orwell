@@ -20,6 +20,14 @@ combined env file with `CLIPPY_AUTH_ROUTE_PREFIX`,
 
 ## Build and run
 
+### Docker Compose
+
+```bash
+docker compose up --build
+```
+
+### Standalone
+
 ```bash
 mvn -f pom.xml -pl apps/combined-server -am package
 cp apps/combined-server/.env.example apps/combined-server/.env

@@ -14,6 +14,7 @@
         <module>packages/server-bootstrap</module>
         <module>packages/primitives</module>
         <module>packages/server-parent</module>
+        <module>packages/env-http</module>
         <module>apps/auth</module>
         <module>apps/klippy</module>
         <module>apps/jarvis</module>
@@ -84,6 +85,11 @@
             <dependency>
                 <groupId>dev.orwell</groupId>
                 <artifactId>env</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.orwell</groupId>
+                <artifactId>env-http</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

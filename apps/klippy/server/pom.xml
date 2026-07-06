@@ -29,6 +29,10 @@
             <groupId>dev.orwell</groupId>
             <artifactId>clippy-utils</artifactId>
         </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>env-http</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
