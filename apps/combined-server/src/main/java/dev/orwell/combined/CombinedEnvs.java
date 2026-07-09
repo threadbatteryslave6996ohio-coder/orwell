@@ -110,6 +110,7 @@ public final class CombinedEnvs {
         copy(source, values, "PROXY_MANAGEMENT_SESSION_SECRET", "proxy.management.session-secret");
         copy(source, values, "PROXY_SERVER_URL", "proxy.server.url");
         copy(source, values, "PROXY_AUDIT_FILE", "proxy.logging.audit-file");
+        copy(source, values, "PROXY_LOGGING_AUDIT_FILE", "proxy.logging.audit-file");
         copy(source, values, "WEBSOCKET_HOST", "keeboarder.websocket.host");
         copy(source, values, "WEBSOCKET_PORT", "keeboarder.websocket.port");
         copy(source, values, "REDIS_HOST", "keeboarder.redis.host");

@@ -1,6 +1,8 @@
 # AWS S3 Private Bucket
 
-This project deploys a private AWS S3 bucket plus a Java-based EC2 proxy and Java stream services. The only shell-based pieces are the stream helper scripts and the deployment bootstrap.
+This project deploys a private object storage bucket plus a Java-based EC2 proxy
+and Java stream services. The only shell-based pieces are the stream helper
+scripts and the deployment bootstrap.
 
 ## Components
 
@@ -36,7 +38,7 @@ MediaMTX receives RTMP input, the recorder writes segmented MP4 files, and the a
 ## Documentation
 
 - [deployment/README.md](deployment/README.md)
-- [deployment/README.md](deployment/README.md)
 - [proxy/README.md](proxy/README.md)
+- [proxy/START_SERVER.md](proxy/START_SERVER.md)
 - [alerting/README.md](alerting/README.md)
 - [streaming/README.md](streaming/README.md)

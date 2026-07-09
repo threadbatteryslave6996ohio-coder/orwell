@@ -124,7 +124,7 @@ public class HttpApiIntegrationTest {
             JsonObject payload = new JsonObject();
             payload.addProperty("toClientId", clientId);
             payload.addProperty("content", "hello-via-http");
-            payload.addProperty("fromClientId", "test-server");
+            payload.addProperty("fromClientId", "spoofed-client");
             byte[] bytes = gson.toJson(payload).getBytes(StandardCharsets.UTF_8);
             pconn.setFixedLengthStreamingMode(bytes.length);
             try (OutputStream os = pconn.getOutputStream()) { os.write(bytes); }
@@ -137,6 +137,7 @@ public class HttpApiIntegrationTest {
             JsonObject personalObj = gson.fromJson(personal, JsonObject.class);
             assertEquals("personal", personalObj.get("type").getAsString());
             assertEquals("hello-via-http", personalObj.get("content").getAsString());
+            assertEquals("test-client", personalObj.get("fromClientId").getAsString());
 
             session.close();
         } finally {

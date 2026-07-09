@@ -102,17 +102,57 @@ public class ChatEndpoint {
         }
 
         String clientId = msg.clientId;
-        sessions.put(clientId, session);
+        Session previousSession = sessions.put(clientId, session);
+        String previousSessionId = previousSession == null ? null : previousSession.getId();
         sessionClientIds.put(session.getId(), clientId);
-        redisCache.registerClient(clientId, msg.name, Instant.now().toString());
 
-        JsonObject registerAck = new JsonObject();
-        registerAck.addProperty("type", "registered");
-        registerAck.addProperty("clientId", clientId);
-        registerAck.addProperty("name", msg.name);
-        sendJson(session, registerAck);
+        boolean registeredInRedis = false;
+        try {
+            redisCache.registerClient(clientId, msg.name, Instant.now().toString());
+            registeredInRedis = true;
+
+            JsonObject registerAck = new JsonObject();
+            registerAck.addProperty("type", "registered");
+            registerAck.addProperty("clientId", clientId);
+            registerAck.addProperty("name", msg.name);
+            sendJson(session, registerAck);
+        } catch (IOException | RuntimeException exception) {
+            rollbackFailedRegistration(clientId, session, previousSession, previousSessionId, registeredInRedis);
+            throw exception;
+        }
+
+        if (previousSession != null && previousSession != session) {
+            sessionClientIds.remove(previousSession.getId());
+            try {
+                if (previousSession.isOpen()) {
+                    previousSession.close();
+                }
+            } catch (IOException ignored) {
+            }
+        }
 
         announceHostJoin(clientId, msg.name);
+    }
+
+    private void rollbackFailedRegistration(String clientId, Session session, Session previousSession, String previousSessionId, boolean registeredInRedis) {
+        sessionClientIds.remove(session.getId());
+        boolean restoredPreviousSession = previousSession != null && previousSession != session && previousSession.isOpen();
+        if (restoredPreviousSession) {
+            sessions.put(clientId, previousSession);
+            sessionClientIds.put(previousSessionId, clientId);
+            return;
+        }
+
+        sessions.remove(clientId, session);
+        if (previousSessionId != null) {
+            sessionClientIds.remove(previousSessionId);
+        }
+        if (registeredInRedis && redisCache != null) {
+            try {
+                redisCache.unregisterClient(clientId);
+            } catch (RuntimeException ignored) {
+            }
+        }
     }
 
     private void handlePersonalMessage(Session session, Message msg) throws IOException {
@@ -186,8 +226,11 @@ public class ChatEndpoint {
             }
         }
         if (removedClientId != null) {
-            sessions.remove(removedClientId);
-            if (redisCache != null) {
+            Session removedSession = sessions.get(removedClientId);
+            if (removedSession == null || removedSession.equals(session)) {
+                sessions.remove(removedClientId, session);
+            }
+            if (redisCache != null && !sessions.containsKey(removedClientId)) {
                 redisCache.unregisterClient(removedClientId);
             }
         }

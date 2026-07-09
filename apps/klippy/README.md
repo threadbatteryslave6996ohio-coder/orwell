@@ -4,7 +4,7 @@ Clippy records text clipboard changes from desktop and Android clients in a
 Spring Boot server backed by PostgreSQL.
 
 The Java code is a JDK 25 multi-module Maven project. The Android client is a
-separate Kotlin/Gradle project under `clients/android`.
+separate Kotlin/Gradle project under `apps/klippy/clients/android`.
 
 ## Requirements
 
@@ -45,7 +45,7 @@ mvn -pl <module> -am test
 mvn -pl <module> -am package
 ```
 
-The Android project is built separately from `clients/android`; see its README
+The Android project is built separately from `apps/klippy/clients/android`; see its README
 for the available toolchain and tasks.
 
 ## Run Locally
@@ -54,10 +54,10 @@ The simplest complete deployment uses Docker Compose:
 
 ```bash
 # Auth server on 8081 and clipboard server on 8080
-docker compose up --build
+docker compose -f apps/klippy/docker-compose.yml up --build
 
 # Combined deployment (auth + clipboard routes in one JVM on 8080)
-docker compose -f ../combined-server/docker-compose.yml up --build
+docker compose -f apps/combined-server/docker-compose.yml up --build
 ```
 
 The separate deployment uses `http://localhost:8081` for auth and
@@ -75,9 +75,9 @@ mvn -pl apps/auth/http-based/server spring-boot:run
 # Terminal 2: clipboard server
 mvn -pl apps/klippy/server spring-boot:run
 # Terminal 3: file-locker
-mvn -pl clients/file-locker -am package && java -jar clients/file-locker/target/clippy-file-locker-0.1.0-SNAPSHOT.jar
+mvn -pl apps/klippy/clients/file-locker -am package && java -jar apps/klippy/clients/file-locker/target/clippy-file-locker-0.1.0-SNAPSHOT-exec.jar
 # Terminal 4: linux client
-mvn -pl clients/linux -am package && java -jar clients/linux/target/clippy-linux-client-0.1.0-SNAPSHOT.jar
+mvn -pl apps/klippy/clients/linux -am package && java -jar apps/klippy/clients/linux/target/clippy-linux-client-0.1.0-SNAPSHOT.jar
 ```
 
 ## Client Authentication

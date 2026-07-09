@@ -1,25 +1,42 @@
-# Object Storage Upload Proxy Server
+# Jarvis Bucket Proxy
 
-This module contains the Java proxy that fronts private AWS S3-compatible or
-Azure Blob storage.
+Java upload proxy for AWS S3-compatible or Azure Blob storage. The launcher
+loads configuration from `.env` and applies nonblank shell overrides.
 
-## Contents
+## Build And Run
 
-- `src/main/java/dev/orwell/bucket/proxy/`: Java source
-- `src/main/java/dev/orwell/bucket/proxy/client/`: reusable Java client for the proxy HTTP API
-- `src/main/resources/application.yml`: configuration
-- `pom.xml`: Maven build
-
-## Local Run
+From the repository root:
 
 ```bash
-mvn -pl apps/jarvis/bucket/proxy -am test
-mvn -pl apps/jarvis/bucket/proxy spring-boot:run
+mvn -pl apps/jarvis/bucket/proxy -am package
+java -jar apps/jarvis/bucket/proxy/target/bucket-proxy-0.1.0-SNAPSHOT-exec.jar
 ```
 
-The service listens on `http://localhost:5000` by default.
+The proxy listens on port `5000` by default.
+
+## Configuration
+
+The main runtime settings are:
+
+- `PROXY_STORAGE_PROVIDER` to select `aws` or `azure`
+- `PROXY_STORAGE_MAX_FILE_SIZE` for the maximum upload size
+- `PROXY_S3_BUCKET_NAME`, `PROXY_S3_REGION`, `PROXY_S3_ENDPOINT`,
+  `PROXY_S3_PATH_STYLE_ACCESS`, and `PROXY_S3_SSE` for AWS storage
+- `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`,
+  `AZURE_STORAGE_ENDPOINT`, and `AZURE_STORAGE_CONNECTION_STRING` for Azure
+- `PROXY_AUTH_SERVER_BASE_URL` for token validation
+- `AUTH_IDENTITY_PROVISIONING_KEY` for provisioning identities through the proxy
+- `PROXY_MANAGEMENT_USERNAME`, `PROXY_MANAGEMENT_PASSWORD`, and
+  `PROXY_MANAGEMENT_SESSION_SECRET` for the management panel
+- `PROXY_CORS_ALLOWED_ORIGINS`, `PROXY_LOGGING_AUDIT_FILE`, and
+  `PROXY_SERVER_URL` for HTTP/runtime behavior
+
+Default values live in `JarvisProxyEnvs`.
 
 ## Endpoints
+
+The proxy routes are rooted at `${jarvis.server.route-prefix:}`. By default the
+routes are at the server root and include:
 
 - `GET /health`
 - `POST /login`
@@ -28,69 +45,26 @@ The service listens on `http://localhost:5000` by default.
 - `GET /list/{folder}`
 - `GET /metadata/{*key}`
 - `DELETE /delete/{*key}`
+- `GET /admin`
+- `POST /admin/login`
+- `POST /admin/logout`
+- `GET /admin/users`
+
+Upload and management requests require the auth server and the management
+session respectively.
 
 ## Java Client Utility
 
-This module now includes a reusable Java client for sending requests to the proxy:
+This module includes `dev.orwell.bucket.proxy.client.BucketProxyClient` for
+programmatic access to the proxy API.
 
-- `dev.orwell.bucket.proxy.client.BucketProxyClient`
-
-It covers:
-
-- `health()`
-- `login(username, password)`
-- `upload(clientId, bearerToken, file, folder, fileName)`
-- `batchUpload(clientId, bearerToken, files, folder)`
-- `list(clientId, bearerToken, folder)`
-- `metadata(clientId, bearerToken, key)`
-- `delete(clientId, bearerToken, key)`
-
-## Configuration
-
-The controller depends only on `storage.BucketStorage`. Set
-`PROXY_STORAGE_PROVIDER` to select one of the adapters:
-
-- `aws` (default): `storage.aws.AwsS3StorageAdapter`
-- `azure`: `storage.azure.AzureBlobStorageAdapter`
-
-AWS configuration:
-
-```bash
-export PROXY_STORAGE_PROVIDER=aws
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export PROXY_S3_ENDPOINT=...                 # optional S3-compatible endpoint
-export PROXY_S3_PATH_STYLE_ACCESS=false
-export PROXY_S3_SSE=AES256
-```
-
-Set `proxy.s3.bucket-name` and `proxy.s3.region` in configuration or with
-equivalent Spring property overrides.
-
-Azure configuration:
-
-```bash
-export PROXY_STORAGE_PROVIDER=azure
-export AZURE_STORAGE_ACCOUNT=...
-export AZURE_STORAGE_CONTAINER=...
-export AZURE_STORAGE_CONNECTION_STRING=...  # optional
-```
-
-When `AZURE_STORAGE_CONNECTION_STRING` is blank, the Azure adapter uses
-`DefaultAzureCredential`, which supports managed identity, environment
-credentials, Azure CLI login, and the other standard credential sources.
-
-## Build
+## Tests
 
 ```bash
 mvn -pl apps/jarvis/bucket/proxy -am test
-mvn -pl apps/jarvis/bucket/proxy -am package
 ```
 
-The deployment script installs the built jar as `/opt/s3-proxy/publish/bucket-proxy.jar` and runs it with `java -jar`.
+## Production
 
-## Production Notes
-
-- Management sign-in is separate from upload authentication
-- The proxy validates tokens against the auth server
-- Nginx forwards traffic to port `5000`
+The deployment script installs the runnable jar as
+`/opt/s3-proxy/publish/bucket-proxy.jar` and runs it with `java -jar`.

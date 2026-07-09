@@ -3,16 +3,21 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <parent>
+        <groupId>dev.orwell</groupId>
+        <artifactId>orwell</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
     <groupId>dev.orwell</groupId>
     <artifactId>eyes-and-ears</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <properties>
-        <java.version>25</java.version>
-        <maven.compiler.release>${java.version}</maven.compiler.release>
-        <spring.boot.version>4.1.0</spring.boot.version>
         <aws.sdk.version>2.27.21</aws.sdk.version>
+        <azure.sdk.version>1.2.35</azure.sdk.version>
+        <jakarta.mail.version>2.0.1</jakarta.mail.version>
     </properties>
 
     <modules>

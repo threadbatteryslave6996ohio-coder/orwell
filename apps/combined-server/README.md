@@ -12,24 +12,26 @@ child Java processes.
 | Klippy | `/klippy` |
 | Jarvis | `/jarvis` |
 | Keeboarder | `/keeboarder` |
+| Secrets | `/secrets` |
 
 `GET /` returns the registered app prefixes. Each prefix can be changed in the
 combined env file with `CLIPPY_AUTH_ROUTE_PREFIX`,
 `CLIPPY_SERVER_ROUTE_PREFIX`, `JARVIS_SERVER_ROUTE_PREFIX`, or
-`KEEBOARDER_SERVER_ROUTE_PREFIX`.
+`KEEBOARDER_SERVER_ROUTE_PREFIX`. The secrets module uses
+`SECRETS_ROUTE_PREFIX`.
 
 ## Build and run
 
 ### Docker Compose
 
 ```bash
-docker compose up --build
+docker compose -f apps/combined-server/docker-compose.yml up --build
 ```
 
 ### Standalone
 
 ```bash
-mvn -f pom.xml -pl apps/combined-server -am package
+mvn -pl apps/combined-server -am package
 cp apps/combined-server/.env.example apps/combined-server/.env
 java -jar apps/combined-server/target/combined-server-0.1.0-SNAPSHOT.jar
 ```

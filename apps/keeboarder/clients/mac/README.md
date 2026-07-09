@@ -1,24 +1,34 @@
 # Keeboarder Mac Client
 
-This module is a Java client that connects to the Keeboarder WebSocket server and streams macOS keyboard events.
+This module is a Java client that connects to the Keeboarder WebSocket server
+and streams macOS keyboard events.
 
 ## Build
 
 ```bash
-mvn -f ../../../pom.xml -pl apps/auth/http-based/client -am install
-mvn -f clients/mac/pom.xml package
+mvn -pl apps/keeboarder/clients/mac -am package
 ```
 
 ## Run
 
 ```bash
-java -jar target/keeboarder-mac-client-0.1.0.jar \
-  --server-url ws://localhost:8025/ws/chat \
-  --auth-base-url http://localhost:8081 \
-  --client-id my-mac \
-  --client-secret change-me-please \
-  --name My-Mac
+java -jar apps/keeboarder/clients/mac/target/keeboarder-mac-client-0.1.0.jar
 ```
+
+Set environment variables or put them in the repository `.env` file:
+
+```dotenv
+KEEBOARDER_SERVER_URL=ws://localhost:8025/ws/chat
+KEEBOARDER_AUTH_BASE_URL=http://localhost:8081
+KEEBOARDER_CLIENT_ID=my-mac
+KEEBOARDER_CLIENT_SECRET=change-me-please
+KEEBOARDER_CLIENT_NAME=My-Mac
+```
+
+`KEEBOARDER_CLIENT_ID` and `KEEBOARDER_CLIENT_SECRET` are required.
+`KEEBOARDER_CLIENT_NAME` defaults to `Mac-<hostname>` when omitted.
+`KEEBOARDER_SERVER_URL` defaults to `ws://localhost:8025/ws/chat` and
+`KEEBOARDER_AUTH_BASE_URL` defaults to `http://localhost:8081`.
 
 ## Behavior
 
@@ -30,13 +40,10 @@ java -jar target/keeboarder-mac-client-0.1.0.jar \
 ## Test
 
 ```bash
-mvn -f ../../../pom.xml -pl apps/auth/http-based/client -am install
-mvn -f clients/mac/pom.xml test
+mvn -pl apps/keeboarder/clients/mac -am test
 ```
 
 ## Notes
 
 - macOS requires Accessibility permissions for global key capture.
-- `--client-id` and `--client-secret` are required. You can also provide them with `KEEBOARDER_CLIENT_ID` and `KEEBOARDER_CLIENT_SECRET`.
-- Use `KEEBOARDER_SERVER_URL`, `KEEBOARDER_AUTH_BASE_URL`, and `KEEBOARDER_CLIENT_NAME` to set defaults.
 - If a test environment blocks local sockets, Maven test runs that start local servers can fail even when the code compiles correctly.

@@ -2,7 +2,8 @@
 
 Spring Boot API that persists clipboard entries in PostgreSQL.
 
-The server does not own client identities. It validates each clipboard request by calling the separate Clippy auth server.
+The server does not own client identities. It validates each clipboard request
+by calling the separate Clippy auth server.
 
 ## Requirements
 
@@ -52,9 +53,10 @@ SPRING_JPA_HIBERNATE_DDL_AUTO=update
 SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE=UTC
 ```
 
-Set those values in `.env` before starting the server.
-The core receives only the map resolved by the launcher; it does not read shell
-exports or Spring command-line configuration independently.
+Set those values in `.env` before starting the server. The launcher resolves
+`.env` from the current directory or any parent and overlays nonblank shell
+variables. The server core receives only the resolved map; it does not read
+shell exports or Spring command-line properties independently.
 
 ## Endpoint
 

@@ -1,7 +1,6 @@
 package dev.orwell.keeboarder.server;
 
 import dev.orwell.auth.AuthenticationStrategy;
-import dev.orwell.auth.BearerToken;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
@@ -14,6 +13,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public class HttpApiServer {
@@ -43,17 +43,6 @@ public class HttpApiServer {
         server.stop(0);
     }
 
-    private static boolean isAuthenticated(String clientId, String authorization, AuthenticationStrategy authenticator) {
-        if (authenticator == null) {
-            return true;
-        }
-        if (clientId == null || clientId.isBlank()) {
-            return false;
-        }
-        String token = BearerToken.extract(authorization);
-        return token != null && authenticator.isTokenValidForClient(clientId, token);
-    }
-
     static class ClientsHandler implements HttpHandler {
         private final KeeboarderService service;
         private final AuthenticationStrategy authenticator;
@@ -71,7 +60,7 @@ public class HttpApiServer {
             }
             String authorization = exchange.getRequestHeaders().getFirst("Authorization");
             String clientId = exchange.getRequestHeaders().getFirst("X-Client-Id");
-            if (!isAuthenticated(clientId, authorization, authenticator)) {
+            if (!KeeboarderRequestAuth.isAuthenticated(authenticator, clientId, authorization)) {
                 exchange.sendResponseHeaders(401, -1);
                 return;
             }
@@ -103,7 +92,7 @@ public class HttpApiServer {
 
             String authorization = exchange.getRequestHeaders().getFirst("Authorization");
             String clientId = exchange.getRequestHeaders().getFirst("X-Client-Id");
-            if (!isAuthenticated(clientId, authorization, authenticator)) {
+            if (!KeeboarderRequestAuth.isAuthenticated(authenticator, clientId, authorization)) {
                 exchange.sendResponseHeaders(401, -1);
                 return;
             }
@@ -123,13 +112,12 @@ public class HttpApiServer {
 
             String toClientId = req.has("toClientId") ? req.get("toClientId").getAsString() : null;
             String content = req.has("content") ? req.get("content").getAsString() : null;
-            String fromClientId = req.has("fromClientId") ? req.get("fromClientId").getAsString() : "server";
-
             if (toClientId == null || content == null) {
                 exchange.sendResponseHeaders(400, -1);
                 return;
             }
 
+            String fromClientId = resolveSenderClientId(req, clientId);
             boolean ok = service.send(toClientId, fromClientId, content);
             JsonObject res = new JsonObject();
             if (ok) {
@@ -146,6 +134,19 @@ public class HttpApiServer {
                 exchange.sendResponseHeaders(404, bytes.length);
                 try (OutputStream os = exchange.getResponseBody()) { os.write(bytes); }
             }
+        }
+
+        private String resolveSenderClientId(JsonObject request, String authenticatedClientId) {
+            if (authenticator != null) {
+                return authenticatedClientId;
+            }
+            if (request.has("fromClientId")) {
+                String requestedSender = request.get("fromClientId").getAsString();
+                if (requestedSender != null && !requestedSender.isBlank()) {
+                    return requestedSender;
+                }
+            }
+            return Objects.requireNonNullElse(authenticatedClientId, "server");
         }
     }
 }

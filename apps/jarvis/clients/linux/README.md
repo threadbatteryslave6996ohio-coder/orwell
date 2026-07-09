@@ -32,7 +32,7 @@ System audio is captured from a `.monitor` source. If auto-detection picks the w
 ## Installation
 
 ```bash
-cd clients/linux
+cd apps/jarvis/clients/linux
 chmod +x *.sh
 ./install.sh
 ```

@@ -38,6 +38,22 @@ services:
       timeout: 5s
       retries: 10
 
+  db-secrets:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: secrets
+      POSTGRES_USER: secrets
+      POSTGRES_PASSWORD: secrets
+    ports:
+      - "5435:5432"
+    volumes:
+      - testing-secrets-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secrets -d secrets"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     volumes:
@@ -65,6 +81,8 @@ services:
         condition: service_healthy
       db-auth:
         condition: service_healthy
+      db-secrets:
+        condition: service_healthy
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -72,4 +90,5 @@ services:
 volumes:
   testing-clippy-pg-data:
   testing-auth-pg-data:
+  testing-secrets-pg-data:
   testing-redis-data:

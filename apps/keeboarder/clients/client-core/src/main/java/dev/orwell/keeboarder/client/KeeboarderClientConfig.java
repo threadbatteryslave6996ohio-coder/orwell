@@ -1,4 +1,4 @@
-package dev.orwell.keeboarder.mac;
+package dev.orwell.keeboarder.client;
 
 import dev.orwell.env.Env;
 import dev.orwell.env.EnvOption;
@@ -8,7 +8,7 @@ import dev.orwell.env.EnvType;
 import java.net.InetAddress;
 import java.util.Map;
 
-public final class ClientEnvs {
+public record KeeboarderClientConfig(String serverUrl, String authBaseUrl, String name, String clientId, String clientSecret) {
     public static final EnvOption<String> KEEBOARDER_SERVER_URL;
     public static final EnvOption<String> KEEBOARDER_AUTH_BASE_URL;
     public static final EnvOption<String> KEEBOARDER_CLIENT_NAME;
@@ -26,22 +26,28 @@ public final class ClientEnvs {
         ENV = builder.build();
     }
 
-    private ClientEnvs() {
+    public static KeeboarderClientConfig fromEnv(Map<String, String> rawEnv, String defaultName) {
+        Env env = ENV.from(rawEnv);
+        String serverUrl = env.get(KEEBOARDER_SERVER_URL);
+        String authBaseUrl = env.get(KEEBOARDER_AUTH_BASE_URL);
+        String name = env.get(KEEBOARDER_CLIENT_NAME);
+        if (name.isBlank()) {
+            name = defaultName;
+        }
+        String clientId = env.get(KEEBOARDER_CLIENT_ID);
+        String clientSecret = env.get(KEEBOARDER_CLIENT_SECRET);
+        return new KeeboarderClientConfig(serverUrl, authBaseUrl, name, clientId, clientSecret);
     }
 
-    public static Env from(Map<String, String> source) {
-        return ENV.from(source);
-    }
-
-    static String defaultName() {
+    public static String defaultName(String prefix, String fallback) {
         try {
             String host = InetAddress.getLocalHost().getHostName();
             if (host == null || host.isBlank()) {
-                return "MacClient";
+                return fallback;
             }
-            return "Mac-" + host;
+            return prefix + host;
         } catch (Exception exception) {
-            return "MacClient";
+            return fallback;
         }
     }
 }

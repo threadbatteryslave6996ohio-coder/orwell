@@ -1,6 +1,6 @@
-# Starting the S3 Proxy Server
+# Starting the Bucket Proxy
 
-This guide covers starting the proxy server and issuing upload identities through the external auth server.
+This guide covers the current env-driven startup flow for the bucket proxy.
 
 ## Local Development
 
@@ -9,57 +9,51 @@ This guide covers starting the proxy server and issuing upload identities throug
 ```bash
 java -version
 mvn -version
-aws sts get-caller-identity
 ```
 
 You need:
 
-- Java 17
-- Maven
-- AWS credentials with access to the target S3 bucket
+- JDK 25+
+- Maven 3.9+
+- AWS or Azure credentials if you are not using local test storage
 - A running auth server, usually on `http://localhost:8081`
 
 ### 2. Configure the server
 
-Edit `appsettings.json`:
+Create a `.env` file in `apps/jarvis/bucket/proxy/` or set shell variables.
+The important settings are:
 
-```json
-{
-  "Logging": {
-    "AuditFile": "logs/audit.log"
-  },
-  "AuthServer": {
-    "BaseUrl": "http://localhost:8081"
-  },
-  "Management": {
-    "Username": "admin",
-    "Password": "replace-with-a-long-admin-password",
-    "SessionSecret": "replace-with-a-long-random-session-secret"
-  },
-  "S3": {
-    "BucketName": "your-bucket-name",
-    "Region": "us-east-1"
-  }
-}
-```
+- `PROXY_STORAGE_PROVIDER=aws` or `azure`
+- AWS settings: `PROXY_S3_BUCKET_NAME`, `PROXY_S3_REGION`,
+  `PROXY_S3_ENDPOINT`, `PROXY_S3_PATH_STYLE_ACCESS`, `PROXY_S3_SSE`
+- Azure settings: `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_CONTAINER`,
+  `AZURE_STORAGE_ENDPOINT`, `AZURE_STORAGE_CONNECTION_STRING`
+- Auth settings: `PROXY_AUTH_SERVER_BASE_URL`, `AUTH_IDENTITY_PROVISIONING_KEY`
+- Management settings: `PROXY_MANAGEMENT_USERNAME`,
+  `PROXY_MANAGEMENT_PASSWORD`, `PROXY_MANAGEMENT_SESSION_SECRET`
 
-The management username/password are only for the proxy management panel. Upload clients must use identities created in the external auth server.
+Example:
 
-Start the auth server before using `/login` or `/admin` identity creation. Its default local URL is:
-
-```text
-http://localhost:8081
+```dotenv
+PROXY_STORAGE_PROVIDER=aws
+PROXY_S3_BUCKET_NAME=your-bucket-name
+PROXY_S3_REGION=us-east-1
+PROXY_AUTH_SERVER_BASE_URL=http://localhost:8081
+PROXY_MANAGEMENT_USERNAME=admin
+PROXY_MANAGEMENT_PASSWORD=replace-with-a-long-admin-password
+PROXY_MANAGEMENT_SESSION_SECRET=replace-with-a-long-random-session-secret
 ```
 
 ### 3. Start the server
 
-From `bucket/proxy`:
+From the repository root:
 
 ```bash
-mvn spring-boot:run
+mvn -pl apps/jarvis/bucket/proxy -am package
+java -jar apps/jarvis/bucket/proxy/target/bucket-proxy-0.1.0-SNAPSHOT-exec.jar
 ```
 
-The server listens on `http://localhost:5000`.
+The proxy listens on port `5000` by default.
 
 ### 4. Check health
 
@@ -75,7 +69,8 @@ Open:
 http://localhost:5000/admin
 ```
 
-Sign in with `Management:Username` and `Management:Password`, then create auth-server client identities for uploaders.
+Sign in with `PROXY_MANAGEMENT_USERNAME` and `PROXY_MANAGEMENT_PASSWORD`, then
+create auth-server identities for uploaders.
 
 ## Client Login Test
 
@@ -87,11 +82,12 @@ curl -H "Content-Type: application/json" \
   http://localhost:5000/login
 ```
 
-The response includes a Bearer token that upload clients send with each request.
+The response includes a bearer token that upload clients send with each request.
 
-## Production systemd Service
+## Production Systemd Service
 
-On the deployed EC2 host, the Terraform setup installs a systemd service named `s3-proxy`.
+On the deployed EC2 host, the Terraform setup installs a systemd service named
+`s3-proxy`.
 
 ```bash
 sudo systemctl status s3-proxy
@@ -101,15 +97,12 @@ sudo journalctl -u s3-proxy -f
 
 Production runs from `/opt/s3-proxy/publish/bucket-proxy.jar`.
 
-The audit log is written to:
+The audit log is written to `/var/log/s3-proxy/audit.log`.
 
-```text
-/var/log/s3-proxy/audit.log
-```
+## Client Settings
 
-## Required Client Settings
-
-Linux clients should use credentials issued from `/admin` through the auth server:
+Linux and macOS recorder clients should use credentials issued from `/admin`
+through the auth server:
 
 ```bash
 UPLOAD_MODE="proxy"
@@ -120,7 +113,9 @@ PROXY_PASSWORD="created-upload-user-password"
 
 ## Notes
 
-- `/health` and `/login` do not require a Bearer token.
-- Upload, list, metadata, and delete endpoints require `Authorization: Bearer TOKEN` and `X-Client-Id`.
-- The proxy validates tokens by calling the auth server `/tokens/check` endpoint.
+- `/health` and `/login` do not require a bearer token.
+- Upload, list, metadata, and delete endpoints require
+  `Authorization: Bearer TOKEN` and `X-Client-Id`.
+- The proxy validates tokens by calling the auth server `/tokens/check`
+  endpoint.
 - `/admin` uses the separate management credential from server config.

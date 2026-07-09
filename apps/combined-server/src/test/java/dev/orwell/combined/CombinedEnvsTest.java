@@ -59,6 +59,17 @@ class CombinedEnvsTest {
     }
 
     @Test
+    void prefersNewProxyAuditEnvOverLegacyValue() {
+        var env = CombinedEnvs.from(validEnvironment());
+
+        assertThat(CombinedEnvs.springProperties(env, Map.of(
+                "PROXY_AUDIT_FILE", "/tmp/legacy-audit.log",
+                "PROXY_LOGGING_AUDIT_FILE", "/tmp/new-audit.log"
+        )))
+                .containsEntry("proxy.logging.audit-file", "/tmp/new-audit.log");
+    }
+
+    @Test
     void rejectsConfigurationThatTheLauncherDidNotSupply() {
         Map<String, String> incomplete = new HashMap<>(validEnvironment());
         incomplete.remove("SPRING_DATASOURCE_URL");

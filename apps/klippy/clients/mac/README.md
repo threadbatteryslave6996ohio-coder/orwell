@@ -22,14 +22,16 @@ CLIPBOARD_POLL_INTERVAL_MS=1000
 ```
 
 `REMOTE_SERVER_URL` is required and may be the server base URL or the full
-`/clipboard` endpoint. `CLIENT_ID` defaults to the machine hostname and
-`CLIPBOARD_POLL_INTERVAL_MS` defaults to `1000`.
+`/clipboard` endpoint. `CLIENT_ID` is optional; if omitted, the client uses the
+machine hostname with a random fallback. `CLIPBOARD_POLL_INTERVAL_MS`
+defaults to `1000`.
 
-With `CLIENT_SECRET`, the client logs in at startup and refreshes its token after
-a `401`; `AUTH_SERVER_URL` is then required. For static authentication, omit
-`CLIENT_SECRET` and set `CLIENT_TOKEN` to a token returned by the auth server's
-`/login` endpoint. See the [auth server documentation](../../../auth/http-based/server/README.md)
-for identity creation and login requests.
+With `CLIENT_SECRET`, the client logs in at startup and refreshes its token
+after a `401`; `AUTH_SERVER_URL` is then required. For static authentication,
+omit `CLIENT_SECRET` and set `CLIENT_TOKEN` to a token returned by the auth
+server's `/login` endpoint. See the
+[auth server documentation](../../../auth/http-based/server/README.md) for
+identity creation and login requests.
 
 Shell environment variables override `.env` values.
 
@@ -38,15 +40,14 @@ Shell environment variables override `.env` values.
 Start the file-locker from the repository root:
 
 ```bash
-mvn -pl clients/file-locker -am package
-java -jar clients/file-locker/target/clippy-file-locker-0.1.0-SNAPSHOT.jar
+./apps/klippy/scripts/start-file-locker.sh
 ```
 
 Then build and run the client in another terminal:
 
 ```bash
-mvn -pl clients/mac -am package
-java -jar clients/mac/target/clippy-client-0.1.0-SNAPSHOT.jar
+mvn -pl apps/klippy/clients/mac -am package
+java -jar apps/klippy/clients/mac/target/clippy-mac-client-0.1.0-SNAPSHOT.jar
 ```
 
 If a remote write fails, the client asks the file-locker to append the payload
@@ -56,5 +57,5 @@ file-locker is unavailable, preventing uncoordinated file writes.
 ## Test
 
 ```bash
-mvn -pl clients/mac -am test
+mvn -pl apps/klippy/clients/mac -am test
 ```

@@ -16,7 +16,7 @@ clients can safely retry the exact pending entry after an IPC timeout.
 Start the service before either client:
 
 ```bash
-./scripts/start-file-locker.sh
+./apps/klippy/scripts/start-file-locker.sh
 ```
 
 Maven packaging keeps the thin `clippy-file-locker` JAR for other modules and
@@ -31,3 +31,9 @@ OFFLINE_FILE_LOCKER_SOCKET=/run/user/1000/clippy-file-locker.sock
 
 The service removes a stale socket at startup, refuses to replace a socket with
 an active listener, and removes its own socket during normal shutdown.
+
+## Test
+
+```bash
+mvn -pl apps/klippy/clients/file-locker -am test
+```

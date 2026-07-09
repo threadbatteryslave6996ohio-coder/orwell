@@ -5,6 +5,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
 import dev.orwell.auth.http.api.LoginHttpResponse;
+import dev.orwell.keeboarder.client.KeeboarderClientConfig;
 import com.sun.jna.Callback;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
@@ -33,7 +34,7 @@ public final class MacKeyboardClient {
     private static final String RUN_LOOP_COMMON_MODES = "kCFRunLoopCommonModes";
     private static final int KEY_CODE_FIELD = 9;
 
-    private final ClientConfig config;
+    private final KeeboarderClientConfig config;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private final AtomicBoolean registered = new AtomicBoolean(false);
     private final AtomicBoolean cleanedUp = new AtomicBoolean(false);
@@ -49,7 +50,7 @@ public final class MacKeyboardClient {
     private volatile Thread tapThread;
     private volatile String authToken;
 
-    public MacKeyboardClient(ClientConfig config) {
+    public MacKeyboardClient(KeeboarderClientConfig config) {
         this.config = config;
         this.currentClientId = new AtomicReference<>(config.clientId());
         this.authClient = new HttpAuthenticationStrategy(config.authBaseUrl());
@@ -177,12 +178,16 @@ public final class MacKeyboardClient {
     }
 
     private void sendRegister(Session session) throws IOException {
+        session.getAsyncRemote().sendText(GSON.toJson(buildRegisterPayload()));
+    }
+
+    JsonObject buildRegisterPayload() {
         JsonObject payload = new JsonObject();
         payload.addProperty("type", "register");
-        payload.addProperty("clientId", config.clientId());
+        payload.addProperty("clientId", currentClientId.get());
         payload.addProperty("name", config.name());
         payload.addProperty("token", authToken);
-        session.getAsyncRemote().sendText(GSON.toJson(payload));
+        return payload;
     }
 
     private void authenticate() {

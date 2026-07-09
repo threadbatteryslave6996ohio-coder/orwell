@@ -1,8 +1,8 @@
 # Jarvis
 
-Surveillance services (bucket proxy, streaming, alerting) and macOS/Linux recorder
-clients. Bucket services are under `apps/jarvis/bucket/`, recorder clients under
-`apps/jarvis/clients/`.
+Surveillance services (bucket proxy, streaming, alerting) and macOS/Linux
+recorder clients. Bucket services are under `bucket/`, recorder clients under
+`clients/`.
 
 Authentication is supplied by `apps/auth`. Build all services from the repository root:
 
@@ -17,7 +17,7 @@ The recorder clients under `clients/` remain standalone shell applications.
 The syncer drains completed recording segments to the bucket proxy. It merges older completed segments (via ffmpeg concat) and uploads the result, leaving the current in-progress segment untouched. Run it on a timer:
 
 ```bash
-bash clients/syncer/syncer.sh
+bash apps/jarvis/clients/syncer/syncer.sh
 ```
 
-Configure proxy credentials in `clients/syncer/config.sh`.
+Configure proxy credentials in `apps/jarvis/clients/syncer/config.sh`.

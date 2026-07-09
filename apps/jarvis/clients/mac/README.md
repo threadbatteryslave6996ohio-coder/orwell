@@ -27,8 +27,7 @@ Edit `config.sh` to set bucket proxy URL, credentials, recording directories, an
 ## Run
 
 ```bash
-./setup-launchagent.sh
-launchctl load ~/Library/LaunchAgents/com.keeboarder.recorder.plist
+./setup-launchagent.sh load
 ```
 
 Grant permissions in **System Settings → Privacy & Security**: Screen Recording, Microphone, and Full Disk Access for Terminal.
@@ -50,9 +49,9 @@ Grant permissions in **System Settings → Privacy & Security**: Screen Recordin
 
 | Action | Command |
 |---|---|
-| Start | `launchctl load ~/Library/LaunchAgents/com.keeboarder.recorder.plist` |
-| Stop | `launchctl unload ~/Library/LaunchAgents/com.keeboarder.recorder.plist` |
-| Status | `launchctl list \| grep keeboarder` |
+| Start | `./setup-launchagent.sh load` |
+| Stop | `./setup-launchagent.sh unload` |
+| Status | `./setup-launchagent.sh status` |
 | View logs | `tail -f ~/recordings/logs/recorder.log` |
 
 ## Proxy Authentication Mode
@@ -85,7 +84,7 @@ Use `flv` for RTMP/RTMPS and `mpegts` for SRT/UDP-style ingest. The stream job i
 - Verify permissions: System Settings → Privacy & Security → Screen Recording
 - Check device names: `ffmpeg -f avfoundation -list_devices true -i ""`
 - Test FFmpeg: `ffmpeg -f avfoundation -i "Capture screen 0:none" -t 5 test.mp4`
-- Check LaunchAgent: `launchctl list | grep keeboarder`
+- Check LaunchAgent: `./setup-launchagent.sh status`
 
 ## Performance Notes
 

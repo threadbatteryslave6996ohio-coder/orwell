@@ -19,7 +19,6 @@ import java.util.Map;
 })
 @Import({
         CombinedAuthModuleConfiguration.class,
-        CombinedAuthenticationConfiguration.class,
         CombinedAuthDatabaseConfiguration.class,
         CombinedClipboardModuleConfiguration.class,
         CombinedClipboardDatabaseConfiguration.class,

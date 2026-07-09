@@ -1,78 +1,61 @@
-# keeboarder
+# Keeboarder Server
 
-A multi-protocol keyboard and communication system.
+Java WebSocket server with Redis-backed client registry and a small HTTP API.
+The server authenticates against the Clippy auth server configured through
+`CLIPPY_AUTH_BASE_URL`.
 
-Java clients are in `apps/keeboarder/clients/`. The macOS client is under `apps/keeboarder/clients/mac`.
+## Requirements
 
-## 🎹 WebSocket Server
+- JDK 25+
+- Maven 3.9+
+- Redis
+- Running Clippy auth server
 
-A Java-based WebSocket server with Redis-backed client management and auth-server-backed client authentication.
+## Build And Run
 
-Both the WebSocket registration flow and HTTP API require credentials issued by
-the auth server configured through `CLIPPY_AUTH_BASE_URL`. HTTP callers send
-`Authorization: Bearer <token>` and `X-Client-Id: <clientId>` headers.
-
-**[→ Full WebSocket Server Documentation](./WEBSOCKET_SERVER.md)**
-
-### Quick Start
-
-1. **Start Redis:**
-   ```bash
-   docker run -d -p 6379:6379 redis:latest
-   ```
-
-2. **Install the auth client locally if building this module on its own:**
-   ```bash
-   cd ..
-   mvn -f ../../pom.xml -pl apps/auth/http-based/client -am install
-   cd server
-   ```
-
-3. **Build the server:**
-   ```bash
-   mvn -DskipTests package
-   ```
-
-4. **Run the server:**
-   ```bash
-   java -jar target/websocket-redis-server-0.1.0-jar-with-dependencies.jar
-   ```
-
-5. **Test the server:**
-   - Use the macOS client in `apps/keeboarder/clients/mac`
-
-### Build And Test
-
-From the repo root:
+From the repository root:
 
 ```bash
-mvn -f ../../pom.xml -pl apps/auth/http-based/client -am install
-mvn -f server/pom.xml test
+mvn -pl apps/keeboarder/server -am package
+java -jar apps/keeboarder/server/target/websocket-redis-server-0.1.0-SNAPSHOT-jar-with-dependencies.jar
 ```
 
-In restricted sandboxes, tests that open local sockets may fail with `java.net.SocketException: Operation not permitted`.
+The launcher loads `.env` from the current directory or any parent, then applies
+nonblank shell overrides.
 
-### Features
+## Configuration
 
-- ✅ Real-time WebSocket communication
-- ✅ Redis-backed client registry
-- ✅ Personalized message delivery
-- ✅ Host advertisement and discovery
-- ✅ Broadcast messaging
+The main runtime settings are:
 
-### Message Protocol
+- `HTTP_HOST` and `HTTP_PORT` for the HTTP API
+- `WEBSOCKET_HOST` and `WEBSOCKET_PORT` for the WebSocket listener
+- `WEBSOCKET_CONTEXT_PATH` for the WebSocket path prefix
+- `REDIS_HOST` and `REDIS_PORT` for client registry storage
+- `CLIPPY_AUTH_BASE_URL` for token validation
+- `KEEBOARDER_SERVER_ROUTE_PREFIX` for the HTTP API prefix
 
-All communication uses JSON. Connect to `ws://localhost:8025/ws/chat`:
+Defaults are `0.0.0.0:8080` for HTTP, `0.0.0.0:8025` for WebSocket, `/ws` for
+the WebSocket context path, and `/api` for the HTTP route prefix.
 
-```javascript
-// Register
-{ type: 'register', clientId: 'my-device', name: 'My Device', token: '<login token>' }
+## Endpoints
 
-// Send personal message
-{ type: 'personal', toClientId: 'them', content: 'Hello' }
+Connect to the WebSocket endpoint at `ws://localhost:8025/ws/chat` by default.
+The register message must include `type=register`, `clientId`, `name`, and
+`token`.
 
-// Send broadcast
-{ type: 'broadcast', content: 'Hello everyone' }
+The HTTP API is rooted at `/api` by default and exposes:
+
+- `GET /api/clients`
+- `POST /api/send`
+
+Both HTTP routes require `Authorization: Bearer <token>` and
+`X-Client-Id: <clientId>`.
+
+## Testing
+
+```bash
+mvn -pl apps/keeboarder/server -am test
 ```
 
-See [WEBSOCKET_SERVER.md](./WEBSOCKET_SERVER.md) for complete documentation.
+In restricted sandboxes, tests that open local sockets may fail with
+`java.net.SocketException: Operation not permitted`.

@@ -6,8 +6,8 @@ system clipboard.
 ## Configure
 
 Start the auth and clipboard servers, create an identity as described in the
-[auth server documentation](../../../auth/http-based/server/README.md), then configure the
-repository-root `.env`:
+[auth server documentation](../../../auth/http-based/server/README.md), then
+configure the repository-root `.env`:
 
 ```dotenv
 REMOTE_SERVER_URL=http://localhost:8080
@@ -33,15 +33,15 @@ values are masked.
 Build and send one command from the repository root:
 
 ```bash
-mvn -pl clients/dummy -am package
-java -jar clients/dummy/target/clippy-dummy-client-0.1.0-SNAPSHOT.jar "ping"
+mvn -pl apps/klippy/clients/dummy -am package
+java -jar apps/klippy/clients/dummy/target/clippy-dummy-client-0.1.0-SNAPSHOT.jar "ping"
 ```
 
 You can also pipe commands on standard input. Each non-empty line is sent as a
 separate request:
 
 ```bash
-printf 'ping\nstatus\n' | java -jar clients/dummy/target/clippy-dummy-client-0.1.0-SNAPSHOT.jar
+printf 'ping\nstatus\n' | java -jar apps/klippy/clients/dummy/target/clippy-dummy-client-0.1.0-SNAPSHOT.jar
 ```
 
 One-shot commands exit with status `1` when the server is unreachable or
@@ -51,5 +51,5 @@ printing credentials.
 ## Test
 
 ```bash
-mvn -pl clients/dummy -am test
+mvn -pl apps/klippy/clients/dummy -am test
 ```

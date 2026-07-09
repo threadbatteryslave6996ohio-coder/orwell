@@ -13,11 +13,12 @@ Android does not allow a normal third-party app to silently monitor clipboard ch
 
 ## Build
 
-Open `clients/android` in Android Studio and run the `app` configuration.
+Open `apps/klippy/clients/android` in Android Studio and run the `app`
+configuration.
 
-Start PostgreSQL, the auth server, and the app server from the repository root before sending clipboard entries:
-
-Start the auth database on port `5433` and the app database on port `5432` using your preferred local PostgreSQL setup, then run the auth server and app server.
+Start PostgreSQL, the auth server, and the app server before sending clipboard
+entries. The auth database listens on `5433` and the app database on `5432`
+when you use the local defaults.
 
 Create a client identity and login with the auth server:
 
@@ -64,3 +65,11 @@ Content-Type: application/json
   "timestamp": "2026-06-23T12:00:00Z"
 }
 ```
+
+## Notes
+
+- `CLIENT_TOKEN` is the normal development path for Android.
+- Use the same `clientId` in the identity, login request, and app token field.
+- The app can only poll the clipboard while it is open; Android does not allow
+  a normal third-party app to silently monitor clipboard changes in the
+  background.
