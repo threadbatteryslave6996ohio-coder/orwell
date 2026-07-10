@@ -28,6 +28,7 @@ public final class JarvisProxyEnvs {
     public static final EnvOption<String> PROXY_CORS_ALLOWED_ORIGINS;
     public static final EnvOption<String> PROXY_LOGGING_AUDIT_FILE;
     public static final EnvOption<String> PROXY_SERVER_URL;
+    public static final EnvOption<String> STREAM_ANALYSIS_ENDPOINT;
     public static final EnvOption<String> SERVER_PORT;
     public static final EnvSchema ENV;
 
@@ -52,6 +53,7 @@ public final class JarvisProxyEnvs {
         PROXY_CORS_ALLOWED_ORIGINS = builder.optional("PROXY_CORS_ALLOWED_ORIGINS", EnvType.string(), "");
         PROXY_LOGGING_AUDIT_FILE = builder.optional("PROXY_LOGGING_AUDIT_FILE", EnvType.string(), "logs/audit.log");
         PROXY_SERVER_URL = builder.optional("PROXY_SERVER_URL", EnvType.string(), "");
+        STREAM_ANALYSIS_ENDPOINT = builder.optional("STREAM_ANALYSIS_ENDPOINT", EnvType.string(), "");
         SERVER_PORT = builder.optional("SERVER_PORT", EnvType.string(), "5000");
         ENV = builder.build();
     }

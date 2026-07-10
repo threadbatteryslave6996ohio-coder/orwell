@@ -38,10 +38,12 @@ if ! command -v java >/dev/null 2>&1; then
     exit 1
 fi
 
-# The stream worker now ships inside the bucket-proxy Spring Boot jar. Launch its
-# main class through the Boot loader rather than as the jar's default entry point.
+# The stream worker is a mode of the bucket-proxy jar. Launch the jar with
+# --mode=stream-worker to run the analysis worker instead of the web server.
+# STREAM_ANALYSIS_WORKER_MODE overrides the mode flag for non-default builds.
 JAVA_WORKER_JAR="${STREAM_ANALYSIS_WORKER_JAR:-/opt/s3-proxy/publish/bucket-proxy.jar}"
-WORKER_MAIN_CLASS="${STREAM_ANALYSIS_WORKER_CLASS:-dev.orwell.bucket.streaming.StreamingApplication}"
+# Split on whitespace so a multi-flag override (e.g. "--mode=stream-worker --debug") works.
+read -r -a WORKER_MODE_ARGS <<< "${STREAM_ANALYSIS_WORKER_MODE:---mode=stream-worker}"
 
 if [ -z "$STREAM_ANALYSIS_ENDPOINT" ]; then
     log_message "WARN" "STREAM_ANALYSIS_ENDPOINT is empty; frames will be sampled but not posted"
@@ -62,8 +64,7 @@ while true; do
             -f image2pipe -vcodec mjpeg - \
             2>>"$ANALYSIS_LOG" | \
             STREAM_ANALYSIS_ENDPOINT="$STREAM_ANALYSIS_ENDPOINT" \
-            java -cp "$JAVA_WORKER_JAR" -Dloader.main="$WORKER_MAIN_CLASS" \
-                org.springframework.boot.loader.launch.PropertiesLauncher >> "$ANALYSIS_LOG" 2>&1
+            java -jar "$JAVA_WORKER_JAR" "${WORKER_MODE_ARGS[@]}" >> "$ANALYSIS_LOG" 2>&1
         else
         ffmpeg -hide_banner -loglevel warning \
             -rtsp_transport tcp \
@@ -73,8 +74,7 @@ while true; do
             -f image2pipe -vcodec mjpeg - \
             2>>"$ANALYSIS_LOG" | \
             STREAM_ANALYSIS_ENDPOINT="$STREAM_ANALYSIS_ENDPOINT" \
-            java -cp "$JAVA_WORKER_JAR" -Dloader.main="$WORKER_MAIN_CLASS" \
-                org.springframework.boot.loader.launch.PropertiesLauncher >> "$ANALYSIS_LOG" 2>&1
+            java -jar "$JAVA_WORKER_JAR" "${WORKER_MODE_ARGS[@]}" >> "$ANALYSIS_LOG" 2>&1
         fi
 
     exit_code=${PIPESTATUS[0]}

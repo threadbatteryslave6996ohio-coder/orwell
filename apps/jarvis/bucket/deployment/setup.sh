@@ -41,9 +41,9 @@ mvn -f bucket/pom.xml package -DskipTests
 # reactor dependencies) from the root pom.
 mvn -f ../../pom.xml -pl apps/alerting -am package -DskipTests
 
-# The bucket-proxy jar now also carries the stream analysis worker
-# (dev.orwell.bucket.streaming.StreamingApplication), so the executable fat jar
-# doubles as the worker jar.
+# The bucket-proxy jar also carries the stream analysis worker as its
+# --mode=stream-worker mode (dev.orwell.bucket.proxy.streaming.AnalysisWorker),
+# so the executable fat jar doubles as the worker jar.
 cp bucket/proxy/target/bucket-proxy-0.1.0-SNAPSHOT-exec.jar "$PROXY_DIR/publish/bucket-proxy.jar"
 cp ../alerting/target/alerting.jar "$STREAM_PUBLISH_DIR/alerting.jar"
 cp bucket/detection/target/bucket-detection.jar "$STREAM_PUBLISH_DIR/bucket-detection.jar"

@@ -55,22 +55,21 @@ session respectively.
 
 ## Stream Analysis Worker
 
-This module also contains the stream ingest worker
-(`dev.orwell.bucket.streaming.AnalysisWorker`), previously the standalone
-`bucket-streaming` module. It reads MJPEG frames from stdin, extracts individual
-JPEGs, and POSTs each frame to `STREAM_ANALYSIS_ENDPOINT` (blank drains the
-stream without forwarding). Its shell wrappers live in `scripts/`:
+The stream ingest worker (`dev.orwell.bucket.proxy.streaming.AnalysisWorker`) is
+a second mode of this same app rather than a separate application. It reads MJPEG
+frames from stdin, extracts individual JPEGs, and POSTs each frame to
+`STREAM_ANALYSIS_ENDPOINT` (blank drains the stream without forwarding). Its
+shell wrappers live in `scripts/`:
 
 - `scripts/record_stream.sh` records segmented MP4 files
 - `scripts/analyze_stream.sh` pipes sampled frames from ffmpeg into the worker
 
-Because the worker ships inside the Spring Boot fat jar, `analyze_stream.sh`
-launches its main class through the Boot loader:
+The worker shares the proxy's jar, entry point (`BucketProxyLauncher`), and
+env schema (`JarvisProxyEnvs`). Run it by passing `--mode=stream-worker` to the
+jar instead of booting the web server:
 
 ```bash
-java -cp bucket-proxy-0.1.0-SNAPSHOT-exec.jar \
-  -Dloader.main=dev.orwell.bucket.streaming.StreamingApplication \
-  org.springframework.boot.loader.launch.PropertiesLauncher
+java -jar bucket-proxy-0.1.0-SNAPSHOT-exec.jar --mode=stream-worker
 ```
 
 ## Java Client Utility
