@@ -40,7 +40,7 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>env-http</artifactId>
+            <artifactId>http</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

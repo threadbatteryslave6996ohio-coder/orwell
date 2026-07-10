@@ -19,7 +19,7 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>env</artifactId>
+            <artifactId>core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

@@ -22,6 +22,7 @@ public final class ClippyServerLauncher {
                 .runOrExit(args);
     }
 
+    // idk what is this
     static Map<String, String> resolveEnvironment(Path startDirectory) throws IOException {
         return EnvFiles.load(startDirectory);
     }

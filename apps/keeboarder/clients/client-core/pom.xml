@@ -16,7 +16,7 @@
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>env</artifactId>
+            <artifactId>core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

@@ -11,21 +11,10 @@
     </parent>
 
     <artifactId>env</artifactId>
+    <packaging>pom</packaging>
 
-    <dependencies>
-        <dependency>
-            <groupId>dev.orwell</groupId>
-            <artifactId>clippy-primitives</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>dev.orwell</groupId>
-            <artifactId>clippy-logger</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+    <modules>
+        <module>core</module>
+        <module>http</module>
+    </modules>
 </project>

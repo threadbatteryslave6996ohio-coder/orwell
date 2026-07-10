@@ -37,21 +37,26 @@ chown -R www-data:www-data "$PROXY_DIR" "$STREAM_LOG_DIR"
 
 cd "$SOURCE_DIR"
 mvn -f bucket/pom.xml package -DskipTests
+# The alerting service is now a standalone top-level app; build it (with its
+# reactor dependencies) from the root pom.
+mvn -f ../../pom.xml -pl apps/alerting -am package -DskipTests
 
-cp bucket/proxy/target/bucket-proxy-0.1.0-SNAPSHOT.jar "$PROXY_DIR/publish/bucket-proxy.jar"
-cp bucket/alerting/target/bucket-alerting.jar "$STREAM_PUBLISH_DIR/bucket-alerting.jar"
+# The bucket-proxy jar now also carries the stream analysis worker
+# (dev.orwell.bucket.streaming.StreamingApplication), so the executable fat jar
+# doubles as the worker jar.
+cp bucket/proxy/target/bucket-proxy-0.1.0-SNAPSHOT-exec.jar "$PROXY_DIR/publish/bucket-proxy.jar"
+cp ../alerting/target/alerting.jar "$STREAM_PUBLISH_DIR/alerting.jar"
 cp bucket/detection/target/bucket-detection.jar "$STREAM_PUBLISH_DIR/bucket-detection.jar"
-cp bucket/streaming/target/bucket-streaming-0.1.0-SNAPSHOT.jar "$STREAM_PUBLISH_DIR/bucket-streaming.jar"
 
-cp bucket/streaming/record_stream.sh "$STREAM_SCRIPTS_DIR/record_stream.sh"
-cp bucket/streaming/analyze_stream.sh "$STREAM_SCRIPTS_DIR/analyze_stream.sh"
+cp bucket/proxy/scripts/record_stream.sh "$STREAM_SCRIPTS_DIR/record_stream.sh"
+cp bucket/proxy/scripts/analyze_stream.sh "$STREAM_SCRIPTS_DIR/analyze_stream.sh"
 chmod 755 "$STREAM_SCRIPTS_DIR/record_stream.sh" "$STREAM_SCRIPTS_DIR/analyze_stream.sh"
 
 cat > /etc/default/streaming <<STREAMENVEOF
 STREAM_SOURCE_URL=rtsp://127.0.0.1:8554/live
 STREAM_ANALYSIS_SOURCE_URL=rtsp://127.0.0.1:8554/live
 STREAM_ANALYSIS_ENDPOINT=${stream_analysis_endpoint_json}
-STREAM_ANALYSIS_WORKER_JAR=$STREAM_PUBLISH_DIR/bucket-streaming.jar
+STREAM_ANALYSIS_WORKER_JAR=$PROXY_DIR/publish/bucket-proxy.jar
 ALERT_SERVER_HOST=127.0.0.1
 ALERT_SERVER_PORT=9000
 ALERT_LOG_FILE=$STREAM_LOG_DIR/alerts.log
@@ -109,7 +114,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 EnvironmentFile=/etc/default/streaming
-ExecStart=/usr/bin/java -jar /opt/streaming/publish/bucket-alerting.jar
+ExecStart=/usr/bin/java -jar /opt/streaming/publish/alerting.jar
 Restart=always
 RestartSec=10
 StandardOutput=journal

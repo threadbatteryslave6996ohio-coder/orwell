@@ -224,7 +224,7 @@ ALERT_LOG_FILE=$(create_env "$ALERT_GROUP"    "ALERT_LOG_FILE"    "/var/log/stre
 # ============================================================================
 echo "[jarvis-streaming]"
 
-STREAM_GROUP=$(create_group "jarvis-streaming" "Frame analysis worker (apps/jarvis/bucket/streaming)")
+STREAM_GROUP=$(create_group "jarvis-streaming" "Frame analysis worker (apps/jarvis/bucket/proxy)")
 STREAM_ENDPOINT=$(create_env "$STREAM_GROUP" "STREAM_ANALYSIS_ENDPOINT" "")
 
 # ============================================================================

@@ -11,7 +11,8 @@ public final class BackupLauncher {
     }
 
     public static void main(String[] args) throws Exception {
-        var rawEnv = EnvLoader.load("file");
+        String source = args.length > 0 ? args[0] : "file";
+        var rawEnv = EnvLoader.load(source);
         Env env = BackupEnvs.from(rawEnv);
         List<ProjectConfig> projects = BackupEnvs.resolveProjects(env, rawEnv);
 

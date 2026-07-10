@@ -53,6 +53,26 @@ routes are at the server root and include:
 Upload and management requests require the auth server and the management
 session respectively.
 
+## Stream Analysis Worker
+
+This module also contains the stream ingest worker
+(`dev.orwell.bucket.streaming.AnalysisWorker`), previously the standalone
+`bucket-streaming` module. It reads MJPEG frames from stdin, extracts individual
+JPEGs, and POSTs each frame to `STREAM_ANALYSIS_ENDPOINT` (blank drains the
+stream without forwarding). Its shell wrappers live in `scripts/`:
+
+- `scripts/record_stream.sh` records segmented MP4 files
+- `scripts/analyze_stream.sh` pipes sampled frames from ffmpeg into the worker
+
+Because the worker ships inside the Spring Boot fat jar, `analyze_stream.sh`
+launches its main class through the Boot loader:
+
+```bash
+java -cp bucket-proxy-0.1.0-SNAPSHOT-exec.jar \
+  -Dloader.main=dev.orwell.bucket.streaming.StreamingApplication \
+  org.springframework.boot.loader.launch.PropertiesLauncher
+```
+
 ## Java Client Utility
 
 This module includes `dev.orwell.bucket.proxy.client.BucketProxyClient` for

@@ -91,5 +91,5 @@ terraform destroy
 
 - [../proxy/README.md](../proxy/README.md) - Proxy application documentation
 - [../streaming/README.md](../streaming/README.md) - Stream ingest, recording, and analysis docs
-- [../alerting/README.md](../alerting/README.md) - Person detection and alert delivery docs
+- [../../../alerting/README.md](../../../alerting/README.md) - Alert delivery service docs (now a standalone app)
 - [../README.md](../README.md) - Main project README

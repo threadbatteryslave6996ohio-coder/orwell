@@ -19,11 +19,11 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>env</artifactId>
+            <artifactId>core</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>env-http</artifactId>
+            <artifactId>http</artifactId>
         </dependency>
     </dependencies>
 

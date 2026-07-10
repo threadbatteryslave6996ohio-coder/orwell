@@ -3,11 +3,13 @@ package dev.orwell.combined;
 import dev.orwell.bootstrap.SpringServerBootstrap;
 import dev.orwell.env.Env;
 import dev.orwell.logging.CustomLogger;
+import dev.orwell.logging.Logger;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration;
 import org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
 import java.util.Map;
@@ -40,6 +42,12 @@ public class CombinedServerApplication {
     /** Starts the core from configuration that has already been fetched by a launcher. */
     public static ConfigurableApplicationContext start(Map<String, String> environment) {
         return start(CombinedEnvs.from(environment));
+    }
+
+    /** Custom {@link Logger} available for injection across the combined server. */
+    @Bean
+    public Logger logger() {
+        return new CustomLogger("combined-server");
     }
 
     static void logCombinedModeDisclaimer() {

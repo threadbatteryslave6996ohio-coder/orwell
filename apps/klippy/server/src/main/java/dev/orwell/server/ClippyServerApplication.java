@@ -2,8 +2,11 @@ package dev.orwell.server;
 
 import dev.orwell.bootstrap.SpringServerBootstrap;
 import dev.orwell.env.Env;
+import dev.orwell.logging.CustomLogger;
+import dev.orwell.logging.Logger;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
 
 import java.util.Map;
 
@@ -24,5 +27,11 @@ public class ClippyServerApplication {
      */
     public static ConfigurableApplicationContext start(Map<String, String> environment) {
         return start(ServerEnvs.from(environment));
+    }
+
+    /** Custom {@link Logger} available for injection across the clipboard server. */
+    @Bean
+    public Logger logger() {
+        return new CustomLogger("clippy-server");
     }
 }

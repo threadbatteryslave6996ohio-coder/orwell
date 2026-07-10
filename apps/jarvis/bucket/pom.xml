@@ -39,7 +39,5 @@
 
     <modules>
         <module>proxy</module>
-        <module>alerting</module>
-        <module>streaming</module>
     </modules>
 </project>

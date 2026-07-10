@@ -1,8 +1,9 @@
 # Jarvis
 
-Surveillance services (bucket proxy, streaming, alerting) and macOS/Linux
-recorder clients. Bucket services are under `bucket/`, recorder clients under
-`clients/`.
+Surveillance services (bucket proxy, alerting) and macOS/Linux recorder
+clients. Bucket services are under `bucket/`, recorder clients under `clients/`.
+The bucket proxy also bundles the stream analysis worker and its ingest scripts
+(see `bucket/proxy/`).
 
 Authentication is supplied by `apps/auth`. Build all services from the repository root:
 
