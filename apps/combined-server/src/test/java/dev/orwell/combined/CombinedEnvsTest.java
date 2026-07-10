@@ -36,36 +36,42 @@ class CombinedEnvsTest {
 
     @Test
     void mapsJarvisEnvironmentFileValuesToSpringProperties() {
-        var env = CombinedEnvs.from(validEnvironment());
-
-        assertThat(CombinedEnvs.springProperties(env, Map.of(
+        var env = CombinedEnvs.from(withOverrides(
+                validEnvironment(),
+                Map.of(
                 "PROXY_STORAGE_PROVIDER", "azure",
                 "AZURE_STORAGE_CONTAINER", "recordings"
-        )))
+                )));
+
+        assertThat(CombinedEnvs.springProperties(env))
                 .containsEntry("proxy.storage.provider", "azure")
                 .containsEntry("proxy.azure.container-name", "recordings");
     }
 
     @Test
     void mapsKeeboarderRuntimeValuesToSpringProperties() {
-        var env = CombinedEnvs.from(validEnvironment());
-
-        assertThat(CombinedEnvs.springProperties(env, Map.of(
+        var env = CombinedEnvs.from(withOverrides(
+                validEnvironment(),
+                Map.of(
                 "WEBSOCKET_PORT", "9000",
                 "REDIS_HOST", "redis.internal"
-        )))
+                )));
+
+        assertThat(CombinedEnvs.springProperties(env))
                 .containsEntry("keeboarder.websocket.port", "9000")
                 .containsEntry("keeboarder.redis.host", "redis.internal");
     }
 
     @Test
     void prefersNewProxyAuditEnvOverLegacyValue() {
-        var env = CombinedEnvs.from(validEnvironment());
-
-        assertThat(CombinedEnvs.springProperties(env, Map.of(
+        var env = CombinedEnvs.from(withOverrides(
+                validEnvironment(),
+                Map.of(
                 "PROXY_AUDIT_FILE", "/tmp/legacy-audit.log",
                 "PROXY_LOGGING_AUDIT_FILE", "/tmp/new-audit.log"
-        )))
+                )));
+
+        assertThat(CombinedEnvs.springProperties(env))
                 .containsEntry("proxy.logging.audit-file", "/tmp/new-audit.log");
     }
 
@@ -115,5 +121,14 @@ class CombinedEnvsTest {
                 Map.entry("SECRETS_DATASOURCE_PASSWORD", "secrets-password"),
                 Map.entry("SECRETS_JPA_HIBERNATE_DDL_AUTO", "update")
         );
+    }
+
+    private static Map<String, String> withOverrides(
+            Map<String, String> base,
+            Map<String, String> overrides
+    ) {
+        Map<String, String> values = new HashMap<>(base);
+        values.putAll(overrides);
+        return Map.copyOf(values);
     }
 }

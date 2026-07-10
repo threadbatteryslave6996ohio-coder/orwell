@@ -1,7 +1,7 @@
 package dev.orwell.secrets;
 
+import dev.orwell.bootstrap.AppServer;
 import dev.orwell.env.EnvFiles;
-import dev.orwell.env.http.EnvLoader;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -11,8 +11,9 @@ public final class SecretsManagerLauncher {
     private SecretsManagerLauncher() {
     }
 
-    public static void main(String[] args) throws IOException {
-        SecretsManagerApplication.start(EnvLoader.load("file"));
+    public static void main(String[] args) {
+        new AppServer(SecretsManagerEnvs.ENV, SecretsManagerApplication::start)
+                .runOrExit(args);
     }
 
     static Map<String, String> resolveEnvironment(Path startDirectory) throws IOException {

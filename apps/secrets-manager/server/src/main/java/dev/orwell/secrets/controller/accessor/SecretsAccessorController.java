@@ -37,7 +37,7 @@ public class SecretsAccessorController {
 
     @GetMapping("/groups/{groupId}/envs")
     public List<AccessorEnvironmentResponse> listEnvironments(
-            @PathVariable Long groupId,
+            @PathVariable("groupId") Long groupId,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {
@@ -50,8 +50,8 @@ public class SecretsAccessorController {
 
     @GetMapping("/groups/{groupId}/envs/{envId}")
     public AccessorEnvironmentResponse getEnvironment(
-            @PathVariable Long groupId,
-            @PathVariable Long envId,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("envId") Long envId,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {
@@ -63,8 +63,8 @@ public class SecretsAccessorController {
 
     @GetMapping("/groups/{groupId}/envs/by-name/{envName}")
     public AccessorEnvironmentResponse getEnvironmentByName(
-            @PathVariable Long groupId,
-            @PathVariable String envName,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("envName") String envName,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {
@@ -88,7 +88,7 @@ public class SecretsAccessorController {
 
     @GetMapping("/bundles/{id}")
     public AccessorBundleDetailResponse getBundle(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {

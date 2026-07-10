@@ -1,5 +1,6 @@
 package dev.orwell.combined;
 
+import dev.orwell.bootstrap.AppServer;
 import dev.orwell.env.EnvFiles;
 import dev.orwell.env.EnvValidationException;
 
@@ -19,7 +20,8 @@ public final class CombinedServerLauncher {
 
     public static void main(String[] args) {
         try {
-            CombinedServerApplication.start(resolveEnvironment());
+            new AppServer(CombinedEnvs.ENV, CombinedServerApplication::start)
+                    .start(resolveEnvironment());
         } catch (IOException | IllegalStateException | EnvValidationException exception) {
             System.err.println(startupErrorMessage(exception));
             System.exit(1);

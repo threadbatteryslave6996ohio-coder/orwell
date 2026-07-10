@@ -1,7 +1,7 @@
 package dev.orwell.server;
 
+import dev.orwell.bootstrap.AppServer;
 import dev.orwell.env.EnvFiles;
-import dev.orwell.env.http.EnvLoader;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -18,20 +18,8 @@ public final class ClippyServerLauncher {
     }
 
     public static void main(String[] args) {
-        try {
-            ClippyServerApplication.start(resolveEnv(args));
-        } catch (IOException e) {
-            System.err.println(e.getMessage());
-            System.exit(1);
-        }
-    }
-
-    private static Map<String, String> resolveEnv(String[] args) throws IOException {
-        if (args.length > 0 && "--remote".equals(args[0])) {
-            String url = args.length > 1 ? args[1] : "http://localhost:8080/v1/env";
-            return EnvLoader.fetchRemote(url);
-        }
-        return EnvLoader.load("file");
+        new AppServer(ServerEnvs.ENV, ClippyServerApplication::start)
+                .runOrExit(args);
     }
 
     static Map<String, String> resolveEnvironment(Path startDirectory) throws IOException {

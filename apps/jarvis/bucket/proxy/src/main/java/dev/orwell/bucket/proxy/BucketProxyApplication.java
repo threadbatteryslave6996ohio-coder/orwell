@@ -11,11 +11,14 @@ import java.util.Map;
 @SpringBootApplication
 @ConfigurationPropertiesScan
 public class BucketProxyApplication {
-    public static ConfigurableApplicationContext start(Map<String, String> environment) {
-        Env env = JarvisProxyEnvs.from(environment);
+    public static ConfigurableApplicationContext start(Env env) {
         return SpringServerBootstrap.run(
                 BucketProxyApplication.class,
                 JarvisProxyEnvs.springProperties(env),
                 "jarvisProxyLauncher");
+    }
+
+    public static ConfigurableApplicationContext start(Map<String, String> environment) {
+        return start(JarvisProxyEnvs.from(environment));
     }
 }

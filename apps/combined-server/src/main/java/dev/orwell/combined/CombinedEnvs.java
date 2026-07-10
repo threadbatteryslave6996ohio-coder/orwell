@@ -30,6 +30,28 @@ public final class CombinedEnvs {
     public static final EnvOption<String> AUTH_JPA_HIBERNATE_DDL_AUTO;
     public static final EnvOption<String> CLIPBOARD_JPA_HIBERNATE_DDL_AUTO;
     public static final EnvOption<String> JPA_JDBC_TIME_ZONE;
+    public static final EnvOption<String> PROXY_STORAGE_PROVIDER;
+    public static final EnvOption<Long> PROXY_STORAGE_MAX_FILE_SIZE;
+    public static final EnvOption<String> PROXY_S3_BUCKET_NAME;
+    public static final EnvOption<String> PROXY_S3_REGION;
+    public static final EnvOption<String> PROXY_S3_ENDPOINT;
+    public static final EnvOption<Boolean> PROXY_S3_PATH_STYLE_ACCESS;
+    public static final EnvOption<String> PROXY_S3_SSE;
+    public static final EnvOption<String> AZURE_STORAGE_ACCOUNT;
+    public static final EnvOption<String> AZURE_STORAGE_CONTAINER;
+    public static final EnvOption<String> AZURE_STORAGE_ENDPOINT;
+    public static final EnvOption<String> AZURE_STORAGE_CONNECTION_STRING;
+    public static final EnvOption<String> AUTH_IDENTITY_PROVISIONING_KEY;
+    public static final EnvOption<String> PROXY_MANAGEMENT_USERNAME;
+    public static final EnvOption<String> PROXY_MANAGEMENT_PASSWORD;
+    public static final EnvOption<String> PROXY_MANAGEMENT_SESSION_SECRET;
+    public static final EnvOption<String> PROXY_SERVER_URL;
+    public static final EnvOption<String> PROXY_AUDIT_FILE;
+    public static final EnvOption<String> PROXY_LOGGING_AUDIT_FILE;
+    public static final EnvOption<String> WEBSOCKET_HOST;
+    public static final EnvOption<String> WEBSOCKET_PORT;
+    public static final EnvOption<String> REDIS_HOST;
+    public static final EnvOption<String> REDIS_PORT;
     public static final EnvSchema ENV;
 
     static {
@@ -55,6 +77,28 @@ public final class CombinedEnvs {
         AUTH_JPA_HIBERNATE_DDL_AUTO = builder.required("AUTH_JPA_HIBERNATE_DDL_AUTO", EnvType.string());
         CLIPBOARD_JPA_HIBERNATE_DDL_AUTO = builder.required("CLIPBOARD_JPA_HIBERNATE_DDL_AUTO", EnvType.string());
         JPA_JDBC_TIME_ZONE = builder.required("JPA_JDBC_TIME_ZONE", EnvType.string());
+        PROXY_STORAGE_PROVIDER = builder.optional("PROXY_STORAGE_PROVIDER", EnvType.string());
+        PROXY_STORAGE_MAX_FILE_SIZE = builder.optional("PROXY_STORAGE_MAX_FILE_SIZE", EnvType.longInteger());
+        PROXY_S3_BUCKET_NAME = builder.optional("PROXY_S3_BUCKET_NAME", EnvType.string());
+        PROXY_S3_REGION = builder.optional("PROXY_S3_REGION", EnvType.string());
+        PROXY_S3_ENDPOINT = builder.optional("PROXY_S3_ENDPOINT", EnvType.string());
+        PROXY_S3_PATH_STYLE_ACCESS = builder.optional("PROXY_S3_PATH_STYLE_ACCESS", EnvType.bool());
+        PROXY_S3_SSE = builder.optional("PROXY_S3_SSE", EnvType.string());
+        AZURE_STORAGE_ACCOUNT = builder.optional("AZURE_STORAGE_ACCOUNT", EnvType.string());
+        AZURE_STORAGE_CONTAINER = builder.optional("AZURE_STORAGE_CONTAINER", EnvType.string());
+        AZURE_STORAGE_ENDPOINT = builder.optional("AZURE_STORAGE_ENDPOINT", EnvType.string());
+        AZURE_STORAGE_CONNECTION_STRING = builder.optional("AZURE_STORAGE_CONNECTION_STRING", EnvType.string());
+        AUTH_IDENTITY_PROVISIONING_KEY = builder.optional("AUTH_IDENTITY_PROVISIONING_KEY", EnvType.string());
+        PROXY_MANAGEMENT_USERNAME = builder.optional("PROXY_MANAGEMENT_USERNAME", EnvType.string());
+        PROXY_MANAGEMENT_PASSWORD = builder.optional("PROXY_MANAGEMENT_PASSWORD", EnvType.string());
+        PROXY_MANAGEMENT_SESSION_SECRET = builder.optional("PROXY_MANAGEMENT_SESSION_SECRET", EnvType.string());
+        PROXY_SERVER_URL = builder.optional("PROXY_SERVER_URL", EnvType.string());
+        PROXY_AUDIT_FILE = builder.optional("PROXY_AUDIT_FILE", EnvType.string());
+        PROXY_LOGGING_AUDIT_FILE = builder.optional("PROXY_LOGGING_AUDIT_FILE", EnvType.string());
+        WEBSOCKET_HOST = builder.optional("WEBSOCKET_HOST", EnvType.string());
+        WEBSOCKET_PORT = builder.optional("WEBSOCKET_PORT", EnvType.string());
+        REDIS_HOST = builder.optional("REDIS_HOST", EnvType.string());
+        REDIS_PORT = builder.optional("REDIS_PORT", EnvType.string());
         ENV = builder.build();
     }
 
@@ -66,10 +110,6 @@ public final class CombinedEnvs {
     }
 
     static Map<String, Object> springProperties(Env env) {
-        return springProperties(env, Map.of());
-    }
-
-    static Map<String, Object> springProperties(Env env, Map<String, String> source) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("server.port", env.get(COMBINED_SERVER_PORT));
         values.put("clippy.auth.datasource.url", env.get(AUTH_DATASOURCE_URL));
@@ -93,40 +133,39 @@ public final class CombinedEnvs {
         values.put("clippy.auth.jpa.hibernate.ddl-auto", env.get(AUTH_JPA_HIBERNATE_DDL_AUTO));
         values.put("clippy.clipboard.jpa.hibernate.ddl-auto", env.get(CLIPBOARD_JPA_HIBERNATE_DDL_AUTO));
         values.put("clippy.jpa.jdbc-time-zone", env.get(JPA_JDBC_TIME_ZONE));
-        copy(source, values, "PROXY_STORAGE_PROVIDER", "proxy.storage.provider");
-        copy(source, values, "PROXY_STORAGE_MAX_FILE_SIZE", "proxy.storage.max-file-size");
-        copy(source, values, "PROXY_S3_BUCKET_NAME", "proxy.s3.bucket-name");
-        copy(source, values, "PROXY_S3_REGION", "proxy.s3.region");
-        copy(source, values, "PROXY_S3_ENDPOINT", "proxy.s3.endpoint");
-        copy(source, values, "PROXY_S3_PATH_STYLE_ACCESS", "proxy.s3.path-style-access");
-        copy(source, values, "PROXY_S3_SSE", "proxy.s3.server-side-encryption");
-        copy(source, values, "AZURE_STORAGE_ACCOUNT", "proxy.azure.account-name");
-        copy(source, values, "AZURE_STORAGE_CONTAINER", "proxy.azure.container-name");
-        copy(source, values, "AZURE_STORAGE_ENDPOINT", "proxy.azure.endpoint");
-        copy(source, values, "AZURE_STORAGE_CONNECTION_STRING", "proxy.azure.connection-string");
-        copy(source, values, "AUTH_IDENTITY_PROVISIONING_KEY", "proxy.auth-server.identity-provisioning-key");
-        copy(source, values, "PROXY_MANAGEMENT_USERNAME", "proxy.management.username");
-        copy(source, values, "PROXY_MANAGEMENT_PASSWORD", "proxy.management.password");
-        copy(source, values, "PROXY_MANAGEMENT_SESSION_SECRET", "proxy.management.session-secret");
-        copy(source, values, "PROXY_SERVER_URL", "proxy.server.url");
-        copy(source, values, "PROXY_AUDIT_FILE", "proxy.logging.audit-file");
-        copy(source, values, "PROXY_LOGGING_AUDIT_FILE", "proxy.logging.audit-file");
-        copy(source, values, "WEBSOCKET_HOST", "keeboarder.websocket.host");
-        copy(source, values, "WEBSOCKET_PORT", "keeboarder.websocket.port");
-        copy(source, values, "REDIS_HOST", "keeboarder.redis.host");
-        copy(source, values, "REDIS_PORT", "keeboarder.redis.port");
+        putIfPresent(values, env, PROXY_STORAGE_PROVIDER, "proxy.storage.provider");
+        putIfPresent(values, env, PROXY_STORAGE_MAX_FILE_SIZE, "proxy.storage.max-file-size");
+        putIfPresent(values, env, PROXY_S3_BUCKET_NAME, "proxy.s3.bucket-name");
+        putIfPresent(values, env, PROXY_S3_REGION, "proxy.s3.region");
+        putIfPresent(values, env, PROXY_S3_ENDPOINT, "proxy.s3.endpoint");
+        putIfPresent(values, env, PROXY_S3_PATH_STYLE_ACCESS, "proxy.s3.path-style-access");
+        putIfPresent(values, env, PROXY_S3_SSE, "proxy.s3.server-side-encryption");
+        putIfPresent(values, env, AZURE_STORAGE_ACCOUNT, "proxy.azure.account-name");
+        putIfPresent(values, env, AZURE_STORAGE_CONTAINER, "proxy.azure.container-name");
+        putIfPresent(values, env, AZURE_STORAGE_ENDPOINT, "proxy.azure.endpoint");
+        putIfPresent(values, env, AZURE_STORAGE_CONNECTION_STRING, "proxy.azure.connection-string");
+        putIfPresent(values, env, AUTH_IDENTITY_PROVISIONING_KEY, "proxy.auth-server.identity-provisioning-key");
+        putIfPresent(values, env, PROXY_MANAGEMENT_USERNAME, "proxy.management.username");
+        putIfPresent(values, env, PROXY_MANAGEMENT_PASSWORD, "proxy.management.password");
+        putIfPresent(values, env, PROXY_MANAGEMENT_SESSION_SECRET, "proxy.management.session-secret");
+        putIfPresent(values, env, PROXY_SERVER_URL, "proxy.server.url");
+        putIfPresent(values, env, PROXY_AUDIT_FILE, "proxy.logging.audit-file");
+        putIfPresent(values, env, PROXY_LOGGING_AUDIT_FILE, "proxy.logging.audit-file");
+        putIfPresent(values, env, WEBSOCKET_HOST, "keeboarder.websocket.host");
+        putIfPresent(values, env, WEBSOCKET_PORT, "keeboarder.websocket.port");
+        putIfPresent(values, env, REDIS_HOST, "keeboarder.redis.host");
+        putIfPresent(values, env, REDIS_PORT, "keeboarder.redis.port");
         return values;
     }
 
-    private static void copy(
-            Map<String, String> source,
+    private static <T> void putIfPresent(
             Map<String, Object> destination,
-            String environmentName,
+            Env env,
+            EnvOption<T> option,
             String propertyName
     ) {
-        String value = source.get(environmentName);
-        if (value != null && !value.isBlank()) {
-            destination.put(propertyName, value.trim());
+        if (env.has(option)) {
+            destination.put(propertyName, env.get(option));
         }
     }
 

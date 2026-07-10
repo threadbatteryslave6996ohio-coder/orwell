@@ -1,7 +1,8 @@
 package dev.orwell.auth.http.server;
 
+import dev.orwell.auth.http.server.config.AuthServerEnvs;
+import dev.orwell.bootstrap.AppServer;
 import dev.orwell.env.EnvFiles;
-import dev.orwell.env.http.EnvLoader;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -17,8 +18,9 @@ public final class ClippyAuthServerLauncher {
     private ClippyAuthServerLauncher() {
     }
 
-    public static void main(String[] args) throws IOException {
-        ClippyAuthServerApplication.start(EnvLoader.load("file"));
+    public static void main(String[] args) {
+        new AppServer(AuthServerEnvs.ENV, ClippyAuthServerApplication::start)
+                .runOrExit(args);
     }
 
     public static Map<String, String> resolveEnvironment(Path startDirectory) throws IOException {

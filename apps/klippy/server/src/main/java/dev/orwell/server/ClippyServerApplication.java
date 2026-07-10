@@ -9,17 +9,20 @@ import java.util.Map;
 
 @SpringBootApplication
 public class ClippyServerApplication {
+    public static ConfigurableApplicationContext start(Env env) {
+        return SpringServerBootstrap.start(
+                ClippyServerApplication.class,
+                env.get(ServerEnvs.LOGGING_FILE_NAME),
+                ServerEnvs.springProperties(env),
+                "clippyServerLauncher");
+    }
+
     /**
      * Boots the clipboard server from an already-resolved environment. The core never reads
      * {@code .env} files or system env itself: whoever launches it (see {@link ClippyServerLauncher},
      * the combined server, or tests) decides how to fetch the values and passes them in here.
      */
     public static ConfigurableApplicationContext start(Map<String, String> environment) {
-        Env env = ServerEnvs.from(environment);
-        return SpringServerBootstrap.start(
-                ClippyServerApplication.class,
-                env.get(ServerEnvs.LOGGING_FILE_NAME),
-                ServerEnvs.springProperties(env),
-                "clippyServerLauncher");
+        return start(ServerEnvs.from(environment));
     }
 }

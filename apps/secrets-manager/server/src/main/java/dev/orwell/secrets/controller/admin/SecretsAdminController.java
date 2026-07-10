@@ -84,7 +84,7 @@ public class SecretsAdminController {
 
     @GetMapping("/groups/{id}")
     public GroupResponse getGroup(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {
@@ -96,7 +96,7 @@ public class SecretsAdminController {
 
     @PutMapping("/groups/{id}")
     public GroupResponse updateGroup(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody UpdateGroupRequest request,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
@@ -110,7 +110,7 @@ public class SecretsAdminController {
     @DeleteMapping("/groups/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteGroup(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {
@@ -121,7 +121,7 @@ public class SecretsAdminController {
     @PostMapping("/groups/{groupId}/envs")
     @ResponseStatus(HttpStatus.CREATED)
     public EnvironmentResponse createEnvironment(
-            @PathVariable Long groupId,
+            @PathVariable("groupId") Long groupId,
             @Valid @RequestBody CreateEnvironmentRequest request,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
@@ -134,7 +134,7 @@ public class SecretsAdminController {
 
     @GetMapping("/groups/{groupId}/envs")
     public List<EnvironmentResponse> listEnvironments(
-            @PathVariable Long groupId,
+            @PathVariable("groupId") Long groupId,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {
@@ -147,8 +147,8 @@ public class SecretsAdminController {
 
     @GetMapping("/groups/{groupId}/envs/{envId}")
     public EnvironmentResponse getEnvironment(
-            @PathVariable Long groupId,
-            @PathVariable Long envId,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("envId") Long envId,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {
@@ -160,8 +160,8 @@ public class SecretsAdminController {
 
     @PutMapping("/groups/{groupId}/envs/{envId}")
     public EnvironmentResponse updateEnvironment(
-            @PathVariable Long groupId,
-            @PathVariable Long envId,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("envId") Long envId,
             @Valid @RequestBody UpdateEnvironmentRequest request,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
@@ -175,8 +175,8 @@ public class SecretsAdminController {
     @DeleteMapping("/groups/{groupId}/envs/{envId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteEnvironment(
-            @PathVariable Long groupId,
-            @PathVariable Long envId,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("envId") Long envId,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {
@@ -212,7 +212,7 @@ public class SecretsAdminController {
 
     @GetMapping("/bundles/{id}")
     public BundleDetailResponse getBundle(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {
@@ -222,7 +222,7 @@ public class SecretsAdminController {
 
     @PutMapping("/bundles/{id}")
     public BundleResponse updateBundle(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody UpdateBundleRequest request,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
@@ -235,7 +235,7 @@ public class SecretsAdminController {
 
     @PutMapping("/bundles/{id}/envs")
     public BundleDetailResponse setBundleEnvs(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody SetBundleEnvsRequest request,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
@@ -248,7 +248,7 @@ public class SecretsAdminController {
     @DeleteMapping("/bundles/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteBundle(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId
     ) {

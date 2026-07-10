@@ -28,15 +28,18 @@ import java.util.Map;
         CombinedSecretsDatabaseConfiguration.class
 })
 public class CombinedServerApplication {
-    /** Starts the core from configuration that has already been fetched by a launcher. */
-    public static ConfigurableApplicationContext start(Map<String, String> environment) {
-        Env env = CombinedEnvs.from(environment);
+    public static ConfigurableApplicationContext start(Env env) {
         return SpringServerBootstrap.start(
                 CombinedServerApplication.class,
                 env.get(CombinedEnvs.LOGGING_FILE_NAME),
                 CombinedServerApplication::logCombinedModeDisclaimer,
-                CombinedEnvs.springProperties(env, environment),
+                CombinedEnvs.springProperties(env),
                 "combinedServerLauncher");
+    }
+
+    /** Starts the core from configuration that has already been fetched by a launcher. */
+    public static ConfigurableApplicationContext start(Map<String, String> environment) {
+        return start(CombinedEnvs.from(environment));
     }
 
     static void logCombinedModeDisclaimer() {
