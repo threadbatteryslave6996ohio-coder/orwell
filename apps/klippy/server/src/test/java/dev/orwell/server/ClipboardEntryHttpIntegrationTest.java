@@ -1,6 +1,10 @@
 package dev.orwell.server;
 
 import dev.orwell.auth.AuthenticationStrategy;
+import dev.orwell.server.application.ClippyServerApplication;
+import dev.orwell.server.dto.ClipboardEntryResponse;
+import dev.orwell.server.model.ClipboardEntry;
+import dev.orwell.server.repository.ClipboardEntryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,7 +30,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+        classes = {ClippyServerApplication.class, ClipboardEntryHttpIntegrationTest.TestConfig.class},
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
+)
 class ClipboardEntryHttpIntegrationTest {
     @Container
     static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -63,7 +70,7 @@ class ClipboardEntryHttpIntegrationTest {
                 }
                 """.formatted(timestamp);
 
-        HttpResponse<String> response = post("/clipboard", json, "valid-token");
+        HttpResponse<String> response = post("/clipboard", json, "android-pixel-8", "valid-token");
 
         assertThat(response.statusCode()).isEqualTo(201);
         assertThat(response.body()).contains("\"id\":");
@@ -88,7 +95,7 @@ class ClipboardEntryHttpIntegrationTest {
                 }
                 """;
 
-        HttpResponse<String> response = post("/clipboard", json, null);
+        HttpResponse<String> response = post("/clipboard", json, "android-pixel-8", null);
 
         assertThat(response.statusCode()).isEqualTo(401);
         assertThat(repository.findAll()).isEmpty();
@@ -111,8 +118,8 @@ class ClipboardEntryHttpIntegrationTest {
                 }
                 """;
 
-        HttpResponse<String> firstResponse = post("/clipboard", first, "valid-token");
-        HttpResponse<String> duplicateResponse = post("/clipboard", duplicate, "valid-token");
+        HttpResponse<String> firstResponse = post("/clipboard", first, "android-pixel-8", "valid-token");
+        HttpResponse<String> duplicateResponse = post("/clipboard", duplicate, "android-pixel-8", "valid-token");
 
         assertThat(firstResponse.statusCode()).isEqualTo(201);
         assertThat(duplicateResponse.statusCode()).isEqualTo(201);
@@ -132,8 +139,8 @@ class ClipboardEntryHttpIntegrationTest {
                 }
                 """;
 
-        HttpResponse<String> firstResponse = post("/clipboard", historical, "valid-token");
-        HttpResponse<String> retryResponse = post("/clipboard", historical, "valid-token");
+        HttpResponse<String> firstResponse = post("/clipboard", historical, "android-pixel-8", "valid-token");
+        HttpResponse<String> retryResponse = post("/clipboard", historical, "android-pixel-8", "valid-token");
 
         assertThat(firstResponse.statusCode()).isEqualTo(201);
         assertThat(retryResponse.statusCode()).isEqualTo(201);
@@ -151,8 +158,8 @@ class ClipboardEntryHttpIntegrationTest {
                 }
                 """;
 
-        HttpResponse<String> firstResponse = post("/clipboard", entry, "valid-token");
-        HttpResponse<String> retryResponse = post("/clipboard", entry, "valid-token");
+        HttpResponse<String> firstResponse = post("/clipboard", entry, "android-pixel-8", "valid-token");
+        HttpResponse<String> retryResponse = post("/clipboard", entry, "android-pixel-8", "valid-token");
 
         assertThat(firstResponse.statusCode()).isEqualTo(201);
         assertThat(retryResponse.body()).isEqualTo(firstResponse.body());
@@ -170,6 +177,7 @@ class ClipboardEntryHttpIntegrationTest {
 
         HttpResponse<String> response = get(
                 "/clipboard?clientId=android-pixel-8&from=2026-06-23T12%3A00%3A00Z&to=2026-06-23T13%3A00%3A00Z",
+                "android-pixel-8",
                 "valid-token"
         );
 
@@ -187,6 +195,7 @@ class ClipboardEntryHttpIntegrationTest {
         HttpResponse<String> response = get(
                 "/clipboard?clientId=android-pixel-8&from=2026-06-23T12%3A00%3A00Z"
                         + "&to=2026-06-23T13%3A00%3A00Z",
+                "android-pixel-8",
                 null
         );
 
@@ -205,12 +214,14 @@ class ClipboardEntryHttpIntegrationTest {
         HttpResponse<String> firstPage = get(
                 "/clipboard?clientId=android-pixel-8&from=2026-06-23T12%3A00%3A00Z"
                         + "&to=2026-06-23T13%3A00%3A00Z&limit=2",
+                "android-pixel-8",
                 "valid-token"
         );
         HttpResponse<String> secondPage = get(
                 "/clipboard?clientId=android-pixel-8&from=2026-06-23T12%3A00%3A00Z"
                         + "&to=2026-06-23T13%3A00%3A00Z&limit=2"
                         + "&afterTimestamp=2026-06-23T12%3A00%3A00Z&afterId=" + second.getId(),
+                "android-pixel-8",
                 "valid-token"
         );
 
@@ -221,9 +232,10 @@ class ClipboardEntryHttpIntegrationTest {
         assertThat(secondPage.body()).contains("third").doesNotContain("first").doesNotContain("second");
     }
 
-    private HttpResponse<String> post(String path, String json, String bearerToken) throws IOException, InterruptedException {
+    private HttpResponse<String> post(String path, String json, String clientId, String bearerToken) throws IOException, InterruptedException {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("http://localhost:%d%s".formatted(port, path)))
                 .header("Content-Type", "application/json")
+                .header("X-Client-Id", clientId)
                 .POST(HttpRequest.BodyPublishers.ofString(json));
         if (bearerToken != null) {
             builder.header("Authorization", "Bearer " + bearerToken);
@@ -232,9 +244,10 @@ class ClipboardEntryHttpIntegrationTest {
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
-    private HttpResponse<String> get(String path, String bearerToken) throws IOException, InterruptedException {
+    private HttpResponse<String> get(String path, String clientId, String bearerToken) throws IOException, InterruptedException {
         HttpRequest.Builder builder = HttpRequest.newBuilder(
                         URI.create("http://localhost:%d%s".formatted(port, path)))
+                .header("X-Client-Id", clientId)
                 .GET();
         if (bearerToken != null) {
             builder.header("Authorization", "Bearer " + bearerToken);

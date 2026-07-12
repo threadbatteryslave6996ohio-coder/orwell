@@ -1,4 +1,6 @@
-package dev.orwell.server;
+package dev.orwell.server.repository;
+
+import dev.orwell.server.model.ClipboardEntry;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

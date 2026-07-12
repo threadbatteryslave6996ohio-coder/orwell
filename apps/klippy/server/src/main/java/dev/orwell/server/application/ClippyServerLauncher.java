@@ -1,10 +1,8 @@
-package dev.orwell.server;
+package dev.orwell.server.application;
 
 import dev.orwell.bootstrap.AppServer;
-import dev.orwell.env.EnvFiles;
+import dev.orwell.server.config.ServerEnvs;
 
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.Map;
 
 /**
@@ -20,10 +18,5 @@ public final class ClippyServerLauncher {
     public static void main(String[] args) {
         new AppServer(ServerEnvs.ENV, ClippyServerApplication::start)
                 .runOrExit(args);
-    }
-
-    // idk what is this
-    static Map<String, String> resolveEnvironment(Path startDirectory) throws IOException {
-        return EnvFiles.load(startDirectory);
     }
 }

@@ -2,11 +2,6 @@ package dev.orwell.auth.http.server;
 
 import dev.orwell.auth.http.server.config.AuthServerEnvs;
 import dev.orwell.bootstrap.AppServer;
-import dev.orwell.env.EnvFiles;
-
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.Map;
 
 /**
  * Default standalone entry point for the auth server. This is the "actor" that decides how the
@@ -21,9 +16,5 @@ public final class ClippyAuthServerLauncher {
     public static void main(String[] args) {
         new AppServer(AuthServerEnvs.ENV, ClippyAuthServerApplication::start)
                 .runOrExit(args);
-    }
-
-    public static Map<String, String> resolveEnvironment(Path startDirectory) throws IOException {
-        return EnvFiles.load(startDirectory);
     }
 }

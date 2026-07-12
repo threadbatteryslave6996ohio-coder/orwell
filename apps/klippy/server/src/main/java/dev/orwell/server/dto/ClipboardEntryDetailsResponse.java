@@ -1,4 +1,6 @@
-package dev.orwell.server;
+package dev.orwell.server.dto;
+
+import dev.orwell.server.model.ClipboardEntry;
 
 import java.time.Instant;
 
@@ -8,7 +10,7 @@ public record ClipboardEntryDetailsResponse(
         String content,
         Instant timestamp
 ) {
-    static ClipboardEntryDetailsResponse from(ClipboardEntry entry) {
+    public static ClipboardEntryDetailsResponse from(ClipboardEntry entry) {
         return new ClipboardEntryDetailsResponse(
                 entry.getId(),
                 entry.getClientId(),

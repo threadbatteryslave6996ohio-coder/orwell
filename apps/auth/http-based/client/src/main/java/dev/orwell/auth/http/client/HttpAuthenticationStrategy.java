@@ -1,6 +1,7 @@
 package dev.orwell.auth.http.client;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.orwell.auth.AuthenticationContext;
 import dev.orwell.auth.AuthenticationStrategy;
 import dev.orwell.auth.http.api.CheckTokenHttpRequest;
 import dev.orwell.auth.http.api.CheckTokenHttpResponse;
@@ -43,6 +44,11 @@ public final class HttpAuthenticationStrategy implements AuthenticationStrategy 
 
     @Override
     public boolean isTokenValidForClient(String clientId, String token) {
+        return authenticate(clientId, token).authenticated();
+    }
+
+    @Override
+    public AuthenticationContext authenticate(String clientId, String token) {
         try {
             CheckTokenHttpResponse response = restClient.post()
                     .uri("/tokens/check")
@@ -53,7 +59,10 @@ public final class HttpAuthenticationStrategy implements AuthenticationStrategy 
                     })
                     .body(CheckTokenHttpResponse.class);
 
-            return response != null && response.valid() && clientId.equals(response.clientId());
+            if (response == null || !response.valid() || !clientId.equals(response.clientId())) {
+                return AuthenticationContext.unauthenticated();
+            }
+            return AuthenticationContext.authenticated(response.clientId(), response.identityId());
         } catch (RestClientException exception) {
             throw new HttpAuthenticationException("Cannot check token with auth server.", exception);
         }

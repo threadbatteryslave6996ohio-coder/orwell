@@ -1,5 +1,6 @@
 package dev.orwell.secrets.service;
 
+import dev.orwell.auth.AuthenticationContext;
 import dev.orwell.auth.AuthenticationStrategy;
 import dev.orwell.auth.BearerToken;
 import dev.orwell.secrets.repository.AccessorIdentityRepository;
@@ -32,10 +33,24 @@ public class AuthValidator {
         }
     }
 
+    public void requireAdmin(AuthenticationContext authenticationContext) {
+        validateContext(authenticationContext);
+        if (!adminRepo.existsByName(authenticationContext.clientId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access required.");
+        }
+    }
+
     public void requireAccessor(String authorization, String clientId) {
         validateClientId(clientId);
         validateToken(authorization, clientId);
         if (!accessorRepo.existsByName(clientId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accessor access required.");
+        }
+    }
+
+    public void requireAccessor(AuthenticationContext authenticationContext) {
+        validateContext(authenticationContext);
+        if (!accessorRepo.existsByName(authenticationContext.clientId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accessor access required.");
         }
     }
@@ -53,6 +68,12 @@ public class AuthValidator {
         }
         if (!authenticationStrategy.isTokenValidForClient(clientId, token)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
+        }
+    }
+
+    private static void validateContext(AuthenticationContext authenticationContext) {
+        if (authenticationContext == null || !authenticationContext.authenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing client identity.");
         }
     }
 }

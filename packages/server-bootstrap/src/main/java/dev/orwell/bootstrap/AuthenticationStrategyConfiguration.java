@@ -1,11 +1,16 @@
 package dev.orwell.bootstrap;
 
+import dev.orwell.auth.AuthenticationContext;
 import dev.orwell.auth.AuthenticationStrategy;
 import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
+import org.springframework.web.context.WebApplicationContext;
+import jakarta.servlet.http.HttpServletRequest;
 
 @Configuration
 public class AuthenticationStrategyConfiguration {
@@ -16,5 +21,21 @@ public class AuthenticationStrategyConfiguration {
             @Value("${clippy.auth.base-url:http://localhost:8081}") String authBaseUrl
     ) {
         return new HttpAuthenticationStrategy(authBaseUrl);
+    }
+
+    @Bean
+    @Scope(WebApplicationContext.SCOPE_REQUEST)
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+    AuthenticationContext requestAuthenticationContext(
+            HttpServletRequest request,
+            AuthenticationStrategy authenticationStrategy
+    ) {
+        String clientId = request.getHeader("X-Client-Id");
+        String authorization = request.getHeader("Authorization");
+        String token = dev.orwell.auth.BearerToken.extract(authorization);
+        if (clientId == null || clientId.isBlank() || token == null) {
+            return AuthenticationContext.unauthenticated();
+        }
+        return authenticationStrategy.authenticate(clientId, token);
     }
 }

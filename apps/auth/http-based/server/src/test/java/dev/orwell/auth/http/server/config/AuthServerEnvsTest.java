@@ -3,8 +3,8 @@ package dev.orwell.auth.http.server.config;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.orwell.auth.http.server.ClippyAuthServerLauncher;
 import dev.orwell.env.Env;
+import dev.orwell.env.EnvFiles;
 import dev.orwell.env.EnvValidationException;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,7 +36,7 @@ class AuthServerEnvsTest {
                         "AUTH_JPA_JDBC_TIME_ZONE=UTC\n"
         );
 
-        Env env = AuthServerEnvs.from(ClippyAuthServerLauncher.resolveEnvironment(nestedDirectory));
+        Env env = AuthServerEnvs.from(EnvFiles.load(nestedDirectory));
 
         assertEquals("jdbc:postgresql://example:5432/auth", env.get(AuthServerEnvs.AUTH_DATASOURCE_URL));
         assertEquals("example-user", env.get(AuthServerEnvs.AUTH_DATASOURCE_USERNAME));

@@ -33,7 +33,7 @@ public class ClippyAuthServerApplication {
 
     /** Custom {@link Logger} available for injection across the auth server. */
     @Bean
-    public Logger logger() {
+    public CustomLogger logger() {
         return new CustomLogger("auth-server");
     }
 

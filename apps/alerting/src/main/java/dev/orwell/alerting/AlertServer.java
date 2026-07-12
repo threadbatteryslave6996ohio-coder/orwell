@@ -3,9 +3,9 @@ package dev.orwell.alerting;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import dev.orwell.env.http.HttpExchangeResponses;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
-import jakarta.mail.PasswordAuthentication;
 import jakarta.mail.Session;
 import jakarta.mail.Transport;
 import jakarta.mail.internet.InternetAddress;
@@ -13,13 +13,11 @@ import jakarta.mail.internet.MimeMessage;
 
 import dev.orwell.env.Env;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Properties;
 
 final class AlertServer {
     private final String host;
@@ -27,27 +25,18 @@ final class AlertServer {
     private final boolean emailEnabled;
     private final String emailTo;
     private final String emailFrom;
-    private final String smtpHost;
-    private final int smtpPort;
-    private final String smtpUsername;
-    private final String smtpPassword;
-    private final boolean smtpUseTls;
+    private final SmtpConfig smtp;
     private final JsonLogger logger;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private AlertServer(String host, int port, boolean emailEnabled, String emailTo, String emailFrom,
-                        String smtpHost, int smtpPort, String smtpUsername, String smtpPassword,
-                        boolean smtpUseTls, JsonLogger logger) {
+                        SmtpConfig smtp, JsonLogger logger) {
         this.host = host;
         this.port = port;
         this.emailEnabled = emailEnabled;
         this.emailTo = emailTo;
         this.emailFrom = emailFrom;
-        this.smtpHost = smtpHost;
-        this.smtpPort = smtpPort;
-        this.smtpUsername = smtpUsername;
-        this.smtpPassword = smtpPassword;
-        this.smtpUseTls = smtpUseTls;
+        this.smtp = smtp;
         this.logger = logger;
     }
 
@@ -60,13 +49,9 @@ final class AlertServer {
         if (emailFrom.isBlank()) {
             emailFrom = emailTo.isBlank() ? "alerts@localhost" : emailTo;
         }
-        String smtpHost = env.get(AlertEnvs.SMTP_HOST);
-        int smtpPort = env.get(AlertEnvs.SMTP_PORT);
-        String smtpUsername = env.get(AlertEnvs.SMTP_USERNAME);
-        String smtpPassword = env.get(AlertEnvs.SMTP_PASSWORD);
-        boolean smtpUseTls = env.get(AlertEnvs.SMTP_USE_TLS);
+        SmtpConfig smtp = SmtpConfig.fromEnv(env);
         JsonLogger logger = new JsonLogger(Path.of(env.get(AlertEnvs.ALERT_LOG_FILE)));
-        return new AlertServer(host, port, emailEnabled, emailTo, emailFrom, smtpHost, smtpPort, smtpUsername, smtpPassword, smtpUseTls, logger);
+        return new AlertServer(host, port, emailEnabled, emailTo, emailFrom, smtp, logger);
     }
 
     void run() throws IOException {
@@ -78,23 +63,31 @@ final class AlertServer {
     }
 
     private void writeHealth(HttpExchange exchange) throws IOException {
-        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-            writeJson(exchange, 405, Map.of("success", false, "error", "method not allowed"));
+        if (!HttpExchangeResponses.requireMethod(exchange, "GET")) {
             return;
         }
-        writeJson(exchange, 200, Map.of("success", true, "status", "healthy", "emailEnabled", emailEnabled));
+        HttpExchangeResponses.writeJson(
+                exchange,
+                200,
+                Map.of("success", true, "status", "healthy", "emailEnabled", emailEnabled),
+                objectMapper
+        );
     }
 
     private void handleAlert(HttpExchange exchange) throws IOException {
-        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-            writeJson(exchange, 405, Map.of("success", false, "error", "method not allowed"));
+        if (!HttpExchangeResponses.requireMethod(exchange, "POST")) {
             return;
         }
         Map<String, Object> alert;
         try (var body = exchange.getRequestBody()) {
             alert = objectMapper.readValue(body, new com.fasterxml.jackson.core.type.TypeReference<>() {});
         } catch (Exception exception) {
-            writeJson(exchange, 400, Map.of("success", false, "error", "invalid json"));
+            HttpExchangeResponses.writeJson(
+                    exchange,
+                    400,
+                    Map.of("success", false, "error", "invalid json"),
+                    objectMapper
+            );
             return;
         }
 
@@ -112,27 +105,16 @@ final class AlertServer {
         response.put("emailEnabled", emailEnabled);
         response.put("emailSent", emailSent);
         response.put("emailError", emailError);
-        writeJson(exchange, 200, response);
+        HttpExchangeResponses.writeJson(exchange, 200, response, objectMapper);
     }
 
     private boolean sendEmail(Map<String, Object> alert) throws MessagingException, IOException {
-        if (!emailEnabled || emailTo.isBlank() || smtpHost.isBlank()) {
+        if (!emailEnabled || emailTo.isBlank() || !smtp.isConfigured()) {
             logger.info("alert.email.skipped", Map.of("reason", "missing email settings"));
             return false;
         }
 
-        Properties props = new Properties();
-        props.put("mail.smtp.host", smtpHost);
-        props.put("mail.smtp.port", String.valueOf(smtpPort));
-        props.put("mail.smtp.auth", String.valueOf(!smtpUsername.isBlank()));
-        props.put("mail.smtp.starttls.enable", String.valueOf(smtpUseTls));
-
-        Session session = Session.getInstance(props, smtpUsername.isBlank() ? null : new jakarta.mail.Authenticator() {
-            @Override
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(smtpUsername, smtpPassword);
-            }
-        });
+        Session session = smtp.createSession();
 
         String event = String.valueOf(alert.getOrDefault("event", "alert"));
         String source = String.valueOf(alert.getOrDefault("source", "unknown"));
@@ -144,15 +126,6 @@ final class AlertServer {
         message.setText(body, StandardCharsets.UTF_8.name());
         Transport.send(message);
         return true;
-    }
-
-    private void writeJson(HttpExchange exchange, int status, Map<String, ?> payload) throws IOException {
-        byte[] bytes = objectMapper.writeValueAsBytes(payload);
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(status, bytes.length);
-        try (OutputStream output = exchange.getResponseBody()) {
-            output.write(bytes);
-        }
     }
 
 }

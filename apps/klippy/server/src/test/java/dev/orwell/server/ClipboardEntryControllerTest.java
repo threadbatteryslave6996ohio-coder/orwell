@@ -1,8 +1,15 @@
 package dev.orwell.server;
 
-import dev.orwell.auth.AuthenticationStrategy;
+import dev.orwell.auth.AuthenticationContext;
+import dev.orwell.server.controller.ClipboardEntryController;
+import dev.orwell.server.dto.ClipboardEntryDetailsResponse;
+import dev.orwell.server.dto.ClipboardEntryRequest;
+import dev.orwell.server.dto.ClipboardEntryResponse;
+import dev.orwell.server.model.ClipboardEntry;
+import dev.orwell.server.repository.ClipboardEntryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -27,13 +34,13 @@ class ClipboardEntryControllerTest {
 
         try {
             ClipboardEntryRepository repository = clipboardEntryRepository();
-            AuthenticationStrategy authTokenVerifier = (clientId, token) -> "android-pixel-8".equals(clientId)
-                    && "valid-token".equals(token);
 
-            ClipboardEntryController controller = new ClipboardEntryController(repository, authTokenVerifier);
+            ClipboardEntryController controller = new ClipboardEntryController(
+                    repository,
+                    provider(AuthenticationContext.authenticated("android-pixel-8", 1L))
+            );
             ClipboardEntryResponse response = controller.create(
-                    new ClipboardEntryRequest("android-pixel-8", "clipboard text", Instant.parse("2026-06-23T12:00:00Z")),
-                    "Bearer valid-token"
+                    new ClipboardEntryRequest("android-pixel-8", "clipboard text", Instant.parse("2026-06-23T12:00:00Z"))
             );
 
             assertThat(response.clientId()).isEqualTo("android-pixel-8");
@@ -60,13 +67,13 @@ class ClipboardEntryControllerTest {
 
         try {
             ClipboardEntryRepository repository = clipboardEntryRepository();
-            AuthenticationStrategy authTokenVerifier = (clientId, token) -> "android-pixel-8".equals(clientId)
-                    && "valid-token".equals(token);
 
-            ClipboardEntryController controller = new ClipboardEntryController(repository, authTokenVerifier);
+            ClipboardEntryController controller = new ClipboardEntryController(
+                    repository,
+                    provider(AuthenticationContext.authenticated("android-pixel-8", 1L))
+            );
             ClipboardEntryResponse response = controller.create(
-                    new ClipboardEntryRequest("android-pixel-8", "clipboard text", Instant.parse("2026-06-23T12:00:00Z")),
-                    "Bearer valid-token"
+                    new ClipboardEntryRequest("android-pixel-8", "clipboard text", Instant.parse("2026-06-23T12:00:00Z"))
             );
 
             assertThat(response.clientId()).isEqualTo("android-pixel-8");
@@ -90,16 +97,15 @@ class ClipboardEntryControllerTest {
         setId(existing, 41L);
         AtomicInteger saves = new AtomicInteger();
         ClipboardEntryRepository repository = clipboardEntryRepository(List.of(existing), saves);
-        AuthenticationStrategy authTokenVerifier = (clientId, token) -> "android-pixel-8".equals(clientId)
-                && "valid-token".equals(token);
-
-        ClipboardEntryResponse response = new ClipboardEntryController(repository, authTokenVerifier).create(
+        ClipboardEntryResponse response = new ClipboardEntryController(
+                repository,
+                provider(AuthenticationContext.authenticated("android-pixel-8", 1L))
+        ).create(
                 new ClipboardEntryRequest(
                         "android-pixel-8",
                         "clipboard text",
                         Instant.parse("2026-06-23T12:00:00Z")
-                ),
-                "Bearer valid-token"
+                )
         );
 
         assertThat(response.id()).isEqualTo(41L);
@@ -116,16 +122,15 @@ class ClipboardEntryControllerTest {
         );
         AtomicInteger saves = new AtomicInteger();
         ClipboardEntryRepository repository = clipboardEntryRepository(List.of(latest), saves);
-        AuthenticationStrategy authTokenVerifier = (clientId, token) -> "android-pixel-8".equals(clientId)
-                && "valid-token".equals(token);
-
-        ClipboardEntryResponse response = new ClipboardEntryController(repository, authTokenVerifier).create(
+        ClipboardEntryResponse response = new ClipboardEntryController(
+                repository,
+                provider(AuthenticationContext.authenticated("android-pixel-8", 1L))
+        ).create(
                 new ClipboardEntryRequest(
                         "android-pixel-8",
                         "new text",
                         Instant.parse("2026-06-23T12:01:00Z")
-                ),
-                "Bearer valid-token"
+                )
         );
 
         assertThat(response.id()).isEqualTo(42L);
@@ -144,13 +149,12 @@ class ClipboardEntryControllerTest {
         ClipboardEntryRepository repository = clipboardEntryRepository(List.of(latest), saves);
 
         ClipboardEntryResponse response = new ClipboardEntryController(
-                repository, (clientId, token) -> true).create(
+                repository, provider(AuthenticationContext.authenticated("android-pixel-8", 1L))).create(
                 new ClipboardEntryRequest(
                         "android-pixel-8",
                         "clipboard text",
                         Instant.parse("2026-06-23T12:00:00Z")
-                ),
-                "Bearer valid-token"
+                )
         );
 
         assertThat(response.id()).isEqualTo(42L);
@@ -166,12 +170,12 @@ class ClipboardEntryControllerTest {
                 new ClipboardEntry("client-a", "first", from),
                 new ClipboardEntry("client-a", "second", to)
         ));
-        AuthenticationStrategy authTokenVerifier = (clientId, token) -> "client-a".equals(clientId)
-                && "valid-token".equals(token);
-
-        ClipboardEntryController controller = new ClipboardEntryController(repository, authTokenVerifier);
+        ClipboardEntryController controller = new ClipboardEntryController(
+                repository,
+                provider(AuthenticationContext.authenticated("client-a", 1L))
+        );
         List<ClipboardEntryDetailsResponse> response = controller.findWithinTimeframe(
-                "client-a", from, to, null, null, null, "Bearer valid-token"
+                "client-a", from, to, null, null, null
         );
 
         assertThat(response).extracting(ClipboardEntryDetailsResponse::content)
@@ -240,5 +244,34 @@ class ClipboardEntryControllerTest {
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);
         }
+    }
+
+    private static ObjectProvider<AuthenticationContext> provider(AuthenticationContext authenticationContext) {
+        return new ObjectProvider<>() {
+            @Override
+            public AuthenticationContext getObject(Object... args) {
+                return authenticationContext;
+            }
+
+            @Override
+            public AuthenticationContext getObject() {
+                return authenticationContext;
+            }
+
+            @Override
+            public AuthenticationContext getIfAvailable() {
+                return authenticationContext;
+            }
+
+            @Override
+            public AuthenticationContext getIfUnique() {
+                return authenticationContext;
+            }
+
+            @Override
+            public java.util.Iterator<AuthenticationContext> iterator() {
+                return java.util.List.of(authenticationContext).iterator();
+            }
+        };
     }
 }

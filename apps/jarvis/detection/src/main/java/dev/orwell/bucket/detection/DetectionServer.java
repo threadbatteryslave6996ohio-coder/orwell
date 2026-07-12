@@ -4,10 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.orwell.env.Env;
+import dev.orwell.env.http.HttpExchangeResponses;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -58,8 +58,7 @@ final class DetectionServer {
     }
 
     private void writeHealth(HttpExchange exchange) throws IOException {
-        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-            writeJson(exchange, 405, Map.of("success", false, "error", "method not allowed"));
+        if (!HttpExchangeResponses.requireMethod(exchange, "GET")) {
             return;
         }
         Map<String, Object> response = new LinkedHashMap<>();
@@ -67,19 +66,18 @@ final class DetectionServer {
         response.put("status", "healthy");
         response.put("detectionsTotal", detectionsTotal);
         response.put("alertsSentTotal", alertsSentTotal);
-        writeJson(exchange, 200, response);
+        HttpExchangeResponses.writeJson(exchange, 200, response, mapper);
     }
 
     private void detect(HttpExchange exchange) throws IOException {
-        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
-            writeJson(exchange, 405, Map.of("success", false, "error", "method not allowed"));
+        if (!HttpExchangeResponses.requireMethod(exchange, "POST")) {
             return;
         }
         Map<String, Object> payload;
         try (InputStream input = exchange.getRequestBody()) {
             payload = mapper.readValue(input, Map.class);
         } catch (Exception exception) {
-            writeJson(exchange, 400, Map.of("success", false, "error", "invalid json"));
+            HttpExchangeResponses.writeJson(exchange, 400, Map.of("success", false, "error", "invalid json"), mapper);
             return;
         }
 
@@ -89,7 +87,7 @@ final class DetectionServer {
             frameBytes = decodeFrame(payload);
             frameSha = sha256Hex(frameBytes);
         } catch (Exception exception) {
-            writeJson(exchange, 400, Map.of("success", false, "error", exception.getMessage()));
+            HttpExchangeResponses.writeJson(exchange, 400, Map.of("success", false, "error", exception.getMessage()), mapper);
             return;
         }
 
@@ -101,7 +99,7 @@ final class DetectionServer {
         try {
             detections = detector.detect(frameBytes);
         } catch (Exception exception) {
-            writeJson(exchange, 500, Map.of("success", false, "error", exception.getMessage()));
+            HttpExchangeResponses.writeJson(exchange, 500, Map.of("success", false, "error", exception.getMessage()), mapper);
             return;
         }
 
@@ -142,7 +140,7 @@ final class DetectionServer {
         response.put("alertSent", alertSent);
         response.put("alertError", alertError);
         response.put("boxes", detections);
-        writeJson(exchange, 200, response);
+        HttpExchangeResponses.writeJson(exchange, 200, response, mapper);
     }
 
     private byte[] decodeFrame(Map<String, Object> payload) {
@@ -156,15 +154,6 @@ final class DetectionServer {
             throw new IllegalArgumentException("frame hash mismatch");
         }
         return frame;
-    }
-
-    private void writeJson(HttpExchange exchange, int status, Map<String, ?> payload) throws IOException {
-        byte[] bytes = mapper.writeValueAsBytes(payload);
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(status, bytes.length);
-        try (OutputStream output = exchange.getResponseBody()) {
-            output.write(bytes);
-        }
     }
 
     private static String sha256Hex(byte[] data) {

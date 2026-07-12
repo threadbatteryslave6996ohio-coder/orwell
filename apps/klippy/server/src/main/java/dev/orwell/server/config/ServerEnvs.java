@@ -1,4 +1,4 @@
-package dev.orwell.server;
+package dev.orwell.server.config;
 
 import dev.orwell.env.Env;
 import dev.orwell.env.EnvOption;

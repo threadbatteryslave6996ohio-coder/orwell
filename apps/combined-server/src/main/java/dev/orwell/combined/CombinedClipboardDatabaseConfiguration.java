@@ -1,8 +1,8 @@
 package dev.orwell.combined;
 
 import com.zaxxer.hikari.HikariDataSource;
-import dev.orwell.server.ClipboardEntry;
-import dev.orwell.server.ClipboardEntryRepository;
+import dev.orwell.server.model.ClipboardEntry;
+import dev.orwell.server.repository.ClipboardEntryRepository;
 import jakarta.persistence.EntityManagerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.jdbc.DataSourceBuilder;

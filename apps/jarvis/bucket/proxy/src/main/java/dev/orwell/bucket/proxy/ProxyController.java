@@ -1,10 +1,9 @@
 package dev.orwell.bucket.proxy;
 
-import dev.orwell.auth.AuthenticationStrategy;
-import dev.orwell.auth.BearerToken;
+import dev.orwell.auth.AuthenticationContext;
 import dev.orwell.bucket.proxy.storage.BucketStorage;
 import dev.orwell.bucket.proxy.storage.ObjectKeys;
-import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -21,7 +20,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,7 +38,7 @@ import java.util.Map;
 public class ProxyController {
     private final ProxyProperties properties;
     private final AuthServerClient authServerClient;
-    private final AuthenticationStrategy authenticationStrategy;
+    private final ObjectProvider<AuthenticationContext> authenticationContextProvider;
     private final BucketStorage storage;
     private final FileAuditLogger audit;
     private final ManagementSessionService sessions;
@@ -48,29 +46,17 @@ public class ProxyController {
     public ProxyController(
             ProxyProperties properties,
             AuthServerClient authServerClient,
-            AuthenticationStrategy authenticationStrategy,
+            ObjectProvider<AuthenticationContext> authenticationContextProvider,
             BucketStorage storage,
             FileAuditLogger audit,
             ManagementSessionService sessions
-    ) {
+        ) {
         this.properties = properties;
         this.authServerClient = authServerClient;
-        this.authenticationStrategy = authenticationStrategy;
+        this.authenticationContextProvider = authenticationContextProvider;
         this.storage = storage;
         this.audit = audit;
         this.sessions = sessions;
-    }
-
-    @GetMapping("/health")
-    public Map<String, Object> health() {
-        return Map.of(
-                "status", "healthy",
-                "storageProvider", storage.provider(),
-                "bucket", storage.containerName(),
-                "region", storage.location(),
-                "auth", "external-auth-server",
-                "authServer", properties.authServer().baseUrl()
-        );
     }
 
     @PostMapping("/login")
@@ -95,11 +81,9 @@ public class ProxyController {
     @PostMapping("/upload")
     public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file,
                                     @RequestParam(value = "folder", defaultValue = "uploads") String folder,
-                                    @RequestParam(value = "fileName", required = false) String fileName,
-                                    @RequestHeader(value = "Authorization", required = false) String authorization,
-                                    @RequestHeader(value = "X-Client-Id", required = false) String clientId) throws IOException {
-        String user = authenticate(authorization, clientId);
-        if (user == null) {
+                                    @RequestParam(value = "fileName", required = false) String fileName) throws IOException {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
             return unauthorized();
         }
         Path temp = Files.createTempFile("bucket-upload-", ".bin");
@@ -114,11 +98,9 @@ public class ProxyController {
 
     @PostMapping("/batch-upload")
     public ResponseEntity<?> batchUpload(@RequestParam("files") List<MultipartFile> files,
-                                         @RequestParam(value = "folder", defaultValue = "uploads") String folder,
-                                         @RequestHeader(value = "Authorization", required = false) String authorization,
-                                         @RequestHeader(value = "X-Client-Id", required = false) String clientId) throws IOException {
-        String user = authenticate(authorization, clientId);
-        if (user == null) {
+                                         @RequestParam(value = "folder", defaultValue = "uploads") String folder) throws IOException {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
             return unauthorized();
         }
         List<Map<String, Object>> uploaded = new ArrayList<>();
@@ -136,11 +118,9 @@ public class ProxyController {
     }
 
     @GetMapping("/list/{folder}")
-    public ResponseEntity<?> list(@PathVariable("folder") String folder,
-                                  @RequestHeader(value = "Authorization", required = false) String authorization,
-                                  @RequestHeader(value = "X-Client-Id", required = false) String clientId) {
-        String user = authenticate(authorization, clientId);
-        if (user == null) {
+    public ResponseEntity<?> list(@PathVariable("folder") String folder) {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
             return unauthorized();
         }
         var files = storage.list(folder).stream().map(item -> Map.<String, Object>of(
@@ -152,11 +132,9 @@ public class ProxyController {
     }
 
     @GetMapping("/metadata/{*key}")
-    public ResponseEntity<?> metadata(@PathVariable("key") String key,
-                                      @RequestHeader(value = "Authorization", required = false) String authorization,
-                                      @RequestHeader(value = "X-Client-Id", required = false) String clientId) {
-        String user = authenticate(authorization, clientId);
-        if (user == null) {
+    public ResponseEntity<?> metadata(@PathVariable("key") String key) {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
             return unauthorized();
         }
         String normalizedKey = ObjectKeys.normalizeKey(key);
@@ -168,11 +146,9 @@ public class ProxyController {
     }
 
     @DeleteMapping("/delete/{*key}")
-    public ResponseEntity<?> delete(@PathVariable("key") String key,
-                                    @RequestHeader(value = "Authorization", required = false) String authorization,
-                                    @RequestHeader(value = "X-Client-Id", required = false) String clientId) {
-        String user = authenticate(authorization, clientId);
-        if (user == null) {
+    public ResponseEntity<?> delete(@PathVariable("key") String key) {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
             return unauthorized();
         }
         String normalizedKey = ObjectKeys.normalizeKey(key);
@@ -224,17 +200,6 @@ public class ProxyController {
                 : "Auth server rejected identity creation with HTTP " + status + ".";
         int responseStatus = result.success() ? HttpStatus.OK.value() : status;
         return ResponseEntity.status(responseStatus).body(adminDashboard(username[0], message));
-    }
-
-    private String authenticate(String authorization, String clientId) {
-        if (clientId == null || clientId.isBlank()) {
-            return null;
-        }
-        String token = BearerToken.extract(authorization);
-        if (token == null) {
-            return null;
-        }
-        return authenticationStrategy.isTokenValidForClient(clientId, token) ? clientId : null;
     }
 
     private ResponseEntity<Map<String, Object>> unauthorized() {

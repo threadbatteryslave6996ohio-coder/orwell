@@ -13,6 +13,15 @@ Shared Spring Boot startup wiring for server applications across the repository.
 need a different strategy can define their own `@Bean`; it takes precedence via
 `@ConditionalOnMissingBean`.
 
+`HealthEndpointConfiguration` is also auto-configured: it provides a shared
+`HealthDetailsProvider` bean per app boundary for servlet apps. Apps
+contribute their own prefixed `GET /health` controllers and can add extra
+fields by overriding the matching named bean:
+
+- `jarvisHealthDetailsProvider`
+- `clippyHealthDetailsProvider`
+- `secretsHealthDetailsProvider`
+
 ## Maven dependency
 
 ```xml
@@ -29,3 +38,4 @@ need a different strategy can define their own `@Bean`; it takes precedence via
 |---|---|
 | `SpringServerBootstrap` | Entry point: `start(Class<?>, Map<String, String>)` |
 | `AuthenticationStrategyConfiguration` | Provides default `AuthenticationStrategy` bean |
+| `HealthEndpointConfiguration` | Provides default named `HealthDetailsProvider` beans |

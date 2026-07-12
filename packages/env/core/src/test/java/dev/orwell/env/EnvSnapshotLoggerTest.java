@@ -49,7 +49,7 @@ class EnvSnapshotLoggerTest {
             assertTrue(console.contains("CLIENT_SECRET=[redacted]"));
 
             String file = Files.readString(tempDir.resolve("dummy-client-env.txt"));
-            assertTrue(file.contains("[dummy-client-env] Loaded 3 environment values:"));
+            assertTrue(file.contains("[dummy-client-env] [INFO] Loaded 3 environment values:"));
             assertTrue(file.contains("CLIENT_SECRET=[redacted]"));
         } finally {
             System.setOut(originalOut);

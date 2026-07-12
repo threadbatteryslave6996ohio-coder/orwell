@@ -2,8 +2,8 @@ package dev.orwell.combined;
 
 import dev.orwell.auth.http.server.repository.ClientIdentityRepository;
 import dev.orwell.auth.http.server.repository.ClientTokenRepository;
-import dev.orwell.server.ClipboardEntry;
-import dev.orwell.server.ClipboardEntryRepository;
+import dev.orwell.server.model.ClipboardEntry;
+import dev.orwell.server.repository.ClipboardEntryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -136,6 +136,7 @@ class CombinedServerHttpIntegrationTest {
                           "timestamp": "2026-06-23T12:00:00Z"
                         }
                         """,
+                "android-pixel-8",
                 token
         );
 
@@ -208,9 +209,16 @@ class CombinedServerHttpIntegrationTest {
     }
 
     private HttpResponse<String> post(String path, String json, String bearerToken) throws IOException, InterruptedException {
+        return post(path, json, null, bearerToken);
+    }
+
+    private HttpResponse<String> post(String path, String json, String clientId, String bearerToken) throws IOException, InterruptedException {
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create("http://localhost:%d%s".formatted(port, path)))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json));
+        if (clientId != null) {
+            builder.header("X-Client-Id", clientId);
+        }
         if (bearerToken != null) {
             builder.header("Authorization", "Bearer " + bearerToken);
         }

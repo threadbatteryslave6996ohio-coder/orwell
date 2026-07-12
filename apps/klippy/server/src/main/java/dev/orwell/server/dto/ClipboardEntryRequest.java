@@ -1,4 +1,4 @@
-package dev.orwell.server;
+package dev.orwell.server.dto;
 
 import dev.orwell.utils.ClipboardLimits;
 import jakarta.validation.constraints.NotBlank;

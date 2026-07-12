@@ -4,5 +4,6 @@ public record ProjectConfig(
         String name,
         String databaseUrl,
         String storageType,
-        String storageDir) {
+        String storageDir
+) {
 }

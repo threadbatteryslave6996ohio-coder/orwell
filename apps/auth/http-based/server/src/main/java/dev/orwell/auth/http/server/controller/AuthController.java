@@ -28,23 +28,24 @@ import java.time.Instant;
 @RestController
 @RequestMapping("${clippy.auth.route-prefix:}")
 public class AuthController {
-    private static final CustomLogger LOGGER = new CustomLogger("auth-server");
-
     private final ClientIdentityRepository identities;
     private final ClientTokenRepository tokens;
     private final CredentialHasher credentialHasher;
     private final TokenGenerator tokenGenerator;
+    private final CustomLogger logger;
 
     public AuthController(
             ClientIdentityRepository identities,
             ClientTokenRepository tokens,
             CredentialHasher credentialHasher,
-            TokenGenerator tokenGenerator
+            TokenGenerator tokenGenerator,
+            CustomLogger logger
     ) {
         this.identities = identities;
         this.tokens = tokens;
         this.credentialHasher = credentialHasher;
         this.tokenGenerator = tokenGenerator;
+        this.logger = logger;
     }
 
     @PostMapping("/identities")
@@ -70,36 +71,39 @@ public class AuthController {
 
     @PostMapping("/login")
     public LoginHttpResponse login(@Valid @RequestBody LoginHttpRequest request) {
-        LOGGER.log("Login request received for clientId=" + request.clientId());
+        logger.log("Login request received for clientId=" + request.clientId());
 
         ClientIdentity identity = identities.findByClientId(request.clientId())
                 .filter(ClientIdentity::isActive)
                 .filter(candidate -> credentialHasher.matches(request.secret(), candidate.getSecretHash()))
                 .orElseThrow(() -> {
-                    LOGGER.log("Login rejected for clientId=" + request.clientId());
+                    logger.log("Login rejected for clientId=" + request.clientId());
                     return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client credentials.");
                 });
 
         String token = tokenGenerator.newToken();
         Instant issuedAt = Instant.now();
         tokens.save(new ClientToken(identity, credentialHasher.hashToken(token), issuedAt));
-        LOGGER.log("Issued login token for clientId=" + identity.getClientId() + " at " + issuedAt);
+        logger.log("Issued login token for clientId=" + identity.getClientId() + " at " + issuedAt);
 
         return new LoginHttpResponse(identity.getClientId(), token);
     }
 
     @PostMapping("/tokens/check")
     public CheckTokenHttpResponse checkToken(@Valid @RequestBody CheckTokenHttpRequest request) {
-        LOGGER.log("Token check request received for clientId=" + request.clientId());
+        logger.log("Token check request received for clientId=" + request.clientId());
 
-        boolean valid = tokens.findWithIdentityByTokenHash(credentialHasher.hashToken(request.token()))
+        return tokens.findWithIdentityByTokenHash(credentialHasher.hashToken(request.token()))
                 .map(ClientToken::getIdentity)
                 .filter(ClientIdentity::isActive)
-                .map(ClientIdentity::getClientId)
-                .filter(request.clientId()::equals)
-                .isPresent();
-
-        LOGGER.log("Token check completed for clientId=" + request.clientId() + ", valid=" + valid);
-        return new CheckTokenHttpResponse(valid, request.clientId());
+                .filter(identity -> request.clientId().equals(identity.getClientId()))
+                .map(identity -> {
+                    logger.log("Token check completed for clientId=" + request.clientId() + ", valid=true");
+                    return new CheckTokenHttpResponse(true, identity.getClientId(), identity.getId());
+                })
+                .orElseGet(() -> {
+                    logger.log("Token check completed for clientId=" + request.clientId() + ", valid=false");
+                    return new CheckTokenHttpResponse(false, request.clientId(), null);
+                });
     }
 }

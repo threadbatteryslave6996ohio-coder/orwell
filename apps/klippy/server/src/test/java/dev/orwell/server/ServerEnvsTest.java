@@ -2,6 +2,7 @@ package dev.orwell.server;
 
 import dev.orwell.env.Env;
 import dev.orwell.env.EnvValidationException;
+import dev.orwell.server.config.ServerEnvs;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;

@@ -1,7 +1,9 @@
 package dev.orwell.bucket.proxy;
 
 import dev.orwell.bootstrap.SpringServerBootstrap;
+import dev.orwell.bootstrap.HealthDetailsProvider;
 import dev.orwell.env.Env;
+import dev.orwell.bucket.proxy.storage.BucketStorage;
 import dev.orwell.logging.CustomLogger;
 import dev.orwell.logging.Logger;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -29,5 +31,15 @@ public class BucketProxyApplication {
     @Bean
     public Logger logger() {
         return new CustomLogger("bucket-proxy");
+    }
+
+    @Bean(name = "jarvisHealthDetailsProvider")
+    public HealthDetailsProvider healthDetailsProvider(ProxyProperties properties, BucketStorage storage) {
+        return () -> Map.of(
+                "bucket", storage.containerName(),
+                "region", storage.location(),
+                "auth", "external-auth-server",
+                "authServer", properties.authServer().baseUrl()
+        );
     }
 }

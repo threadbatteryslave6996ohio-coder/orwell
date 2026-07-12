@@ -1,16 +1,19 @@
-package dev.orwell.server;
+package dev.orwell.server.controller;
 
-import dev.orwell.auth.AuthenticationStrategy;
-import dev.orwell.auth.BearerToken;
+import dev.orwell.auth.AuthenticationContext;
 import dev.orwell.logging.CustomLogger;
+import dev.orwell.server.dto.ClipboardEntryDetailsResponse;
+import dev.orwell.server.dto.ClipboardEntryRequest;
+import dev.orwell.server.dto.ClipboardEntryResponse;
+import dev.orwell.server.model.ClipboardEntry;
+import dev.orwell.server.repository.ClipboardEntryRepository;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpHeaders;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -20,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("${clippy.server.route-prefix:}")
@@ -27,27 +31,26 @@ public class ClipboardEntryController {
     private static final CustomLogger LOGGER = new CustomLogger("clippy-server");
 
     private final ClipboardEntryRepository repository;
-    private final AuthenticationStrategy authenticationStrategy;
+    private final ObjectProvider<AuthenticationContext> authenticationContextProvider;
 
     public ClipboardEntryController(
             ClipboardEntryRepository repository,
-            AuthenticationStrategy authenticationStrategy
+            ObjectProvider<AuthenticationContext> authenticationContextProvider
     ) {
         this.repository = repository;
-        this.authenticationStrategy = authenticationStrategy;
+        this.authenticationContextProvider = authenticationContextProvider;
     }
 
     @PostMapping("/clipboard")
     @ResponseStatus(HttpStatus.CREATED)
     public synchronized ClipboardEntryResponse create(
-            @Valid @RequestBody ClipboardEntryRequest request,
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization
+            @Valid @RequestBody ClipboardEntryRequest request
     ) {
-        String token = BearerToken.extract(authorization);
-        if (token == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token.");
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing client identity.");
         }
-        if (!authenticationStrategy.isTokenValidForClient(request.clientId(), token)) {
+        if (!Objects.equals(request.clientId(), authenticationContext.clientId())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
         }
 
@@ -66,7 +69,13 @@ public class ClipboardEntryController {
                 request.content(),
                 timestamp
         ));
-        logClipboardEntrySaved(saved);
+        try {
+            LOGGER.log("Added clipboard entry for clientId=" + saved.getClientId()
+                    + ", entryId=" + saved.getId()
+                    + " at " + saved.getTimestamp());
+        } catch (RuntimeException exception) {
+            // Audit logging is best-effort; a logging failure must not reject the write.
+        }
         return new ClipboardEntryResponse(saved.getId(), saved.getClientId(), saved.getTimestamp());
     }
 
@@ -77,14 +86,13 @@ public class ClipboardEntryController {
             @RequestParam("to") Instant to,
             @RequestParam(value = "limit", required = false) Integer limit,
             @RequestParam(value = "afterTimestamp", required = false) Instant afterTimestamp,
-            @RequestParam(value = "afterId", required = false) Long afterId,
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization
+            @RequestParam(value = "afterId", required = false) Long afterId
     ) {
-        String token = BearerToken.extract(authorization);
-        if (token == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token.");
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing client identity.");
         }
-        if (!authenticationStrategy.isTokenValidForClient(clientId, token)) {
+        if (!Objects.equals(clientId, authenticationContext.clientId())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
         }
         if (from.isAfter(to)) {
@@ -113,16 +121,6 @@ public class ClipboardEntryController {
                 .stream()
                 .map(ClipboardEntryDetailsResponse::from)
                 .toList();
-    }
-
-    private static void logClipboardEntrySaved(ClipboardEntry saved) {
-        try {
-            LOGGER.log("Added clipboard entry for clientId=" + saved.getClientId()
-                    + ", entryId=" + saved.getId()
-                    + " at " + saved.getTimestamp());
-        } catch (RuntimeException exception) {
-            // Audit logging is best-effort; a logging failure must not reject the write.
-        }
     }
 
     private static ClipboardEntryResponse response(ClipboardEntry entry) {

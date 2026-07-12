@@ -12,6 +12,7 @@ import dev.orwell.auth.http.server.repository.ClientIdentityRepository;
 import dev.orwell.auth.http.server.repository.ClientTokenRepository;
 import dev.orwell.auth.http.server.security.CredentialHasher;
 import dev.orwell.auth.http.server.security.TokenGenerator;
+import dev.orwell.logging.CustomLogger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -40,6 +41,9 @@ class AuthControllerTest {
     @Mock
     private TokenGenerator tokenGenerator;
 
+    @Mock
+    private CustomLogger logger;
+
     private final CredentialHasher credentialHasher = new CredentialHasher();
 
     @Test
@@ -47,7 +51,7 @@ class AuthControllerTest {
         when(identities.existsByClientId("client-a")).thenReturn(false);
         when(identities.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator);
+        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator, logger);
         IdentityResponse response = controller.createIdentity(new CreateIdentityRequest("client-a", "super-secret"));
 
         ArgumentCaptor<ClientIdentity> identityCaptor = ArgumentCaptor.forClass(ClientIdentity.class);
@@ -62,7 +66,7 @@ class AuthControllerTest {
     void createIdentityRejectsDuplicates() {
         when(identities.existsByClientId("client-a")).thenReturn(true);
 
-        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator);
+        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator, logger);
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> controller.createIdentity(new CreateIdentityRequest("client-a", "super-secret")));
@@ -78,7 +82,7 @@ class AuthControllerTest {
         when(tokenGenerator.newToken()).thenReturn("issued-token");
         when(tokens.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator);
+        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator, logger);
         LoginHttpResponse response = controller.login(new LoginHttpRequest("client-a", "super-secret"));
 
         ArgumentCaptor<ClientToken> tokenCaptor = ArgumentCaptor.forClass(ClientToken.class);
@@ -94,7 +98,7 @@ class AuthControllerTest {
         ClientIdentity identity = new ClientIdentity("client-a", credentialHasher.hashSecret("super-secret"), Instant.now());
         when(identities.findByClientId("client-a")).thenReturn(Optional.of(identity));
 
-        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator);
+        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator, logger);
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> controller.login(new LoginHttpRequest("client-a", "wrong-secret")));
@@ -109,7 +113,7 @@ class AuthControllerTest {
         String tokenHash = credentialHasher.hashToken(token);
         when(tokens.findWithIdentityByTokenHash(tokenHash)).thenReturn(Optional.of(new ClientToken(identity, tokenHash, Instant.now())));
 
-        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator);
+        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator, logger);
 
         CheckTokenHttpResponse response = controller.checkToken(new CheckTokenHttpRequest("client-a", token));
 
@@ -124,7 +128,7 @@ class AuthControllerTest {
         String tokenHash = credentialHasher.hashToken(token);
         when(tokens.findWithIdentityByTokenHash(tokenHash)).thenReturn(Optional.of(new ClientToken(identity, tokenHash, Instant.now())));
 
-        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator);
+        AuthController controller = new AuthController(identities, tokens, credentialHasher, tokenGenerator, logger);
 
         CheckTokenHttpResponse response = controller.checkToken(new CheckTokenHttpRequest("client-b", token));
 

@@ -23,6 +23,10 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
+            <artifactId>clippy-logger</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
             <artifactId>core</artifactId>
         </dependency>
         <dependency>

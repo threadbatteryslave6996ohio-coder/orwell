@@ -1,7 +1,9 @@
 package dev.orwell.bucket.proxy;
 
 import dev.orwell.bucket.proxy.storage.BucketStorage;
+import dev.orwell.auth.AuthenticationContext;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -83,11 +85,40 @@ class ProxyControllerTest {
         return new ProxyController(
                 properties,
                 authServerClient,
-                (clientId, token) -> true,
+                provider(AuthenticationContext.authenticated("client", 1L)),
                 storage,
                 newFileAuditLogger(properties),
                 new ManagementSessionService(properties)
         );
+    }
+
+    private static ObjectProvider<AuthenticationContext> provider(AuthenticationContext authenticationContext) {
+        return new ObjectProvider<>() {
+            @Override
+            public AuthenticationContext getObject(Object... args) {
+                return authenticationContext;
+            }
+
+            @Override
+            public AuthenticationContext getObject() {
+                return authenticationContext;
+            }
+
+            @Override
+            public AuthenticationContext getIfAvailable() {
+                return authenticationContext;
+            }
+
+            @Override
+            public AuthenticationContext getIfUnique() {
+                return authenticationContext;
+            }
+
+            @Override
+            public java.util.Iterator<AuthenticationContext> iterator() {
+                return java.util.List.of(authenticationContext).iterator();
+            }
+        };
     }
 
     private static ProxyProperties properties(String serverUrl) {

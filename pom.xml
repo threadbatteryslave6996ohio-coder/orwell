@@ -17,11 +17,14 @@
         <module>apps/auth</module>
         <module>apps/klippy</module>
         <module>apps/jarvis</module>
+        <module>apps/log-analyzer</module>
         <module>apps/alerting</module>
         <module>apps/keeboarder</module>
         <module>apps/combined-server</module>
         <module>apps/secrets-manager</module>
         <module>apps/backup</module>
+        <module>apps/google</module>
+        <module>apps/analyzer</module>
     </modules>
 
     <properties>
@@ -120,6 +123,11 @@
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.datatype</groupId>
+                <artifactId>jackson-datatype-jsr310</artifactId>
                 <version>${jackson.version}</version>
             </dependency>
             <dependency>

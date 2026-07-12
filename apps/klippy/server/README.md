@@ -5,6 +5,17 @@ Spring Boot API that persists clipboard entries in PostgreSQL.
 The server does not own client identities. It validates each clipboard request
 by calling the separate Clippy auth server.
 
+## Code Layout
+
+The server code is grouped by responsibility under `dev.orwell.server`:
+
+- `application`: Spring Boot application and standalone launcher.
+- `config`: environment schema and Spring property mapping.
+- `controller`: HTTP endpoints.
+- `dto`: HTTP request and response records.
+- `model`: JPA entities.
+- `repository`: Spring Data persistence interfaces.
+
 ## Requirements
 
 Use the JDK, Maven, and Docker versions listed in the [root README](../README.md).

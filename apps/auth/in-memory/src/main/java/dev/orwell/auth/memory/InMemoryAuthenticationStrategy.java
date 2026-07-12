@@ -1,5 +1,6 @@
 package dev.orwell.auth.memory;
 
+import dev.orwell.auth.AuthenticationContext;
 import dev.orwell.auth.AuthenticationStrategy;
 
 import java.util.Map;
@@ -29,6 +30,13 @@ public final class InMemoryAuthenticationStrategy implements AuthenticationStrat
     @Override
     public boolean isTokenValidForClient(String clientId, String token) {
         return clientId != null && token != null && token.equals(tokensByClientId.get(clientId));
+    }
+
+    @Override
+    public AuthenticationContext authenticate(String clientId, String token) {
+        return isTokenValidForClient(clientId, token)
+                ? AuthenticationContext.authenticated(clientId, null)
+                : AuthenticationContext.unauthenticated();
     }
 
     private static String requireValue(String value, String name) {

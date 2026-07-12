@@ -13,6 +13,8 @@ mvn -pl apps/jarvis -am package
 
 The recorder clients under `clients/` remain standalone shell applications.
 
+The log analyzer is now a standalone app; see `apps/log-analyzer`.
+
 ### Syncer (`clients/syncer`)
 
 The syncer drains completed recording segments to the bucket proxy. It merges older completed segments (via ffmpeg concat) and uploads the result, leaving the current in-progress segment untouched. Run it on a timer:

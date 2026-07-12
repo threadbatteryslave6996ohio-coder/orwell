@@ -1,4 +1,4 @@
-package dev.orwell.server;
+package dev.orwell.server.dto;
 
 import java.time.Instant;
 

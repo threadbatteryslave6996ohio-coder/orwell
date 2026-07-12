@@ -1,0 +1,417 @@
+package dev.orwell.loganalyzer;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import dev.orwell.env.Env;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
+
+final class LogAnalyzerServer {
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+    private static final Pattern NON_ALNUM = Pattern.compile("[^a-z0-9]+");
+
+    private final String host;
+    private final int port;
+    private final int pollIntervalSeconds;
+    private final int lookbackSeconds;
+    private final int maxLogLines;
+    private final String grafanaUrl;
+    private final String grafanaApiToken;
+    private final String grafanaLokiDatasourceUid;
+    private final String lokiQuery;
+    private final AiAnalyzer aiAnalyzer;
+    private final AlertClient alertClient;
+    private final AlertCooldownTracker cooldownTracker;
+    private final double minImportanceConfidence;
+    private final HttpClient httpClient;
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private volatile Instant lastRunAt;
+    private volatile Instant lastAlertAt;
+    private volatile String lastDecisionSummary = "";
+    private volatile String lastError = "";
+    private final AtomicLong pollsTotal = new AtomicLong();
+    private final AtomicLong alertsSentTotal = new AtomicLong();
+    private final AtomicLong alertsRejectedTotal = new AtomicLong();
+    private final AtomicLong errorsTotal = new AtomicLong();
+    private final AtomicBoolean pollInProgress = new AtomicBoolean(false);
+
+    private LogAnalyzerServer(String host, int port, int pollIntervalSeconds, int lookbackSeconds, int maxLogLines,
+                              String grafanaUrl, String grafanaApiToken, String grafanaLokiDatasourceUid,
+                              String lokiQuery,
+                              AiAnalyzer aiAnalyzer, AlertClient alertClient, AlertCooldownTracker cooldownTracker,
+                              double minImportanceConfidence, HttpClient httpClient) {
+        this.host = host;
+        this.port = port;
+        this.pollIntervalSeconds = pollIntervalSeconds;
+        this.lookbackSeconds = lookbackSeconds;
+        this.maxLogLines = maxLogLines;
+        this.grafanaUrl = grafanaUrl;
+        this.grafanaApiToken = grafanaApiToken;
+        this.grafanaLokiDatasourceUid = grafanaLokiDatasourceUid;
+        this.lokiQuery = lokiQuery;
+        this.aiAnalyzer = aiAnalyzer;
+        this.alertClient = alertClient;
+        this.cooldownTracker = cooldownTracker;
+        this.minImportanceConfidence = minImportanceConfidence;
+        this.httpClient = httpClient;
+    }
+
+    static LogAnalyzerServer fromEnv(Env env) {
+        String host = env.get(LogAnalyzerEnvs.SERVER_HOST);
+        int port = env.get(LogAnalyzerEnvs.SERVER_PORT);
+        int pollIntervalSeconds = env.get(LogAnalyzerEnvs.POLL_INTERVAL_SECONDS);
+        int lookbackSeconds = env.get(LogAnalyzerEnvs.LOOKBACK_SECONDS);
+        int maxLogLines = env.get(LogAnalyzerEnvs.MAX_LOG_LINES);
+        String grafanaUrl = env.get(LogAnalyzerEnvs.GRAFANA_URL);
+        String grafanaApiToken = env.get(LogAnalyzerEnvs.GRAFANA_API_TOKEN);
+        String grafanaLokiDatasourceUid = env.get(LogAnalyzerEnvs.GRAFANA_LOKI_DATASOURCE_UID);
+        String lokiQuery = env.get(LogAnalyzerEnvs.LOKI_QUERY);
+        String alertUrl = env.get(LogAnalyzerEnvs.ALERT_URL);
+        String aiApiUrl = env.get(LogAnalyzerEnvs.AI_API_URL);
+        String aiApiKey = env.get(LogAnalyzerEnvs.AI_API_KEY);
+        String aiModel = env.get(LogAnalyzerEnvs.AI_MODEL);
+        Duration aiTimeout = LogAnalyzerEnvs.aiTimeout(env);
+        double minImportanceConfidence = env.get(LogAnalyzerEnvs.MIN_IMPORTANCE_CONFIDENCE);
+        int cooldownSeconds = env.get(LogAnalyzerEnvs.ALERT_COOLDOWN_SECONDS);
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+        Model model = new OpenAiModel(aiApiUrl, aiApiKey, aiModel, aiTimeout, httpClient, new ObjectMapper().findAndRegisterModules());
+        AiAnalyzer aiAnalyzer = new AiAnalyzer(model, new ObjectMapper().findAndRegisterModules());
+        AlertClient alertClient = new AlertClient(alertUrl, httpClient, new ObjectMapper().findAndRegisterModules());
+        return new LogAnalyzerServer(
+                host,
+                port,
+                pollIntervalSeconds,
+                lookbackSeconds,
+                maxLogLines,
+                grafanaUrl,
+                grafanaApiToken,
+                grafanaLokiDatasourceUid,
+                lokiQuery,
+                aiAnalyzer,
+                alertClient,
+                new AlertCooldownTracker(cooldownSeconds),
+                minImportanceConfidence,
+                httpClient
+        );
+    }
+
+    void run() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(host, port), 0);
+        server.createContext("/health", this::writeHealth);
+        server.createContext("/run-once", this::handleRunOnce);
+        server.start();
+        scheduler.scheduleAtFixedRate(this::pollSafely, 0, pollIntervalSeconds, TimeUnit.SECONDS);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            scheduler.shutdownNow();
+            server.stop(0);
+        }));
+        System.out.printf("Log analyzer started on %s:%d, pollInterval=%ds%n", host, port, pollIntervalSeconds);
+    }
+
+    private void writeHealth(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+            writeJson(exchange, 405, Map.of("success", false, "error", "method not allowed"));
+            return;
+        }
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("status", "healthy");
+        response.put("pollsTotal", pollsTotal.get());
+        response.put("alertsSentTotal", alertsSentTotal.get());
+        response.put("alertsRejectedTotal", alertsRejectedTotal.get());
+        response.put("errorsTotal", errorsTotal.get());
+        response.put("lastRunAt", lastRunAt == null ? null : lastRunAt.toString());
+        response.put("lastAlertAt", lastAlertAt == null ? null : lastAlertAt.toString());
+        response.put("lastDecisionSummary", lastDecisionSummary);
+        response.put("lastError", lastError);
+        writeJson(exchange, 200, response);
+    }
+
+    private void handleRunOnce(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+            writeJson(exchange, 405, Map.of("success", false, "error", "method not allowed"));
+            return;
+        }
+        try {
+            Map<String, Object> result = pollOnce();
+            // A poll already in progress is not a completed run; signal 409 so a caller
+            // forcing an on-demand check can tell nothing ran and retry.
+            int status = Boolean.TRUE.equals(result.get("skipped")) ? 409 : 200;
+            writeJson(exchange, status, result);
+        } catch (Exception exception) {
+            recordFailure(exception);
+            writeJson(exchange, 500, Map.of("success", false, "error", exception.getMessage()));
+        }
+    }
+
+    private void pollSafely() {
+        try {
+            pollOnce();
+        } catch (Exception exception) {
+            recordFailure(exception);
+        }
+    }
+
+    private void recordFailure(Exception exception) {
+        errorsTotal.incrementAndGet();
+        lastError = exception.getMessage();
+    }
+
+    private Map<String, Object> pollOnce() throws IOException, InterruptedException {
+        // Single-flight the poll: the scheduler thread and the /run-once handler thread both call
+        // this, and a poll can outlive the interval (a slow AI call), so guard against overlap.
+        if (!pollInProgress.compareAndSet(false, true)) {
+            Map<String, Object> busy = new LinkedHashMap<>();
+            busy.put("success", false);
+            busy.put("skipped", true);
+            busy.put("summary", "A poll is already in progress.");
+            return busy;
+        }
+        try {
+            return runPoll();
+        } finally {
+            pollInProgress.set(false);
+        }
+    }
+
+    private Map<String, Object> runPoll() throws IOException, InterruptedException {
+        pollsTotal.incrementAndGet();
+        lastRunAt = Instant.now();
+        List<LogLine> logLines = fetchRecentErrorLogs();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("logCount", logLines.size());
+        response.put("alertSent", false);
+
+        if (logLines.isEmpty()) {
+            lastDecisionSummary = "No matching logs found.";
+            response.put("summary", lastDecisionSummary);
+            return response;
+        }
+
+        if (!aiAnalyzer.isEnabled()) {
+            lastDecisionSummary = "AI is disabled because the API url or key is missing.";
+            response.put("summary", lastDecisionSummary);
+            return response;
+        }
+
+        AiDecision decision = aiAnalyzer.analyze(lokiQuery, logLines);
+        lastDecisionSummary = decision.message();
+        response.put("analysis", Map.of(
+                "important", decision.important(),
+                "severity", decision.severity(),
+                "title", decision.title(),
+                "message", decision.message(),
+                "reason", decision.reason(),
+                "recommendedAction", decision.recommendedAction(),
+                "confidence", decision.confidence()
+        ));
+
+        if (!decision.important() || decision.confidence() < minImportanceConfidence) {
+            response.put("summary", "AI did not mark these logs as important.");
+            return response;
+        }
+
+        if (!alertClient.isEnabled()) {
+            response.put("summary", "Alert URL is disabled.");
+            return response;
+        }
+
+        String fingerprint = fingerprint(decision);
+        long nowSeconds = Instant.now().getEpochSecond();
+        if (!cooldownTracker.tryAcquire(fingerprint, nowSeconds)) {
+            response.put("summary", "Alert suppressed by cooldown.");
+            response.put("alertSuppressed", true);
+            return response;
+        }
+
+        AlertClient.Outcome outcome;
+        try {
+            outcome = alertClient.sendAlert(decision, logLines, lokiQuery, "grafana-loki");
+        } catch (IOException | InterruptedException exception) {
+            // Transient network failure: free the slot so the next poll retries.
+            cooldownTracker.rollback(fingerprint, nowSeconds);
+            throw exception;
+        }
+        switch (outcome) {
+            case DELIVERED -> {
+                response.put("alertSent", true);
+                response.put("summary", "Alert sent.");
+                alertsSentTotal.incrementAndGet();
+                lastAlertAt = Instant.now();
+            }
+            case REJECTED -> {
+                // Terminal client error: the service will keep rejecting this payload, so hold
+                // the cooldown instead of hammering it. Surface it so a broken alerting pipeline
+                // (e.g. bad auth) is visible on /health rather than failing silently.
+                alertsRejectedTotal.incrementAndGet();
+                lastError = "Alert service rejected the request.";
+                response.put("summary", "Alert service rejected the request.");
+            }
+            case FAILED -> {
+                // Transient error (5xx/408/429): release the slot so the next poll retries.
+                cooldownTracker.rollback(fingerprint, nowSeconds);
+                response.put("summary", "Alert delivery failed; will retry.");
+            }
+        }
+        return response;
+    }
+
+    private List<LogLine> fetchRecentErrorLogs() throws IOException, InterruptedException {
+        long now = System.currentTimeMillis();
+        long startMillis = now - (lookbackSeconds * 1000L);
+        String url = buildGrafanaProxyUrl(startMillis * 1_000_000L, now * 1_000_000L, maxLogLines);
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                .GET();
+        if (!grafanaApiToken.isBlank()) {
+            builder.header("Authorization", "Bearer " + grafanaApiToken);
+        }
+        HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException("Grafana proxy query failed with status " + response.statusCode());
+        }
+
+        Map<String, Object> parsed = objectMapper.readValue(response.body(), MAP_TYPE);
+        Map<String, Object> data = asMap(parsed.get("data"));
+        List<Map<String, Object>> result = asListOfMaps(data.get("result"));
+        List<LogLine> logLines = new ArrayList<>();
+        for (Map<String, Object> stream : result) {
+            Map<String, Object> labels = asMap(stream.get("stream"));
+            List<List<Object>> values = asListOfLists(stream.get("values"));
+            for (List<Object> value : values) {
+                if (value.size() < 2) {
+                    continue;
+                }
+                long tsNanos = Long.parseLong(String.valueOf(value.get(0)));
+                String line = String.valueOf(value.get(1));
+                LogLine logLine = new LogLine(
+                        Instant.ofEpochMilli(tsNanos / 1_000_000L),
+                        labels,
+                        line
+                );
+                logLines.add(logLine);
+            }
+        }
+        logLines.sort((left, right) -> left.timestamp().compareTo(right.timestamp()));
+        // Defense in depth: the query already sends limit=maxLogLines, but don't trust a proxy
+        // or datasource to honor it — keep the prompt bounded to the newest maxLogLines lines.
+        if (logLines.size() > maxLogLines) {
+            return new ArrayList<>(logLines.subList(logLines.size() - maxLogLines, logLines.size()));
+        }
+        return logLines;
+    }
+
+    private String buildGrafanaProxyUrl(long startNanos, long endNanos, int limit) {
+        if (grafanaUrl.isBlank()) {
+            throw new IllegalStateException("GRAFANA_URL is required.");
+        }
+        if (grafanaLokiDatasourceUid.isBlank()) {
+            throw new IllegalStateException("GRAFANA_LOKI_DATASOURCE_UID is required.");
+        }
+        StringBuilder builder = new StringBuilder(trimTrailingSlash(grafanaUrl));
+        builder.append("/api/datasources/proxy/uid/")
+                .append(encodePathSegment(grafanaLokiDatasourceUid))
+                .append("/loki/api/v1/query_range");
+        builder.append('?');
+        builder.append("query=").append(encode(lokiQuery));
+        builder.append("&start=").append(startNanos);
+        builder.append("&end=").append(endNanos);
+        builder.append("&limit=").append(limit);
+        builder.append("&direction=backward");
+        return builder.toString();
+    }
+
+    private String fingerprint(AiDecision decision) {
+        MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (Exception exception) {
+            throw new IllegalStateException("Cannot create digest.", exception);
+        }
+        // Key the cooldown on the stable class of anomaly (title + severity), not the raw
+        // log bodies, which vary every poll and would otherwise defeat the cooldown. Normalize
+        // the title (lowercase, collapse non-alphanumeric runs) so cosmetic rewording of the
+        // same anomaly across polls still maps to one fingerprint.
+        digest.update(normalizeTitle(decision.title()).getBytes(StandardCharsets.UTF_8));
+        digest.update(decision.severity().toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8));
+        byte[] hash = digest.digest();
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
+    }
+
+    private static String normalizeTitle(String title) {
+        return NON_ALNUM.matcher(title.toLowerCase(Locale.ROOT)).replaceAll(" ").trim();
+    }
+
+    private void writeJson(HttpExchange exchange, int status, Map<String, ?> payload) throws IOException {
+        byte[] bytes = objectMapper.writeValueAsBytes(payload);
+        exchange.getResponseHeaders().add("Content-Type", "application/json");
+        exchange.sendResponseHeaders(status, bytes.length);
+        try (OutputStream output = exchange.getResponseBody()) {
+            output.write(bytes);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asMap(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        return Map.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> asListOfMaps(Object value) {
+        if (value instanceof List<?> list) {
+            return (List<Map<String, Object>>) list;
+        }
+        return List.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<List<Object>> asListOfLists(Object value) {
+        if (value instanceof List<?> list) {
+            return (List<List<Object>>) list;
+        }
+        return List.of();
+    }
+
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private static String encodePathSegment(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    private static String trimTrailingSlash(String value) {
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+    }
+}
