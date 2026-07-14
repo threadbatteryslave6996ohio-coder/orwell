@@ -33,6 +33,11 @@
             <groupId>dev.orwell</groupId>
             <artifactId>http</artifactId>
         </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>server-test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -42,7 +47,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <classifier>exec</classifier>
-                    <mainClass>dev.orwell.server.application.ClippyServerLauncher</mainClass>
+                    <mainClass>dev.orwell.server.application.ClippyServerApplication</mainClass>
                 </configuration>
                 <executions>
                     <execution>

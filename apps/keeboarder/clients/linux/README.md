@@ -48,5 +48,6 @@ java -jar apps/keeboarder/clients/linux/target/keeboarder-linux-client-0.1.0.jar
 ## Notes
 
 - Start the client from a logged-in X11 desktop session with `DISPLAY` set.
-- The combined server serves auth over `/auth`, but the websocket listener
-  still uses its own port, typically `8025`.
+- The Keeboarder server serves its REST API and the websocket endpoint
+  (`/ws/chat`) on the same HTTP port, typically `8025`; the auth server runs
+  separately (typically `http://localhost:8081`).

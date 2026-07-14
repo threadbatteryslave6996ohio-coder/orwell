@@ -11,8 +11,6 @@ import java.util.Map;
 public final class KeeboarderEnvs {
     public static final EnvOption<String> HTTP_HOST;
     public static final EnvOption<String> HTTP_PORT;
-    public static final EnvOption<String> WEBSOCKET_HOST;
-    public static final EnvOption<String> WEBSOCKET_PORT;
     public static final EnvOption<String> WEBSOCKET_CONTEXT_PATH;
     public static final EnvOption<Boolean> WEBSOCKET_ENABLED;
     public static final EnvOption<String> REDIS_HOST;
@@ -24,9 +22,10 @@ public final class KeeboarderEnvs {
     static {
         var builder = EnvSchema.builder();
         HTTP_HOST = builder.optional("HTTP_HOST", EnvType.string(), "0.0.0.0");
-        HTTP_PORT = builder.optional("HTTP_PORT", EnvType.string(), "8080");
-        WEBSOCKET_HOST = builder.optional("WEBSOCKET_HOST", EnvType.string(), "0.0.0.0");
-        WEBSOCKET_PORT = builder.optional("WEBSOCKET_PORT", EnvType.string(), "8025");
+        // 8025 was the dedicated WebSocket listener port before the endpoint moved onto the HTTP
+        // container; keeping it as the default HTTP port preserves every client's default
+        // ws://host:8025/ws/chat URL. (WEBSOCKET_PORT no longer exists — one port serves both.)
+        HTTP_PORT = builder.optional("HTTP_PORT", EnvType.string(), "8025");
         WEBSOCKET_CONTEXT_PATH = builder.optional("WEBSOCKET_CONTEXT_PATH", EnvType.string(), "/ws");
         WEBSOCKET_ENABLED = builder.optional("WEBSOCKET_ENABLED", EnvType.bool(), true);
         REDIS_HOST = builder.optional("REDIS_HOST", EnvType.string(), "localhost");
@@ -48,8 +47,6 @@ public final class KeeboarderEnvs {
         values.put("server.address", env.get(HTTP_HOST));
         values.put("server.port", env.get(HTTP_PORT));
         values.put("keeboarder.server.route-prefix", env.get(KEEBOARDER_SERVER_ROUTE_PREFIX));
-        values.put("keeboarder.websocket.host", env.get(WEBSOCKET_HOST));
-        values.put("keeboarder.websocket.port", env.get(WEBSOCKET_PORT));
         values.put("keeboarder.websocket.context-path", env.get(WEBSOCKET_CONTEXT_PATH));
         values.put("keeboarder.websocket.enabled", env.get(WEBSOCKET_ENABLED));
         values.put("keeboarder.redis.host", env.get(REDIS_HOST));

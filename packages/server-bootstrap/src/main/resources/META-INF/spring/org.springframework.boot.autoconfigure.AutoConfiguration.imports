@@ -1,2 +1,4 @@
 dev.orwell.bootstrap.AuthenticationStrategyConfiguration
 dev.orwell.bootstrap.HealthEndpointConfiguration
+dev.orwell.bootstrap.LoggerConfiguration
+dev.orwell.bootstrap.WebContractConfiguration

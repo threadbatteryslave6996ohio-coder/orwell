@@ -14,6 +14,6 @@ RUN --mount=type=cache,target=/root/.m2 \
 FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
 
-COPY --from=build /workspace/apps/alerting/target/alerting.jar /app/alerting.jar
-COPY --from=build /workspace/apps/log-analyzer/target/log-analyzer.jar /app/log-analyzer.jar
+COPY --from=build /workspace/apps/alerting/target/alerting-0.1.0-SNAPSHOT-exec.jar /app/alerting.jar
+COPY --from=build /workspace/apps/log-analyzer/target/log-analyzer-0.1.0-SNAPSHOT-exec.jar /app/log-analyzer.jar
 

@@ -1,41 +1,59 @@
 package dev.orwell.bucket.proxy;
 
-import dev.orwell.bootstrap.SpringServerBootstrap;
+import dev.orwell.bootstrap.AppServer;
 import dev.orwell.bootstrap.HealthDetailsProvider;
-import dev.orwell.env.Env;
 import dev.orwell.bucket.proxy.storage.BucketStorage;
-import dev.orwell.logging.CustomLogger;
-import dev.orwell.logging.Logger;
+import dev.orwell.bucket.proxy.streaming.AnalysisWorker;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
-import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 
+import java.util.Arrays;
 import java.util.Map;
 
 @SpringBootApplication
 @ConfigurationPropertiesScan
 public class BucketProxyApplication {
-    public static ConfigurableApplicationContext start(Env env) {
-        return SpringServerBootstrap.run(
-                BucketProxyApplication.class,
-                JarvisProxyEnvs.springProperties(env),
-                "jarvisProxyLauncher");
+    static final String STREAM_WORKER_MODE = "--mode=stream-worker";
+
+    /**
+     * Server descriptor: how the environment is fetched stays with whoever calls
+     * {@code SERVER.start(...)} / {@code runOrExit}; the core never reads {@code .env} files itself.
+     */
+    public static final AppServer SERVER = AppServer.spring(BucketProxyApplication.class)
+            .name("bucket-proxy")
+            .envs(JarvisProxyEnvs.ENV)
+            .properties(JarvisProxyEnvs::springProperties)
+            .build();
+
+    /**
+     * By default boots the Spring web server; passing {@code --mode=stream-worker} runs the bundled
+     * stream analysis worker (an stdin MJPEG pipe filter, see deployment/analyze_stream.sh) from the
+     * same jar instead.
+     */
+    public static void main(String[] args) throws Exception {
+        if (isStreamWorkerMode(args)) {
+            AnalysisWorker.main(withoutModeFlag(args));
+            return;
+        }
+        SERVER.runOrExit(args);
     }
 
-    public static ConfigurableApplicationContext start(Map<String, String> environment) {
-        return start(JarvisProxyEnvs.from(environment));
+    private static boolean isStreamWorkerMode(String[] args) {
+        return Arrays.asList(args).contains(STREAM_WORKER_MODE);
     }
 
-    /** Custom {@link Logger} available for injection across the bucket proxy. */
+    private static String[] withoutModeFlag(String[] args) {
+        return Arrays.stream(args)
+                .filter(arg -> !STREAM_WORKER_MODE.equals(arg))
+                .toArray(String[]::new);
+    }
+
+    /** Extra payload for the shared {@code /health} endpoint. */
     @Bean
-    public Logger logger() {
-        return new CustomLogger("bucket-proxy");
-    }
-
-    @Bean(name = "jarvisHealthDetailsProvider")
-    public HealthDetailsProvider healthDetailsProvider(ProxyProperties properties, BucketStorage storage) {
+    public HealthDetailsProvider proxyHealthDetailsProvider(ProxyProperties properties, BucketStorage storage) {
         return () -> Map.of(
+                "storageProvider", storage.provider(),
                 "bucket", storage.containerName(),
                 "region", storage.location(),
                 "auth", "external-auth-server",

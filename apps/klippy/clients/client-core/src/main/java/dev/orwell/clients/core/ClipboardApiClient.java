@@ -46,6 +46,7 @@ public final class ClipboardApiClient {
         return sendWithAuthRetry(token -> HttpRequest.newBuilder(endpoint)
                 .timeout(requestTimeout)
                 .header("Content-Type", "application/json")
+                .header("X-Client-Id", authSession.clientId())
                 .header("Authorization", "Bearer " + token)
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build());
@@ -54,6 +55,7 @@ public final class ClipboardApiClient {
     public HttpResponse<String> get(URI uri) throws IOException, InterruptedException {
         return sendWithAuthRetry(token -> HttpRequest.newBuilder(uri)
                 .timeout(requestTimeout)
+                .header("X-Client-Id", authSession.clientId())
                 .header("Authorization", "Bearer " + token)
                 .GET()
                 .build());

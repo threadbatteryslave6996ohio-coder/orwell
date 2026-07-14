@@ -1,43 +1,28 @@
 package dev.orwell.server.application;
 
-import dev.orwell.bootstrap.SpringServerBootstrap;
-import dev.orwell.env.Env;
-import dev.orwell.logging.CustomLogger;
-import dev.orwell.logging.Logger;
+import dev.orwell.bootstrap.AppServer;
 import dev.orwell.server.config.ServerEnvs;
 import dev.orwell.server.repository.ClipboardEntryRepository;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Bean;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
-
-import java.util.Map;
 
 @SpringBootApplication(scanBasePackages = "dev.orwell.server")
 @EnableJpaRepositories(basePackageClasses = ClipboardEntryRepository.class)
 @EntityScan(basePackages = "dev.orwell.server.model")
 public class ClippyServerApplication {
-    public static ConfigurableApplicationContext start(Env env) {
-        return SpringServerBootstrap.start(
-                ClippyServerApplication.class,
-                env.get(ServerEnvs.LOGGING_FILE_NAME),
-                ServerEnvs.springProperties(env),
-                "clippyServerLauncher");
-    }
-
     /**
-     * Boots the clipboard server from an already-resolved environment. The core never reads
-     * {@code .env} files or system env itself: whoever launches it (see {@link ClippyServerLauncher},
-     * the combined server, or tests) decides how to fetch the values and passes them in here.
+     * Server descriptor: how the environment is fetched stays with whoever calls
+     * {@code SERVER.start(...)} / {@code runOrExit}; the core never reads {@code .env} files itself.
      */
-    public static ConfigurableApplicationContext start(Map<String, String> environment) {
-        return start(ServerEnvs.from(environment));
-    }
+    public static final AppServer SERVER = AppServer.spring(ClippyServerApplication.class)
+            .name("clippy-server")
+            .envs(ServerEnvs.ENV)
+            .properties(ServerEnvs::springProperties)
+            .loggingFile(env -> env.get(ServerEnvs.LOGGING_FILE_NAME))
+            .build();
 
-    /** Custom {@link Logger} available for injection across the clipboard server. */
-    @Bean
-    public Logger logger() {
-        return new CustomLogger("clippy-server");
+    public static void main(String[] args) {
+        SERVER.runOrExit(args);
     }
 }

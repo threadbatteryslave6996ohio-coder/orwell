@@ -45,8 +45,8 @@ mvn -f ../../pom.xml -pl apps/alerting -am package -DskipTests
 # --mode=stream-worker mode (dev.orwell.bucket.proxy.streaming.AnalysisWorker),
 # so the executable fat jar doubles as the worker jar.
 cp bucket/proxy/target/bucket-proxy-0.1.0-SNAPSHOT-exec.jar "$PROXY_DIR/publish/bucket-proxy.jar"
-cp ../alerting/target/alerting.jar "$STREAM_PUBLISH_DIR/alerting.jar"
-cp bucket/detection/target/bucket-detection.jar "$STREAM_PUBLISH_DIR/bucket-detection.jar"
+cp ../alerting/target/alerting-0.1.0-SNAPSHOT-exec.jar "$STREAM_PUBLISH_DIR/alerting.jar"
+cp bucket/detection/target/bucket-detection-0.1.0-SNAPSHOT-exec.jar "$STREAM_PUBLISH_DIR/bucket-detection.jar"
 
 cp bucket/proxy/scripts/record_stream.sh "$STREAM_SCRIPTS_DIR/record_stream.sh"
 cp bucket/proxy/scripts/analyze_stream.sh "$STREAM_SCRIPTS_DIR/analyze_stream.sh"
@@ -190,10 +190,22 @@ Wants=network-online.target
 [Service]
 User=www-data
 WorkingDirectory=/opt/s3-proxy/publish
-ExecStart=/usr/bin/java -jar /opt/s3-proxy/publish/bucket-proxy.jar --server.port=5000 --proxy.s3.bucket-name=${bucket_name} --proxy.s3.region=${aws_region} --proxy.auth-server.base-url=${auth_server_base_url_json} --proxy.auth-server.identity-provisioning-key=${auth_identity_provisioning_key_json} --proxy.management.username=${proxy_management_username_json} --proxy.management.password=${proxy_management_password_json} --proxy.management.session-secret=${proxy_management_session_secret_json} --proxy.logging.audit-file=/var/log/s3-proxy/audit.log --proxy.cors.allowed-origins=${allowed_origins_json}
+# Configuration goes through the env schema (JarvisProxyEnvs); the entry point takes no
+# program args (it would treat them as an env-loader selector and exit).
+ExecStart=/usr/bin/java -jar /opt/s3-proxy/publish/bucket-proxy.jar
 Restart=always
 RestartSec=10
 Environment=JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8
+Environment="SERVER_PORT=5000"
+Environment="PROXY_S3_BUCKET_NAME=${bucket_name}"
+Environment="PROXY_S3_REGION=${aws_region}"
+Environment="PROXY_AUTH_SERVER_BASE_URL=${auth_server_base_url_json}"
+Environment="AUTH_IDENTITY_PROVISIONING_KEY=${auth_identity_provisioning_key_json}"
+Environment="PROXY_MANAGEMENT_USERNAME=${proxy_management_username_json}"
+Environment="PROXY_MANAGEMENT_PASSWORD=${proxy_management_password_json}"
+Environment="PROXY_MANAGEMENT_SESSION_SECRET=${proxy_management_session_secret_json}"
+Environment="PROXY_LOGGING_AUDIT_FILE=/var/log/s3-proxy/audit.log"
+Environment="PROXY_CORS_ALLOWED_ORIGINS=${allowed_origins_json}"
 StandardOutput=journal
 StandardError=journal
 

@@ -10,7 +10,6 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 | Clippy | `apps/klippy` | Clipboard history sync |
 | Jarvis | `apps/jarvis` | Surveillance (bucket proxy, streaming, alerting) |
 | Keeboarder | `apps/keeboarder` | Keyboard/message relay |
-| Combined server | `apps/combined-server` | Runs all apps in one JVM |
 
 ## Packages
 

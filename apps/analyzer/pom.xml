@@ -9,9 +9,30 @@
     <artifactId>analyzer</artifactId>
     <dependencies>
         <dependency><groupId>dev.orwell</groupId><artifactId>gmail-general</artifactId><version>${project.version}</version></dependency>
+        <dependency><groupId>dev.orwell</groupId><artifactId>auth-core</artifactId></dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>auth-http-client</artifactId></dependency>
-        <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
-        <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>dev.orwell</groupId><artifactId>core</artifactId></dependency>
+        <dependency><groupId>dev.orwell</groupId><artifactId>clippy-server-bootstrap</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
     </dependencies>
-    <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-shade-plugin</artifactId><executions><execution><phase>package</phase><goals><goal>shade</goal></goals><configuration><createDependencyReducedPom>false</createDependencyReducedPom><finalName>analyzer</finalName><transformers><transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer"><mainClass>dev.orwell.analyzer.AnalyzerApplication</mainClass></transformer></transformers></configuration></execution></executions></plugin></plugins></build>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>dev.orwell.analyzer.AnalyzerApplication</mainClass>
+                    <classifier>exec</classifier>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

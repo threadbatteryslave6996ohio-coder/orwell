@@ -3,7 +3,7 @@ package dev.orwell.keeboarder.server.service;
 import dev.orwell.keeboarder.server.websocket.ChatEndpoint;
 import org.springframework.stereotype.Service;
 
-/** Server behavior shared by the standalone HTTP adapter and combined Spring app. */
+/** Server behavior backing the Keeboarder REST API. */
 @Service
 public class KeeboarderService {
     public String connectedClientsJson() {

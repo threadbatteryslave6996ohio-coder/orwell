@@ -1,27 +1,23 @@
 package dev.orwell.keeboarder.server;
 
-import dev.orwell.bootstrap.SpringServerBootstrap;
-import dev.orwell.env.Env;
+import dev.orwell.bootstrap.AppServer;
 import dev.orwell.keeboarder.server.config.KeeboarderEnvs;
-import dev.orwell.logging.CustomLogger;
-import dev.orwell.logging.Logger;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Bean;
 
-/** Embeddable Keeboarder HTTP application; process startup lives in {@link ChatServer}. */
+/** Keeboarder server: REST API plus the WebSocket chat endpoint on the embedded container. */
 @SpringBootApplication
 public class KeeboarderServerApplication {
-    public static ConfigurableApplicationContext start(Env env) {
-        return SpringServerBootstrap.run(
-                KeeboarderServerApplication.class,
-                KeeboarderEnvs.springProperties(env),
-                "keeboarderServerLauncher");
-    }
+    /**
+     * Server descriptor: how the environment is fetched stays with whoever calls
+     * {@code SERVER.start(...)} / {@code runOrExit}; the core never reads {@code .env} files itself.
+     */
+    public static final AppServer SERVER = AppServer.spring(KeeboarderServerApplication.class)
+            .name("keeboarder-server")
+            .envs(KeeboarderEnvs.ENV)
+            .properties(KeeboarderEnvs::springProperties)
+            .build();
 
-    /** Custom {@link Logger} available for injection across the Keeboarder server. */
-    @Bean
-    public Logger logger() {
-        return new CustomLogger("keeboarder-server");
+    public static void main(String[] args) {
+        SERVER.runOrExit(args);
     }
 }

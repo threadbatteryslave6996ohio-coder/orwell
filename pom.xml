@@ -14,13 +14,13 @@
         <module>packages/server-bootstrap</module>
         <module>packages/primitives</module>
         <module>packages/server-parent</module>
+        <module>packages/server-test-support</module>
         <module>apps/auth</module>
         <module>apps/klippy</module>
         <module>apps/jarvis</module>
         <module>apps/log-analyzer</module>
         <module>apps/alerting</module>
         <module>apps/keeboarder</module>
-        <module>apps/combined-server</module>
         <module>apps/secrets-manager</module>
         <module>apps/backup</module>
         <module>apps/google</module>
@@ -113,6 +113,11 @@
             <dependency>
                 <groupId>dev.orwell</groupId>
                 <artifactId>secrets-server</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.orwell</groupId>
+                <artifactId>server-test-support</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

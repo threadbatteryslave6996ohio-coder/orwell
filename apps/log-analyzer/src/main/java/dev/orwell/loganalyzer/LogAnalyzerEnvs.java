@@ -5,7 +5,7 @@ import dev.orwell.env.EnvOption;
 import dev.orwell.env.EnvSchema;
 import dev.orwell.env.EnvType;
 
-import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 
 public final class LogAnalyzerEnvs {
@@ -55,7 +55,24 @@ public final class LogAnalyzerEnvs {
         return ENV.from(source);
     }
 
-    static Duration aiTimeout(Env env) {
-        return Duration.ofSeconds(env.get(AI_TIMEOUT_SECONDS));
+    public static Map<String, Object> springProperties(Env env) {
+        Map<String, Object> values = new HashMap<>();
+        values.put("server.address", env.get(SERVER_HOST));
+        values.put("server.port", env.get(SERVER_PORT));
+        values.put("loganalyzer.poll-interval-seconds", env.get(POLL_INTERVAL_SECONDS));
+        values.put("loganalyzer.lookback-seconds", env.get(LOOKBACK_SECONDS));
+        values.put("loganalyzer.max-log-lines", env.get(MAX_LOG_LINES));
+        values.put("loganalyzer.grafana-url", env.get(GRAFANA_URL));
+        values.put("loganalyzer.grafana-api-token", env.get(GRAFANA_API_TOKEN));
+        values.put("loganalyzer.grafana-loki-datasource-uid", env.get(GRAFANA_LOKI_DATASOURCE_UID));
+        values.put("loganalyzer.loki-query", env.get(LOKI_QUERY));
+        values.put("loganalyzer.alert-url", env.get(ALERT_URL));
+        values.put("loganalyzer.ai-api-url", env.get(AI_API_URL));
+        values.put("loganalyzer.ai-api-key", env.get(AI_API_KEY));
+        values.put("loganalyzer.ai-model", env.get(AI_MODEL));
+        values.put("loganalyzer.ai-timeout-seconds", env.get(AI_TIMEOUT_SECONDS));
+        values.put("loganalyzer.min-importance-confidence", env.get(MIN_IMPORTANCE_CONFIDENCE));
+        values.put("loganalyzer.alert-cooldown-seconds", env.get(ALERT_COOLDOWN_SECONDS));
+        return values;
     }
 }

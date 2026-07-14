@@ -5,6 +5,7 @@ import dev.orwell.env.EnvOption;
 import dev.orwell.env.EnvSchema;
 import dev.orwell.env.EnvType;
 
+import java.util.HashMap;
 import java.util.Map;
 
 public final class AlertEnvs {
@@ -42,5 +43,21 @@ public final class AlertEnvs {
 
     public static Env from(Map<String, String> source) {
         return ENV.from(source);
+    }
+
+    public static Map<String, Object> springProperties(Env env) {
+        Map<String, Object> values = new HashMap<>();
+        values.put("server.address", env.get(ALERT_SERVER_HOST));
+        values.put("server.port", env.get(ALERT_SERVER_PORT));
+        values.put("alert.email.enabled", env.get(ALERT_EMAIL_ENABLED));
+        values.put("alert.email.to", env.get(ALERT_EMAIL_TO));
+        values.put("alert.email.from", env.get(ALERT_EMAIL_FROM));
+        values.put("alert.smtp.host", env.get(SMTP_HOST));
+        values.put("alert.smtp.port", env.get(SMTP_PORT));
+        values.put("alert.smtp.username", env.get(SMTP_USERNAME));
+        values.put("alert.smtp.password", env.get(SMTP_PASSWORD));
+        values.put("alert.smtp.use-tls", env.get(SMTP_USE_TLS));
+        values.put("alert.log-file", env.get(ALERT_LOG_FILE));
+        return values;
     }
 }

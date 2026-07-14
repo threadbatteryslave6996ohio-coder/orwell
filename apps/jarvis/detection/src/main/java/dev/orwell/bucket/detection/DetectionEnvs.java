@@ -5,6 +5,7 @@ import dev.orwell.env.EnvOption;
 import dev.orwell.env.EnvSchema;
 import dev.orwell.env.EnvType;
 
+import java.util.HashMap;
 import java.util.Map;
 
 public final class DetectionEnvs {
@@ -30,5 +31,15 @@ public final class DetectionEnvs {
 
     public static Env from(Map<String, String> source) {
         return ENV.from(source);
+    }
+
+    public static Map<String, Object> springProperties(Env env) {
+        Map<String, Object> values = new HashMap<>();
+        values.put("server.address", env.get(DETECTION_SERVER_HOST));
+        values.put("server.port", env.get(DETECTION_SERVER_PORT));
+        values.put("detection.alert-url", env.get(DETECTION_ALERT_URL));
+        values.put("detection.cooldown-seconds", env.get(DETECTION_ALERT_COOLDOWN_SECONDS));
+        values.put("detection.min-confidence", env.get(DETECTION_MIN_CONFIDENCE));
+        return values;
     }
 }

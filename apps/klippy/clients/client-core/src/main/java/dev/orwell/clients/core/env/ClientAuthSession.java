@@ -18,6 +18,10 @@ public final class ClientAuthSession {
         this.clientToken = normalizedOrNull(initialToken);
     }
 
+    public String clientId() {
+        return clientId;
+    }
+
     public synchronized String token() {
         if (clientToken == null) {
             if (!canRefresh()) {

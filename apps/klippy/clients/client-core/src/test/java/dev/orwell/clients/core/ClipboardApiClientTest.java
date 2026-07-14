@@ -18,10 +18,12 @@ class ClipboardApiClientTest {
     @Test
     void postsSerializedEntryWithBearerToken() throws Exception {
         AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> clientId = new AtomicReference<>();
         AtomicReference<String> requestBody = new AtomicReference<>();
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/clipboard", exchange -> {
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            clientId.set(exchange.getRequestHeaders().getFirst("X-Client-Id"));
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             exchange.sendResponseHeaders(201, -1);
             exchange.close();
@@ -38,6 +40,7 @@ class ClipboardApiClientTest {
 
             assertEquals(201, response.statusCode());
             assertEquals("Bearer token-a", authorization.get());
+            assertEquals("client-a", clientId.get());
             assertEquals("line one\nline two",
                     ClipboardJson.mapper().readTree(requestBody.get()).get("content").textValue());
             assertEquals("2026-06-27T15:30:45Z",

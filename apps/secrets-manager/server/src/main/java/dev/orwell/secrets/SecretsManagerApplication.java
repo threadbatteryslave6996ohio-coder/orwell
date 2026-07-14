@@ -1,32 +1,22 @@
 package dev.orwell.secrets;
 
-import dev.orwell.bootstrap.SpringServerBootstrap;
-import dev.orwell.env.Env;
-import dev.orwell.logging.CustomLogger;
-import dev.orwell.logging.Logger;
+import dev.orwell.bootstrap.AppServer;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Bean;
-
-import java.util.Map;
 
 @SpringBootApplication
 public class SecretsManagerApplication {
-    public static ConfigurableApplicationContext start(Env env) {
-        return SpringServerBootstrap.start(
-                SecretsManagerApplication.class,
-                env.get(SecretsManagerEnvs.SECRETS_LOGGING_FILE_NAME),
-                SecretsManagerEnvs.springProperties(env),
-                "secretsManagerLauncher");
-    }
+    /**
+     * Server descriptor: how the environment is fetched stays with whoever calls
+     * {@code SERVER.start(...)} / {@code runOrExit}; the core never reads {@code .env} files itself.
+     */
+    public static final AppServer SERVER = AppServer.spring(SecretsManagerApplication.class)
+            .name("secrets-manager")
+            .envs(SecretsManagerEnvs.ENV)
+            .properties(SecretsManagerEnvs::springProperties)
+            .loggingFile(env -> env.get(SecretsManagerEnvs.SECRETS_LOGGING_FILE_NAME))
+            .build();
 
-    public static ConfigurableApplicationContext start(Map<String, String> environment) {
-        return start(SecretsManagerEnvs.from(environment));
-    }
-
-    /** Custom {@link Logger} available for injection across the secrets manager. */
-    @Bean
-    public Logger logger() {
-        return new CustomLogger("secrets-manager");
+    public static void main(String[] args) {
+        SERVER.runOrExit(args);
     }
 }

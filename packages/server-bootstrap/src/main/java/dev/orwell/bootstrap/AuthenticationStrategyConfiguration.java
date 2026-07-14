@@ -2,6 +2,7 @@ package dev.orwell.bootstrap;
 
 import dev.orwell.auth.AuthenticationContext;
 import dev.orwell.auth.AuthenticationStrategy;
+import dev.orwell.auth.http.client.HttpAuthenticationException;
 import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -36,6 +37,16 @@ public class AuthenticationStrategyConfiguration {
         if (clientId == null || clientId.isBlank() || token == null) {
             return AuthenticationContext.unauthenticated();
         }
-        return authenticationStrategy.authenticate(clientId, token);
+        try {
+            return authenticationStrategy.authenticate(clientId, token);
+        } catch (HttpAuthenticationException exception) {
+            // An unreachable/failing auth service degrades to "unauthenticated" (a 401 at the
+            // controllers), not a 500 from every endpoint that touches the context. Deliberately
+            // narrow: any OTHER RuntimeException from a strategy is a genuine bug and must surface
+            // as a 500 rather than masquerade as endless bad-credential 401s.
+            System.err.println("Auth service check failed; treating request as unauthenticated: "
+                    + exception.getMessage());
+            return AuthenticationContext.unauthenticated();
+        }
     }
 }

@@ -126,41 +126,13 @@ SEC_TZ=$(create_env "$SEC_GROUP"      "SECRETS_JPA_JDBC_TIME_ZONE"  "UTC")
 SEC_AUTH=$(create_env "$SEC_GROUP"    "SECRETS_AUTH_BASE_URL"       "http://localhost:8081")
 
 # ============================================================================
-# 4. COMBINED SERVER
-# ============================================================================
-echo "[combined-server]"
-
-COM_GROUP=$(create_group "combined-server" "Combined all-in-one server (apps/combined-server)")
-COM_PORT=$(create_env "$COM_GROUP"          "COMBINED_SERVER_PORT"       "8080")
-COM_AUTH_URL=$(create_env "$COM_GROUP"      "AUTH_DATASOURCE_URL"        "jdbc:postgresql://localhost:5433/auth")
-COM_AUTH_USER=$(create_env "$COM_GROUP"     "AUTH_DATASOURCE_USERNAME"   "auth")
-COM_AUTH_PASS=$(create_env "$COM_GROUP"     "AUTH_DATASOURCE_PASSWORD"   "auth")
-COM_CLIP_URL=$(create_env "$COM_GROUP"      "SPRING_DATASOURCE_URL"      "jdbc:postgresql://localhost:5432/clippy")
-COM_CLIP_USER=$(create_env "$COM_GROUP"     "SPRING_DATASOURCE_USERNAME" "clippy")
-COM_CLIP_PASS=$(create_env "$COM_GROUP"     "SPRING_DATASOURCE_PASSWORD" "clippy")
-COM_SEC_URL=$(create_env "$COM_GROUP"       "SECRETS_DATASOURCE_URL"     "jdbc:postgresql://localhost:5435/secrets")
-COM_SEC_USER=$(create_env "$COM_GROUP"      "SECRETS_DATASOURCE_USERNAME" "secrets")
-COM_SEC_PASS=$(create_env "$COM_GROUP"      "SECRETS_DATASOURCE_PASSWORD" "secrets")
-COM_AUTH_BASE=$(create_env "$COM_GROUP"     "CLIPPY_AUTH_BASE_URL"       "http://localhost:8080/auth")
-COM_AUTH_PREFIX=$(create_env "$COM_GROUP"   "CLIPPY_AUTH_ROUTE_PREFIX"   "/auth")
-COM_CLIP_PREFIX=$(create_env "$COM_GROUP"   "CLIPPY_SERVER_ROUTE_PREFIX" "/klippy")
-COM_JARVIS_PREFIX=$(create_env "$COM_GROUP" "JARVIS_SERVER_ROUTE_PREFIX" "/jarvis")
-COM_KEEB_PREFIX=$(create_env "$COM_GROUP"   "KEEBOARDER_SERVER_ROUTE_PREFIX" "/keeboarder")
-COM_SEC_PREFIX=$(create_env "$COM_GROUP"    "SECRETS_ROUTE_PREFIX"       "/secrets")
-COM_LOG=$(create_env "$COM_GROUP"           "LOGGING_FILE_NAME"          "logs/combined-server.log")
-COM_AUTH_DDL=$(create_env "$COM_GROUP"      "AUTH_JPA_HIBERNATE_DDL_AUTO" "update")
-COM_CLIP_DDL=$(create_env "$COM_GROUP"      "CLIPBOARD_JPA_HIBERNATE_DDL_AUTO" "update")
-COM_SEC_DDL=$(create_env "$COM_GROUP"       "SECRETS_JPA_HIBERNATE_DDL_AUTO" "update")
-COM_TZ=$(create_env "$COM_GROUP"            "JPA_JDBC_TIME_ZONE"         "UTC")
-
-# ============================================================================
-# 5. KEEBOARDER CHAT SERVER
+# 4. KEEBOARDER CHAT SERVER
 # ============================================================================
 echo "[keeboarder-server]"
 
 KEEB_GROUP=$(create_group "keeboarder-server" "WebSocket chat server (apps/keeboarder)")
-KEEB_WS_HOST=$(create_env "$KEEB_GROUP" "WEBSOCKET_HOST"  "0.0.0.0")
-KEEB_WS_PORT=$(create_env "$KEEB_GROUP" "WEBSOCKET_PORT"  "8025")
+KEEB_HTTP_HOST=$(create_env "$KEEB_GROUP" "HTTP_HOST"  "0.0.0.0")
+KEEB_HTTP_PORT=$(create_env "$KEEB_GROUP" "HTTP_PORT"  "8025")
 KEEB_REDIS_HOST=$(create_env "$KEEB_GROUP" "REDIS_HOST"   "localhost")
 KEEB_REDIS_PORT=$(create_env "$KEEB_GROUP" "REDIS_PORT"   "6379")
 KEEB_AUTH=$(create_env "$KEEB_GROUP"     "CLIPPY_AUTH_BASE_URL" "http://localhost:8081")
@@ -188,7 +160,7 @@ JARVIS_MGMT_USER=$(create_env "$JARVIS_GROUP" "PROXY_MANAGEMENT_USERNAME"     ""
 JARVIS_MGMT_PASS=$(create_env "$JARVIS_GROUP" "PROXY_MANAGEMENT_PASSWORD"     "")
 JARVIS_MGMT_SESS=$(create_env "$JARVIS_GROUP" "PROXY_MANAGEMENT_SESSION_SECRET" "")
 JARVIS_SRV_URL=$(create_env "$JARVIS_GROUP"   "PROXY_SERVER_URL"              "http://localhost:5000")
-JARVIS_AUDIT=$(create_env "$JARVIS_GROUP"     "PROXY_AUDIT_FILE"              "logs/audit.log")
+JARVIS_AUDIT=$(create_env "$JARVIS_GROUP"     "PROXY_LOGGING_AUDIT_FILE"              "logs/audit.log")
 
 # ============================================================================
 # 7. JARVIS DETECTION
@@ -256,10 +228,7 @@ set_bundle_envs "$DB_BUNDLE_ID" "$( \
   echo '[' \
     "$AUTH_DB_URL,$AUTH_DB_USER,$AUTH_DB_PASS," \
     "$KLIP_DB_URL,$KLIP_DB_USER,$KLIP_DB_PASS," \
-    "$SEC_DB_URL,$SEC_DB_USER,$SEC_DB_PASS," \
-    "$COM_AUTH_URL,$COM_AUTH_USER,$COM_AUTH_PASS," \
-    "$COM_CLIP_URL,$COM_CLIP_USER,$COM_CLIP_PASS," \
-    "$COM_SEC_URL,$COM_SEC_USER,$COM_SEC_PASS" \
+    "$SEC_DB_URL,$SEC_DB_USER,$SEC_DB_PASS" \
   ']' | sed 's/ //g' \
 )" && echo "  bundle 'database-connections' created"
 
@@ -267,7 +236,7 @@ set_bundle_envs "$DB_BUNDLE_ID" "$( \
 AUTH_BUNDLE=$(post "/bundles" '{"name":"auth-config","description":"Authentication-related configuration"}')
 AUTH_BUNDLE_ID=$(echo "$AUTH_BUNDLE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 set_bundle_envs "$AUTH_BUNDLE_ID" "$( \
-  echo '[' "$KLIP_AUTH,$KEEB_AUTH,$SEC_AUTH,$COM_AUTH_BASE,$COM_AUTH_PREFIX,$JARVIS_AUTH_KEY" ']' | sed 's/ //g' \
+  echo '[' "$KLIP_AUTH,$KEEB_AUTH,$SEC_AUTH,$JARVIS_AUTH_KEY" ']' | sed 's/ //g' \
 )" && echo "  bundle 'auth-config' created"
 
 # --- Storage bundle ---
@@ -281,28 +250,21 @@ set_bundle_envs "$STORAGE_BUNDLE_ID" "$( \
 MESSAGING_BUNDLE=$(post "/bundles" '{"name":"messaging","description":"WebSocket and Redis configuration"}')
 MESSAGING_BUNDLE_ID=$(echo "$MESSAGING_BUNDLE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 set_bundle_envs "$MESSAGING_BUNDLE_ID" "$( \
-  echo '[' "$KEEB_WS_HOST,$KEEB_WS_PORT,$KEEB_REDIS_HOST,$KEEB_REDIS_PORT" ']' | sed 's/ //g' \
+  echo '[' "$KEEB_HTTP_HOST,$KEEB_HTTP_PORT,$KEEB_REDIS_HOST,$KEEB_REDIS_PORT" ']' | sed 's/ //g' \
 )" && echo "  bundle 'messaging' created"
-
-# --- Routes bundle ---
-ROUTES_BUNDLE=$(post "/bundles" '{"name":"route-prefixes","description":"HTTP route prefix configuration for combined mode"}')
-ROUTES_BUNDLE_ID=$(echo "$ROUTES_BUNDLE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
-set_bundle_envs "$ROUTES_BUNDLE_ID" "$( \
-  echo '[' "$COM_AUTH_PREFIX,$COM_CLIP_PREFIX,$COM_JARVIS_PREFIX,$COM_KEEB_PREFIX,$COM_SEC_PREFIX" ']' | sed 's/ //g' \
-)" && echo "  bundle 'route-prefixes' created"
 
 # --- Ports bundle ---
 PORTS_BUNDLE=$(post "/bundles" '{"name":"server-ports","description":"All service ports"}')
 PORTS_BUNDLE_ID=$(echo "$PORTS_BUNDLE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 set_bundle_envs "$PORTS_BUNDLE_ID" "$( \
-  echo '[' "$AUTH_PORT,$KLIP_PORT,$SEC_PORT,$COM_PORT,$DETECT_PORT,$ALERT_PORT,$KEEB_WS_PORT,$KEEB_REDIS_PORT" ']' | sed 's/ //g' \
+  echo '[' "$AUTH_PORT,$KLIP_PORT,$SEC_PORT,$DETECT_PORT,$ALERT_PORT,$KEEB_HTTP_PORT,$KEEB_REDIS_PORT" ']' | sed 's/ //g' \
 )" && echo "  bundle 'server-ports' created"
 
 # --- JPA / Hibernate bundle ---
 JPA_BUNDLE=$(post "/bundles" '{"name":"jpa-hibernate","description":"JPA / Hibernate DDL and timezone settings"}')
 JPA_BUNDLE_ID=$(echo "$JPA_BUNDLE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 set_bundle_envs "$JPA_BUNDLE_ID" "$( \
-  echo '[' "$AUTH_DDL,$AUTH_TZ,$KLIP_DDL,$KLIP_TZ,$SEC_DDL,$SEC_TZ,$COM_AUTH_DDL,$COM_CLIP_DDL,$COM_SEC_DDL,$COM_TZ" ']' | sed 's/ //g' \
+  echo '[' "$AUTH_DDL,$AUTH_TZ,$KLIP_DDL,$KLIP_TZ,$SEC_DDL,$SEC_TZ" ']' | sed 's/ //g' \
 )" && echo "  bundle 'jpa-hibernate' created"
 
 # --- Jarvis full bundle ---
@@ -310,14 +272,14 @@ JARVIS_FULL=$(post "/bundles" '{"name":"jarvis-full","description":"All Jarvis s
 JARVIS_FULL_ID=$(echo "$JARVIS_FULL" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 set_bundle_envs "$JARVIS_FULL_ID" "$( \
   json_array=$(get_json "/groups/$JARVIS_GROUP/envs"; get_json "/groups/$DETECT_GROUP/envs"; get_json "/groups/$ALERT_GROUP/envs"; get_json "/groups/$STREAM_GROUP/envs")
-  echo "$json_array" | python3 -c "import sys,json; all_ids=[]; [all_ids.extend(e['id'] for e in json.load(l)) for l in sys.stdin]; print(json.dumps(all_ids))"
+  echo "$json_array" | python3 -c "import sys,json; all_ids=[]; [all_ids.extend(e['id'] for e in json.loads(l)) for l in sys.stdin]; print(json.dumps(all_ids))"
 )" && echo "  bundle 'jarvis-full' created"
 
 echo ""
 echo "=== Seeding complete ==="
 echo ""
 echo "Groups created:"
-echo "  auth-server, klippy-server, secrets-server, combined-server"
+echo "  auth-server, klippy-server, secrets-server"
 echo "  keeboarder-server, jarvis-proxy, jarvis-detection"
 echo "  jarvis-alerting, jarvis-streaming, klippy-client"
 echo ""

@@ -1,40 +1,27 @@
 package dev.orwell.auth.http.server;
 
 import dev.orwell.auth.http.server.config.AuthServerEnvs;
-import dev.orwell.bootstrap.SpringServerBootstrap;
+import dev.orwell.bootstrap.AppServer;
 import dev.orwell.env.Env;
 import dev.orwell.logging.CustomLogger;
-import dev.orwell.logging.Logger;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Bean;
-
-import java.util.Map;
 
 @SpringBootApplication
 public class ClippyAuthServerApplication {
-    public static ConfigurableApplicationContext start(Env env) {
-        return SpringServerBootstrap.start(
-                ClippyAuthServerApplication.class,
-                env.get(AuthServerEnvs.AUTH_LOGGING_FILE_NAME),
-                () -> logLocalDatabaseIfApplicable(env),
-                AuthServerEnvs.springProperties(env),
-                "clippyAuthServerLauncher");
-    }
-
     /**
-     * Boots the auth server from an already-resolved environment. The core never reads {@code .env}
-     * files or system env itself: whoever launches it (see {@link ClippyAuthServerLauncher}, the
-     * combined server, or tests) decides how to fetch the values and passes them in here.
+     * Server descriptor: how the environment is fetched stays with whoever calls
+     * {@code SERVER.start(...)} / {@code runOrExit}; the core never reads {@code .env} files itself.
      */
-    public static ConfigurableApplicationContext start(Map<String, String> environment) {
-        return start(AuthServerEnvs.from(environment));
-    }
+    public static final AppServer SERVER = AppServer.spring(ClippyAuthServerApplication.class)
+            .name("auth-server")
+            .envs(AuthServerEnvs.ENV)
+            .properties(AuthServerEnvs::springProperties)
+            .loggingFile(env -> env.get(AuthServerEnvs.AUTH_LOGGING_FILE_NAME))
+            .beforeRun(ClippyAuthServerApplication::logLocalDatabaseIfApplicable)
+            .build();
 
-    /** Custom {@link Logger} available for injection across the auth server. */
-    @Bean
-    public CustomLogger logger() {
-        return new CustomLogger("auth-server");
+    public static void main(String[] args) {
+        SERVER.runOrExit(args);
     }
 
     private static void logLocalDatabaseIfApplicable(Env env) {
