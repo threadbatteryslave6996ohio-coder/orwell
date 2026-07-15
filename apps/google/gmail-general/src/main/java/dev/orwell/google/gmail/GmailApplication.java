@@ -9,11 +9,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  */
 @SpringBootApplication
 public class GmailApplication {
-    public static final AppServer SERVER = AppServer.spring(GmailApplication.class)
-            .name("gmail-general")
-            .envs(GmailEnvs.ENV)
-            .properties(GmailEnvs::springProperties)
-            .build();
+    public static final AppServer SERVER =
+            new AppServer(GmailApplication.class, "gmail-general", GmailEnvs.ENV);
 
     public static void main(String[] args) {
         SERVER.runOrExit(args);

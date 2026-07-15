@@ -9,11 +9,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  */
 @SpringBootApplication
 public class AnalyzerApplication {
-    public static final AppServer SERVER = AppServer.spring(AnalyzerApplication.class)
-            .name("analyzer")
-            .envs(AnalyzerEnvs.ENV)
-            .properties(AnalyzerEnvs::springProperties)
-            .build();
+    public static final AppServer SERVER =
+            new AppServer(AnalyzerApplication.class, "analyzer", AnalyzerEnvs.ENV);
 
     public static void main(String[] args) {
         SERVER.runOrExit(args);

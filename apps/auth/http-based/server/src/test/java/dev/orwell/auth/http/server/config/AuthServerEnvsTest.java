@@ -19,7 +19,7 @@ class AuthServerEnvsTest {
 
     @Test
     void rejectsConfigurationThatTheLauncherDidNotSupply() {
-        assertThrows(EnvValidationException.class, () -> AuthServerEnvs.from(Map.of()));
+        assertThrows(EnvValidationException.class, () -> AuthServerEnvs.ENV.schema().from(Map.of()));
     }
 
     @Test
@@ -30,29 +30,30 @@ class AuthServerEnvsTest {
                 "AUTH_DATASOURCE_URL=jdbc:postgresql://example:5432/auth\n" +
                         "AUTH_DATASOURCE_USERNAME=example-user\n" +
                         "AUTH_DATASOURCE_PASSWORD=example-pass\n" +
-                        "AUTH_SERVER_PORT=9090\n" +
-                        "AUTH_LOGGING_FILE_NAME=/tmp/auth.log\n" +
+                        "SERVER_PORT=9090\n" +
+                        "LOGGING_FILE_NAME=/tmp/auth.log\n" +
                         "AUTH_JPA_HIBERNATE_DDL_AUTO=validate\n" +
                         "AUTH_JPA_JDBC_TIME_ZONE=UTC\n"
         );
 
-        Env env = AuthServerEnvs.from(EnvFiles.load(nestedDirectory));
+        Env env = AuthServerEnvs.ENV.schema().from(EnvFiles.load(nestedDirectory));
 
         assertEquals("jdbc:postgresql://example:5432/auth", env.get(AuthServerEnvs.AUTH_DATASOURCE_URL));
         assertEquals("example-user", env.get(AuthServerEnvs.AUTH_DATASOURCE_USERNAME));
         assertEquals("example-pass", env.get(AuthServerEnvs.AUTH_DATASOURCE_PASSWORD));
-        assertEquals("9090", env.get(AuthServerEnvs.AUTH_SERVER_PORT));
-        assertEquals("/tmp/auth.log", env.get(AuthServerEnvs.AUTH_LOGGING_FILE_NAME));
+        assertEquals(9090, env.get(AuthServerEnvs.ENV.SERVER_PORT));
+        assertEquals("/tmp/auth.log", env.get(AuthServerEnvs.ENV.LOGGING_FILE_NAME));
     }
 
     @Test
     void exposesResolvedValuesAsSpringApplicationProperties() {
-        Env env = AuthServerEnvs.from(Map.of(
+        Env env = AuthServerEnvs.ENV.schema().from(Map.of(
                 "AUTH_DATASOURCE_URL", "jdbc:postgresql://database/auth",
                 "AUTH_DATASOURCE_USERNAME", "user",
                 "AUTH_DATASOURCE_PASSWORD", "password",
-                "AUTH_SERVER_PORT", "9091",
-                "AUTH_LOGGING_FILE_NAME", "/tmp/auth.log",
+                "SERVER_ADDRESS", "0.0.0.0",
+                "SERVER_PORT", "9091",
+                "LOGGING_FILE_NAME", "/tmp/auth.log",
                 "AUTH_JPA_HIBERNATE_DDL_AUTO", "validate",
                 "AUTH_JPA_JDBC_TIME_ZONE", "UTC"
         ));
@@ -61,10 +62,11 @@ class AuthServerEnvsTest {
                 "spring.datasource.url", "jdbc:postgresql://database/auth",
                 "spring.datasource.username", "user",
                 "spring.datasource.password", "password",
-                "server.port", "9091",
+                "server.address", "0.0.0.0",
+                "server.port", 9091,
                 "logging.file.name", "/tmp/auth.log",
                 "spring.jpa.hibernate.ddl-auto", "validate",
                 "spring.jpa.properties.hibernate.jdbc.time_zone", "UTC"
-        ), AuthServerEnvs.springProperties(env));
+        ), AuthServerEnvs.ENV.springProperties(env));
     }
 }

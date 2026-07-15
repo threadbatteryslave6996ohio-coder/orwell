@@ -41,7 +41,7 @@ Client connects → Register with clientId, name, token
 
 - Java 25+
 - Redis server running on localhost:6379 (or configured via environment variables)
-- Auth server running on localhost:8081 by default (or configured via `CLIPPY_AUTH_BASE_URL`)
+- Auth server running on localhost:8081 by default (or configured via `AUTH_BASE_URL`)
 - Maven (for building from source)
 
 ## Building
@@ -83,7 +83,7 @@ WEBSOCKET_PORT=8025             # Default: 8025
 REDIS_HOST=localhost            # Default: localhost
 REDIS_PORT=6379                 # Default: 6379
 SERVER_NAME=KeeboarderWS        # Default: KeeboarderWS
-CLIPPY_AUTH_BASE_URL=http://localhost:8081  # Default: http://localhost:8081
+AUTH_BASE_URL=http://localhost:8081  # Default: http://localhost:8081
 ```
 
 Example with custom configuration:

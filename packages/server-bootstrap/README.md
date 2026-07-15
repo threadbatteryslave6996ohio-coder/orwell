@@ -9,7 +9,7 @@ Shared Spring Boot startup wiring for server applications across the repository.
 3. The bootstrap applies the env map as Spring properties and starts the application.
 
 `AuthenticationStrategyConfiguration` is auto-configured: it provides an
-`HttpAuthenticationStrategy` bean wired to `clippy.auth.base-url`. Modules that
+`HttpAuthenticationStrategy` bean wired to `orwell.auth.base-url`. Modules that
 need a different strategy can define their own `@Bean`; it takes precedence via
 `@ConditionalOnMissingBean`.
 

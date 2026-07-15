@@ -13,11 +13,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableScheduling
 public class LogAnalyzerApplication {
-    public static final AppServer SERVER = AppServer.spring(LogAnalyzerApplication.class)
-            .name("log-analyzer")
-            .envs(LogAnalyzerEnvs.ENV)
-            .properties(LogAnalyzerEnvs::springProperties)
-            .build();
+    public static final AppServer SERVER =
+            new AppServer(LogAnalyzerApplication.class, "log-analyzer", LogAnalyzerEnvs.ENV);
 
     public static void main(String[] args) {
         SERVER.runOrExit(args);

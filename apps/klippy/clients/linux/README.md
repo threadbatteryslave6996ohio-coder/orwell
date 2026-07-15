@@ -34,7 +34,6 @@ AUTH_SERVER_URL=http://localhost:8081
 CLIENT_ID=ubuntu-gnome
 CLIENT_SECRET=change-me-please
 CLIPBOARD_POLL_INTERVAL_MS=1000
-CLIPBOARD_BACKEND=wl-paste
 ```
 
 `REMOTE_SERVER_URL` is required and may be either the server base URL or the

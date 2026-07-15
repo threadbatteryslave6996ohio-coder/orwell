@@ -15,12 +15,8 @@ public class ClippyServerApplication {
      * Server descriptor: how the environment is fetched stays with whoever calls
      * {@code SERVER.start(...)} / {@code runOrExit}; the core never reads {@code .env} files itself.
      */
-    public static final AppServer SERVER = AppServer.spring(ClippyServerApplication.class)
-            .name("clippy-server")
-            .envs(ServerEnvs.ENV)
-            .properties(ServerEnvs::springProperties)
-            .loggingFile(env -> env.get(ServerEnvs.LOGGING_FILE_NAME))
-            .build();
+    public static final AppServer SERVER =
+            new AppServer(ClippyServerApplication.class, "clippy-server", ServerEnvs.ENV);
 
     public static void main(String[] args) {
         SERVER.runOrExit(args);

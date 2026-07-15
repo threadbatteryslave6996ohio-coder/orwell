@@ -1,58 +1,86 @@
 package dev.orwell.bootstrap;
 
-import dev.orwell.env.Env;
-import dev.orwell.env.EnvSchema;
-import dev.orwell.env.EnvType;
 import dev.orwell.env.EnvValidationException;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.support.GenericApplicationContext;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@SpringBootApplication
 class AppServerTest {
     @Test
     void loadsArgsValidatesAgainstSchemaAndStartsApplication() throws IOException {
-        var builder = EnvSchema.builder();
-        var port = builder.required("SERVER_PORT", EnvType.string());
-        EnvSchema schema = builder.build();
-        AtomicReference<String> receivedPort = new AtomicReference<>();
-        ConfigurableApplicationContext context = new GenericApplicationContext();
-
-        AppServer application = new AppServer(
-                schema,
-                env -> captureAndReturn(env, port, receivedPort, context)
-        );
+        AppServerEnv environment = new AppServerEnv(false, false);
+        AppServer application = new AppServer(AppServerTest.class, "app-server-test", environment);
 
         ConfigurableApplicationContext started = application.start(
                 new String[]{"remote", "http://localhost:9999/env"},
                 args -> {
                     assertEquals("remote", args[0]);
                     assertEquals("http://localhost:9999/env", args[1]);
-                    return Map.of("SERVER_PORT", "9090");
+                    return Map.of("SERVER_ADDRESS", "127.0.0.1", "SERVER_PORT", "9090");
                 });
 
-        assertSame(context, started);
-        assertEquals("9090", receivedPort.get());
+        assertEquals("9090", started.getEnvironment().getProperty("server.port"));
+        assertEquals("app-server-test", started.getEnvironment().getProperty("orwell.app.name"));
+        started.close();
     }
 
     @Test
     void rejectsMissingRequiredEnvironmentValues() {
-        var builder = EnvSchema.builder();
-        builder.required("SERVER_PORT", EnvType.string());
-        EnvSchema schema = builder.build();
+        AppServerEnv environment = new AppServerEnv(false, false);
 
         assertThrows(
                 EnvValidationException.class,
-                () -> new AppServer(schema, env -> new GenericApplicationContext())
+                () -> new AppServer(AppServerTest.class, "app-server-test", environment)
                         .start(new String[0], args -> Map.of())
         );
+    }
+
+    @Test
+    void rejectsMissingServerAddress() {
+        AppServerEnv environment = new AppServerEnv(false, false);
+
+        assertThrows(EnvValidationException.class, () ->
+                new AppServer(AppServerTest.class, "app-server-test", environment)
+                        .start(Map.of("SERVER_PORT", "9090")));
+    }
+
+    @Test
+    void rejectsMissingServerPort() {
+        AppServerEnv environment = new AppServerEnv(false, false);
+
+        assertThrows(EnvValidationException.class, () ->
+                new AppServer(AppServerTest.class, "app-server-test", environment)
+                        .start(Map.of("SERVER_ADDRESS", "127.0.0.1")));
+    }
+
+    @Test
+    void startupHookRunsAfterLoggingDirectoryConfiguration() {
+        AppServerEnv environment = new AppServerEnv(true, false);
+        AtomicBoolean hookRanAfterLoggingConfiguration = new AtomicBoolean();
+        AppServer application = new AppServer(
+                AppServerTest.class,
+                "app-server-test",
+                environment,
+                env -> hookRanAfterLoggingConfiguration.set(
+                        "/tmp".equals(System.getProperty("custom.logger.dir")))
+        );
+
+        ConfigurableApplicationContext started = application.start(Map.of(
+                "SERVER_ADDRESS", "127.0.0.1",
+                "SERVER_PORT", "9090",
+                "LOGGING_FILE_NAME", "/tmp/app-server-test.log"
+        ));
+
+        assertEquals(true, hookRanAfterLoggingConfiguration.get());
+        started.close();
     }
 
     @Test
@@ -68,13 +96,4 @@ class AppServerTest {
         );
     }
 
-    private static ConfigurableApplicationContext captureAndReturn(
-            Env env,
-            dev.orwell.env.EnvOption<String> port,
-            AtomicReference<String> receivedPort,
-            ConfigurableApplicationContext context
-    ) {
-        receivedPort.set(env.get(port));
-        return context;
-    }
 }

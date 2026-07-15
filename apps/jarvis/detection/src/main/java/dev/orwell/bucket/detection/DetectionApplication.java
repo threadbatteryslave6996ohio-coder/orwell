@@ -14,11 +14,8 @@ import java.util.Map;
  */
 @SpringBootApplication
 public class DetectionApplication {
-    public static final AppServer SERVER = AppServer.spring(DetectionApplication.class)
-            .name("detection")
-            .envs(DetectionEnvs.ENV)
-            .properties(DetectionEnvs::springProperties)
-            .build();
+    public static final AppServer SERVER =
+            new AppServer(DetectionApplication.class, "detection", DetectionEnvs.ENV);
 
     public static void main(String[] args) {
         SERVER.runOrExit(args);

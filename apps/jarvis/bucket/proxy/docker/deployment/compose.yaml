@@ -6,6 +6,7 @@ services:
       context: ../../../../..
       dockerfile: eyes-and-ears/bucket/proxy/docker/deployment/Dockerfile
     environment:
+      SERVER_ADDRESS: "0.0.0.0"
       SERVER_PORT: "5000"
       PROXY_STORAGE_PROVIDER: ${PROXY_STORAGE_PROVIDER:-aws}
       PROXY_STORAGE_MAX_FILE_SIZE: ${PROXY_STORAGE_MAX_FILE_SIZE:-5368709120}
@@ -27,7 +28,7 @@ services:
       AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
       AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
 
-      PROXY_AUTH_SERVER_BASE_URL: ${PROXY_AUTH_SERVER_BASE_URL:-http://host.docker.internal:8081}
+      AUTH_BASE_URL: ${AUTH_BASE_URL:-http://host.docker.internal:8081}
       AUTH_IDENTITY_PROVISIONING_KEY: ${AUTH_IDENTITY_PROVISIONING_KEY:-}
       PROXY_MANAGEMENT_USERNAME: ${PROXY_MANAGEMENT_USERNAME:-}
       PROXY_MANAGEMENT_PASSWORD: ${PROXY_MANAGEMENT_PASSWORD:-}

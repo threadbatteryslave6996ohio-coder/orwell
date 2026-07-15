@@ -12,13 +12,11 @@ public class ClippyAuthServerApplication {
      * Server descriptor: how the environment is fetched stays with whoever calls
      * {@code SERVER.start(...)} / {@code runOrExit}; the core never reads {@code .env} files itself.
      */
-    public static final AppServer SERVER = AppServer.spring(ClippyAuthServerApplication.class)
-            .name("auth-server")
-            .envs(AuthServerEnvs.ENV)
-            .properties(AuthServerEnvs::springProperties)
-            .loggingFile(env -> env.get(AuthServerEnvs.AUTH_LOGGING_FILE_NAME))
-            .beforeRun(ClippyAuthServerApplication::logLocalDatabaseIfApplicable)
-            .build();
+    public static final AppServer SERVER = new AppServer(
+            ClippyAuthServerApplication.class,
+            "auth-server",
+            AuthServerEnvs.ENV,
+            ClippyAuthServerApplication::logLocalDatabaseIfApplicable);
 
     public static void main(String[] args) {
         SERVER.runOrExit(args);

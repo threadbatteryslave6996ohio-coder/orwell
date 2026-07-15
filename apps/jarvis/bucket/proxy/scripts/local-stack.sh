@@ -81,11 +81,12 @@ cmd_auth() {
         (cd "$REPO_ROOT" && mvn -q -Pservers -pl auth/http-based/server -am package -DskipTests) || die "auth build failed"
     fi
     log "Running auth server on :$AUTH_PORT (Ctrl-C to stop)"
-    AUTH_SERVER_PORT="$AUTH_PORT" \
+    SERVER_ADDRESS=0.0.0.0 \
+    SERVER_PORT="$AUTH_PORT" \
     AUTH_DATASOURCE_URL="jdbc:postgresql://localhost:${PG_PORT}/auth" \
     AUTH_DATASOURCE_USERNAME=auth \
     AUTH_DATASOURCE_PASSWORD=auth \
-    AUTH_LOGGING_FILE_NAME="$REPO_ROOT/auth/http-based/server/target/auth-spring.log" \
+    LOGGING_FILE_NAME="$REPO_ROOT/auth/http-based/server/target/auth-spring.log" \
     AUTH_JPA_HIBERNATE_DDL_AUTO=update \
     AUTH_JPA_JDBC_TIME_ZONE=UTC \
     exec java -Dcustom.logger.dir="$REPO_ROOT/auth/http-based/server/target" -jar "$jar"
@@ -105,13 +106,15 @@ cmd_proxy() {
     AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" \
     AWS_SECRET_ACCESS_KEY="$MINIO_ROOT_PASSWORD" \
     AWS_REGION=us-east-1 \
+    SERVER_ADDRESS=0.0.0.0 \
+    SERVER_PORT="$PROXY_PORT" \
+    AUTH_BASE_URL="http://localhost:${AUTH_PORT}" \
     exec java \
         -Dproxy.s3.bucket-name="$BUCKET" \
         -Dproxy.s3.region=us-east-1 \
         -Dproxy.s3.endpoint="$S3_ENDPOINT" \
         -Dproxy.s3.path-style-access=true \
         -Dproxy.s3.server-side-encryption= \
-        -Dproxy.auth-server.base-url="http://localhost:${AUTH_PORT}" \
         -jar "$jar"
 }
 

@@ -6,34 +6,23 @@ logger/health/auth/JSON auto-configs, the invalid-JSON `@RestControllerAdvice`, 
 `@RequireAuthentication` guard, the shared Testcontainers base, and the removal of
 combined-server — are done.)
 
-## 1. Common `springProperties` keys → `AppServer` descriptor
+## 1. Common `springProperties` keys → `AppServerEnv` descriptor (completed)
 
-Every `*Envs` class still hand-maps the same universal keys: `server.port` (10 copies),
+Previously every `*Envs` class hand-mapped the same universal keys: `server.port` (10 copies),
 `server.address` (6 copies — and auth lacks one, so the auth server always binds `0.0.0.0`),
 `logging.file.name` (3), and the auth base-url (4 copies under **three different property
-names**: `clippy.auth.base-url`, `secrets.auth.base-url`, `proxy.auth-server.base-url`).
+names**; these are now standardized on `orwell.auth.base-url`).
 
-Proposed: the descriptor owns the common keys, `springProperties` keeps only app-specific ones.
+`AppServerEnv` now owns the common keys and each application adds only app-specific options and
+property mappings.
 
 ```java
-AppServer.spring(App.class)
-        .name("analyzer")
-        .envs(AnalyzerEnvs.ENV)
-        .port(ANALYZER_PORT).address(ANALYZER_HOST)   // -> server.port / server.address
-        .authBaseUrl(AUTH_SERVER_URL)                  // -> clippy.auth.base-url (one canonical key)
-        .loggingFile(LOGGING_FILE_NAME)                // -> logging.file.name + CustomLogger directory
-        .properties(AnalyzerEnvs::springProperties)
-        .build();
+new AppServer(AnalyzerApplication.class, "analyzer", AnalyzerEnvs.ENV)
 ```
 
 Sub-items:
-- Canonicalize the auth base-url property to one key so `AuthenticationStrategyConfiguration`
-  no longer needs a hardcoded default.
-- Collapse the `loggingFile` double-declaration (today auth/klippy/secrets pass the same env
-  value to both `.loggingFile(...)` and `springProperties`'s `logging.file.name`): the
-  bootstrap should read `logging.file.name` from the assembled properties and configure the
-  `CustomLogger` directory from it, deleting the builder branch.
-- Add the missing `AUTH_SERVER_HOST` option while at it.
+- Common environment variables are `SERVER_ADDRESS`, `SERVER_PORT`, `LOGGING_FILE_NAME`, and
+  `AUTH_BASE_URL`; the shared bootstrap maps them to Spring properties.
 
 ## 2. `spring-boot-maven-plugin` block → `server-parent` pluginManagement
 

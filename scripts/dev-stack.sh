@@ -88,8 +88,9 @@ write_env auth <<ENV
 AUTH_DATASOURCE_URL=jdbc:postgresql://localhost:5432/auth
 AUTH_DATASOURCE_USERNAME=auth
 AUTH_DATASOURCE_PASSWORD=auth
-AUTH_SERVER_PORT=$AUTH_PORT
-AUTH_LOGGING_FILE_NAME=logs/auth-server.log
+SERVER_PORT=$AUTH_PORT
+SERVER_ADDRESS=0.0.0.0
+LOGGING_FILE_NAME=logs/auth-server.log
 AUTH_JPA_HIBERNATE_DDL_AUTO=update
 AUTH_JPA_JDBC_TIME_ZONE=UTC
 ENV
@@ -99,7 +100,8 @@ SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/clippy
 SPRING_DATASOURCE_USERNAME=clippy
 SPRING_DATASOURCE_PASSWORD=clippy
 SERVER_PORT=$KLIPPY_PORT
-CLIPPY_AUTH_BASE_URL=$AUTH_BASE
+SERVER_ADDRESS=0.0.0.0
+AUTH_BASE_URL=$AUTH_BASE
 LOGGING_FILE_NAME=logs/clippy-server.log
 SPRING_JPA_HIBERNATE_DDL_AUTO=update
 SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE=UTC
@@ -109,21 +111,23 @@ write_env secrets <<ENV
 SECRETS_DATASOURCE_URL=jdbc:postgresql://localhost:5432/secrets
 SECRETS_DATASOURCE_USERNAME=secrets
 SECRETS_DATASOURCE_PASSWORD=secrets
-SECRETS_SERVER_PORT=$SECRETS_PORT
-SECRETS_LOGGING_FILE_NAME=logs/secrets-manager.log
+SERVER_PORT=$SECRETS_PORT
+SERVER_ADDRESS=0.0.0.0
+LOGGING_FILE_NAME=logs/secrets-manager.log
 SECRETS_JPA_HIBERNATE_DDL_AUTO=update
 SECRETS_JPA_JDBC_TIME_ZONE=UTC
-SECRETS_AUTH_BASE_URL=$AUTH_BASE
+AUTH_BASE_URL=$AUTH_BASE
 ENV
 
 write_env proxy <<ENV
 SERVER_PORT=$PROXY_PORT
+SERVER_ADDRESS=0.0.0.0
 PROXY_STORAGE_PROVIDER=aws
 PROXY_S3_BUCKET_NAME=local-bucket
 PROXY_S3_REGION=us-east-1
 PROXY_S3_ENDPOINT=http://localhost:1
 PROXY_S3_PATH_STYLE_ACCESS=true
-PROXY_AUTH_SERVER_BASE_URL=$AUTH_BASE
+AUTH_BASE_URL=$AUTH_BASE
 PROXY_MANAGEMENT_USERNAME=admin
 PROXY_MANAGEMENT_PASSWORD=change-me
 PROXY_MANAGEMENT_SESSION_SECRET=0123456789012345678901234567890123
@@ -131,13 +135,13 @@ PROXY_LOGGING_AUDIT_FILE=logs/proxy-audit.log
 ENV
 
 write_env keeboarder <<ENV
-HTTP_HOST=0.0.0.0
-HTTP_PORT=$KEEBOARDER_PORT
+SERVER_ADDRESS=0.0.0.0
+SERVER_PORT=$KEEBOARDER_PORT
 WEBSOCKET_ENABLED=true
 WEBSOCKET_CONTEXT_PATH=/ws
 REDIS_HOST=localhost
 REDIS_PORT=6379
-CLIPPY_AUTH_BASE_URL=$AUTH_BASE
+AUTH_BASE_URL=$AUTH_BASE
 KEEBOARDER_SERVER_ROUTE_PREFIX=/api
 ENV
 
@@ -177,7 +181,6 @@ REMOTE_SERVER_URL=http://localhost:$KLIPPY_PORT
 AUTH_SERVER_URL=$AUTH_BASE
 CLIENT_ID=$CLIP_ID
 CLIENT_SECRET=$CLIP_SECRET
-CLIPBOARD_BACKEND=wl-paste
 CLIPBOARD_POLL_INTERVAL_MS=1000
 ENV
 
@@ -191,9 +194,9 @@ tmux send-keys -t "$SESSION:file-locker" \
 
 tmux new-window -t "$SESSION" -n clip-client -c "$ROOT/apps/klippy"
 tmux send-keys -t "$SESSION:clip-client" \
-  "echo '[clip-client] needs a graphical session (wl-paste/xclip). Press Enter to start:'" C-m
+  "echo '[clip-client] starting with the persistent AWT backend when available:'" C-m
 tmux send-keys -t "$SESSION:clip-client" \
-  "java -jar clients/linux/target/clippy-linux-client-$VERSION.jar"
+  "java -jar clients/linux/target/clippy-linux-client-$VERSION.jar" C-m
 
 tmux new-window -t "$SESSION" -n keeboarder -c "$ROOT"
 tmux send-keys -t "$SESSION:keeboarder" \
@@ -201,7 +204,7 @@ tmux send-keys -t "$SESSION:keeboarder" \
 tmux send-keys -t "$SESSION:keeboarder" \
   "echo '[keeboarder] X11 ONLY; needs DISPLAY. Press Enter to start:'" C-m
 tmux send-keys -t "$SESSION:keeboarder" \
-  "java -jar apps/keeboarder/clients/linux/target/keeboarder-linux-client-$VERSION.jar"
+  "java -jar apps/keeboarder/clients/linux/target/keeboarder-linux-client-$VERSION.jar" C-m
 
 tmux new-window -t "$SESSION" -n jarvis -c "$ROOT/apps/jarvis/clients/linux"
 tmux send-keys -t "$SESSION:jarvis" \

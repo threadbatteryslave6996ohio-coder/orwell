@@ -34,7 +34,7 @@ class SecretsManagerIntegrationTest extends PostgresIntegrationTest {
 
     @DynamicPropertySource
     static void secretsProperties(DynamicPropertyRegistry registry) {
-        registry.add("secrets.auth.base-url", () -> "http://localhost:1");
+        registry.add("orwell.auth.base-url", () -> "http://localhost:1");
     }
 
     @LocalServerPort

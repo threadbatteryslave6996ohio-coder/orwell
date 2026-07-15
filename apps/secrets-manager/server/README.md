@@ -2,7 +2,7 @@
 
 Spring Boot service for secrets groups, environments, bundles, admins, and
 accessors. The server validates bearer tokens against the auth server
-configured by `SECRETS_AUTH_BASE_URL`.
+configured by `AUTH_BASE_URL`.
 
 ## Requirements
 
@@ -30,11 +30,11 @@ The required runtime variables are:
 - `SECRETS_DATASOURCE_URL`
 - `SECRETS_DATASOURCE_USERNAME`
 - `SECRETS_DATASOURCE_PASSWORD`
-- `SECRETS_SERVER_PORT`
-- `SECRETS_LOGGING_FILE_NAME`
+- `SERVER_PORT`
+- `LOGGING_FILE_NAME`
 - `SECRETS_JPA_HIBERNATE_DDL_AUTO`
 - `SECRETS_JPA_JDBC_TIME_ZONE`
-- `SECRETS_AUTH_BASE_URL`
+- `AUTH_BASE_URL`
 
 ## Routes
 

@@ -35,7 +35,7 @@ public final class LinuxKeyboardClient {
     private final AtomicReference<Session> sessionRef = new AtomicReference<>();
     private final AtomicReference<String> currentClientId;
     private final HttpAuthenticationStrategy authClient;
-    private final X11KeyboardMonitor keyboardMonitor;
+    private final KeyboardMonitor keyboardMonitor;
 
     private volatile String authToken;
 
@@ -43,7 +43,7 @@ public final class LinuxKeyboardClient {
         this.config = config;
         this.currentClientId = new AtomicReference<>(config.clientId());
         this.authClient = new HttpAuthenticationStrategy(config.authBaseUrl());
-        this.keyboardMonitor = new X11KeyboardMonitor(this::sendKeyEvent, this::handleKeyboardFailure);
+        this.keyboardMonitor = KeyboardMonitors.create(this::sendKeyEvent, this::handleKeyboardFailure);
     }
 
     public void run() throws Exception {

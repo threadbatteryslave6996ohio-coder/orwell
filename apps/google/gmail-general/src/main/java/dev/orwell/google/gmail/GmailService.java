@@ -52,7 +52,7 @@ public class GmailService {
     private volatile String currentAccessToken;
 
     public GmailService(
-            @Value("${clippy.auth.base-url}") String authBaseUrl,
+            @Value("${orwell.auth.base-url}") String authBaseUrl,
             @Value("${gmail.auth.client-id}") String authClientId,
             @Value("${gmail.auth.client-secret}") String authClientSecret,
             @Value("${gmail.store-dir}") String storeDir,

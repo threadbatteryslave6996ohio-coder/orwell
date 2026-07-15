@@ -2,7 +2,7 @@
 
 Java WebSocket server with Redis-backed client registry and a small HTTP API.
 The server authenticates against the Clippy auth server configured through
-`CLIPPY_AUTH_BASE_URL`.
+`AUTH_BASE_URL`.
 
 ## Requirements
 
@@ -27,11 +27,11 @@ nonblank shell overrides.
 
 The main runtime settings are:
 
-- `HTTP_HOST` and `HTTP_PORT` for the server (REST API and WebSocket share one port)
+- `SERVER_ADDRESS` and `SERVER_PORT` for the server (REST API and WebSocket share one port)
 - `WEBSOCKET_CONTEXT_PATH` for the WebSocket path prefix
 - `WEBSOCKET_ENABLED` to turn the WebSocket endpoint off entirely
 - `REDIS_HOST` and `REDIS_PORT` for client registry storage
-- `CLIPPY_AUTH_BASE_URL` for token validation
+- `AUTH_BASE_URL` for token validation
 - `KEEBOARDER_SERVER_ROUTE_PREFIX` for the HTTP API prefix
 
 Defaults are `0.0.0.0:8025`, `/ws` for the WebSocket context path, and `/api`

@@ -19,7 +19,7 @@ public class AuthenticationStrategyConfiguration {
     @Bean
     @ConditionalOnMissingBean(AuthenticationStrategy.class)
     AuthenticationStrategy sharedHttpAuthenticationStrategy(
-            @Value("${clippy.auth.base-url:http://localhost:8081}") String authBaseUrl
+            @Value("${orwell.auth.base-url:http://localhost:8081}") String authBaseUrl
     ) {
         return new HttpAuthenticationStrategy(authBaseUrl);
     }

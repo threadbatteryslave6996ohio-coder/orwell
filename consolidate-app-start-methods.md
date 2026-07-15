@@ -59,18 +59,14 @@ parallel raw-HTTP runner. `combined-server` confirms the split: it merges the si
 apps into one context via `@Import`, but alerting/detection are absent — no Spring beans
 to merge.
 
-## Proposed change (Spring apps only)
+## Implemented change (Spring apps only)
 
-Collapse the `Launcher` + `start(Env)` + `start(Map)` triplet into a single descriptor/builder
-on `AppServer`, e.g.:
+The `Launcher` + `start(Env)` + `start(Map)` triplet is now represented by a direct
+`AppServer` constructor and one `AppServerEnv` descriptor, e.g.:
 
 ```java
-public static final AppServer SERVER = AppServer.spring()
-    .envs(AuthServerEnvs.ENV)
-    .app(ClippyAuthServerApplication.class)
-    .properties(AuthServerEnvs::springProperties)
-    .beforeRun(env -> logLocalDatabaseIfApplicable(env))   // optional
-    .build();
+public static final AppServer SERVER = new AppServer(
+    ClippyAuthServerApplication.class, "auth-server", AuthServerEnvs.ENV);
 ```
 
 This deletes the repeated triplet across the six Spring apps. Only the `springProperties`

@@ -216,8 +216,8 @@ Same set used by `klippy-server` and `auth-http-server`:
 | `SECRETS_DATASOURCE_URL` | `spring.datasource.url` |
 | `SECRETS_DATASOURCE_USERNAME` | `spring.datasource.username` |
 | `SECRETS_DATASOURCE_PASSWORD` | `spring.datasource.password` |
-| `SECRETS_SERVER_PORT` | `server.port` |
-| `SECRETS_LOGGING_FILE_NAME` | `logging.file.name` |
+| `SERVER_PORT` | `server.port` |
+| `LOGGING_FILE_NAME` | `logging.file.name` |
 | `SECRETS_JPA_HIBERNATE_DDL_AUTO` | `spring.jpa.hibernate.ddl-auto` |
 | `SECRETS_JPA_JDBC_TIME_ZONE` | `spring.jpa.properties.hibernate.jdbc.time_zone` |
-| `SECRETS_AUTH_BASE_URL` | `secrets.auth.base-url` |
+| `AUTH_BASE_URL` | `orwell.auth.base-url` |

@@ -13,11 +13,8 @@ import java.util.Map;
  */
 @SpringBootApplication
 public class AlertApplication {
-    public static final AppServer SERVER = AppServer.spring(AlertApplication.class)
-            .name("alerting")
-            .envs(AlertEnvs.ENV)
-            .properties(AlertEnvs::springProperties)
-            .build();
+    public static final AppServer SERVER =
+            new AppServer(AlertApplication.class, "alerting", AlertEnvs.ENV);
 
     public static void main(String[] args) {
         SERVER.runOrExit(args);

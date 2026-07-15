@@ -6,16 +6,16 @@
 set -e
 
 # Default values
-HTTP_HOST="${HTTP_HOST:-0.0.0.0}"
-HTTP_PORT="${HTTP_PORT:-8025}"
+SERVER_ADDRESS="${SERVER_ADDRESS:-0.0.0.0}"
+SERVER_PORT="${SERVER_PORT:-8025}"
 REDIS_HOST="${REDIS_HOST:-localhost}"
 REDIS_PORT="${REDIS_PORT:-6379}"
 
 echo "=========================================="
 echo "Keeboarder Server Startup"
 echo "=========================================="
-echo "HTTP API:  http://$HTTP_HOST:$HTTP_PORT/api"
-echo "WebSocket: ws://$HTTP_HOST:$HTTP_PORT/ws/chat"
+echo "HTTP API:  http://$SERVER_ADDRESS:$SERVER_PORT/api"
+echo "WebSocket: ws://$SERVER_ADDRESS:$SERVER_PORT/ws/chat"
 echo "Redis: $REDIS_HOST:$REDIS_PORT"
 echo ""
 
@@ -29,5 +29,6 @@ fi
 
 # Start the server
 echo "Starting Keeboarder server..."
-export HTTP_HOST HTTP_PORT REDIS_HOST REDIS_PORT
+export SERVER_ADDRESS SERVER_PORT REDIS_HOST REDIS_PORT
+export AUTH_BASE_URL="${AUTH_BASE_URL:-http://localhost:8081}"
 java -jar target/websocket-redis-server-0.1.0-SNAPSHOT-exec.jar

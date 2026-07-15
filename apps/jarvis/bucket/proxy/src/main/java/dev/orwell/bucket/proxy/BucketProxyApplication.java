@@ -20,11 +20,8 @@ public class BucketProxyApplication {
      * Server descriptor: how the environment is fetched stays with whoever calls
      * {@code SERVER.start(...)} / {@code runOrExit}; the core never reads {@code .env} files itself.
      */
-    public static final AppServer SERVER = AppServer.spring(BucketProxyApplication.class)
-            .name("bucket-proxy")
-            .envs(JarvisProxyEnvs.ENV)
-            .properties(JarvisProxyEnvs::springProperties)
-            .build();
+    public static final AppServer SERVER =
+            new AppServer(BucketProxyApplication.class, "bucket-proxy", JarvisProxyEnvs.ENV);
 
     /**
      * By default boots the Spring web server; passing {@code --mode=stream-worker} runs the bundled

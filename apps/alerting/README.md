@@ -22,8 +22,8 @@ SMTP settings (see `.env.example`):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ALERT_SERVER_HOST` | `127.0.0.1` | Alert server bind address |
-| `ALERT_SERVER_PORT` | `9000` | Alert server port |
+| `SERVER_ADDRESS` | `127.0.0.1` | Alert server bind address |
+| `SERVER_PORT` | `9000` | Alert server port |
 | `ALERT_EMAIL_ENABLED` | `false` | Enable email delivery |
 | `ALERT_EMAIL_TO` | — | Recipient for alert emails |
 | `ALERT_EMAIL_FROM` | — | Sender address (defaults to `ALERT_EMAIL_TO`) |

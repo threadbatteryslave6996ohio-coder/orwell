@@ -57,22 +57,6 @@ STREAM_SOURCE_URL=rtsp://127.0.0.1:8554/live
 STREAM_ANALYSIS_SOURCE_URL=rtsp://127.0.0.1:8554/live
 STREAM_ANALYSIS_ENDPOINT=${stream_analysis_endpoint_json}
 STREAM_ANALYSIS_WORKER_JAR=$PROXY_DIR/publish/bucket-proxy.jar
-ALERT_SERVER_HOST=127.0.0.1
-ALERT_SERVER_PORT=9000
-ALERT_LOG_FILE=$STREAM_LOG_DIR/alerts.log
-ALERT_EMAIL_ENABLED=false
-ALERT_EMAIL_TO=
-ALERT_EMAIL_FROM=
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_USERNAME=
-SMTP_PASSWORD=
-SMTP_USE_TLS=true
-DETECTION_SERVER_HOST=127.0.0.1
-DETECTION_SERVER_PORT=9001
-DETECTION_ALERT_URL=http://127.0.0.1:9000/alerts
-DETECTION_ALERT_COOLDOWN_SECONDS=60
-DETECTION_MIN_CONFIDENCE=0.0
 STREAM_LOG_DIR=$STREAM_LOG_DIR
 STREAM_RECORD_DIR=$STREAM_RECORD_DIR
 STREAM_SEGMENT_SECONDS=3600
@@ -87,6 +71,28 @@ STREAM_INPUT_FORMAT=rtsp
 STREAM_RTMP_PORT=1935
 STREAM_RTSP_PORT=8554
 STREAMENVEOF
+
+cat > /etc/default/stream-alert <<STREAMALERTENVEOF
+SERVER_ADDRESS=127.0.0.1
+SERVER_PORT=9000
+ALERT_LOG_FILE=$STREAM_LOG_DIR/alerts.log
+ALERT_EMAIL_ENABLED=false
+ALERT_EMAIL_TO=
+ALERT_EMAIL_FROM=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_USE_TLS=true
+STREAMALERTENVEOF
+
+cat > /etc/default/stream-detection <<'STREAMDETECTIONENVEOF'
+SERVER_ADDRESS=127.0.0.1
+SERVER_PORT=9001
+DETECTION_ALERT_URL=http://127.0.0.1:9000/alerts
+DETECTION_ALERT_COOLDOWN_SECONDS=60
+DETECTION_MIN_CONFIDENCE=0.0
+STREAMDETECTIONENVEOF
 
 cat > /etc/systemd/system/mediamtx.service <<'MEDIAMTXEOF'
 [Unit]
@@ -113,7 +119,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/default/streaming
+EnvironmentFile=/etc/default/stream-alert
 ExecStart=/usr/bin/java -jar /opt/streaming/publish/alerting.jar
 Restart=always
 RestartSec=10
@@ -132,7 +138,7 @@ Wants=network-online.target mediamtx.service stream-alert.service
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/default/streaming
+EnvironmentFile=/etc/default/stream-detection
 ExecStart=/usr/bin/java -jar /opt/streaming/publish/bucket-detection.jar
 Restart=always
 RestartSec=10
@@ -197,9 +203,10 @@ Restart=always
 RestartSec=10
 Environment=JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8
 Environment="SERVER_PORT=5000"
+Environment="SERVER_ADDRESS=0.0.0.0"
 Environment="PROXY_S3_BUCKET_NAME=${bucket_name}"
 Environment="PROXY_S3_REGION=${aws_region}"
-Environment="PROXY_AUTH_SERVER_BASE_URL=${auth_server_base_url_json}"
+Environment="AUTH_BASE_URL=${auth_server_base_url_json}"
 Environment="AUTH_IDENTITY_PROVISIONING_KEY=${auth_identity_provisioning_key_json}"
 Environment="PROXY_MANAGEMENT_USERNAME=${proxy_management_username_json}"
 Environment="PROXY_MANAGEMENT_PASSWORD=${proxy_management_password_json}"

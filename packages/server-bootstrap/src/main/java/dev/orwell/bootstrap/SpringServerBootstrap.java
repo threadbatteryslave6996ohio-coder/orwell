@@ -13,45 +13,39 @@ public final class SpringServerBootstrap {
     }
 
     /**
-     * Shared server startup shell: configure the logging directory from {@code loggingFileName},
-     * run any server-specific pre-start hook, then boot Spring with {@code properties}.
+     * Shared server startup shell. The logging directory is derived from the same
+     * {@code logging.file.name} property that Spring receives.
      */
     public static ConfigurableApplicationContext start(
             Class<?> applicationClass,
-            String loggingFileName,
-            Runnable beforeRun,
             Map<String, Object> properties,
-            String propertySourceName
-    ) {
-        CustomLogger.configureDirectoryFromLogFile(loggingFileName);
-        if (beforeRun != null) {
-            beforeRun.run();
-        }
-        return run(applicationClass, properties, propertySourceName);
-    }
-
-    public static ConfigurableApplicationContext start(
-            Class<?> applicationClass,
-            String loggingFileName,
-            Map<String, Object> properties,
-            String propertySourceName
-    ) {
-        return start(applicationClass, loggingFileName, null, properties, propertySourceName);
-    }
-
-    public static ConfigurableApplicationContext run(
-            Class<?> applicationClass,
-            Map<String, Object> properties,
+            Runnable startupHook,
             String propertySourceName
     ) {
         Objects.requireNonNull(applicationClass, "applicationClass");
         Objects.requireNonNull(properties, "properties");
         Objects.requireNonNull(propertySourceName, "propertySourceName");
 
+        Object loggingFileName = properties.get("logging.file.name");
+        if (loggingFileName != null) {
+            CustomLogger.configureDirectoryFromLogFile(loggingFileName.toString());
+        }
+        if (startupHook != null) {
+            startupHook.run();
+        }
+
         SpringApplication application = new SpringApplication(applicationClass);
         application.setDefaultProperties(properties);
         application.addInitializers(context -> context.getEnvironment().getPropertySources()
                 .addFirst(new MapPropertySource(propertySourceName, properties)));
         return application.run();
+    }
+
+    public static ConfigurableApplicationContext start(
+            Class<?> applicationClass,
+            Map<String, Object> properties,
+            String propertySourceName
+    ) {
+        return start(applicationClass, properties, null, propertySourceName);
     }
 }

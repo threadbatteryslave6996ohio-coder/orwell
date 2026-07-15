@@ -5,9 +5,9 @@ and streams Linux keyboard events.
 
 ## Scope
 
-- Global keyboard capture is supported for X11 sessions.
-- Wayland is not supported for global capture. The client fails explicitly
-  when started from a Wayland or headless session.
+- X11 uses the X11 keymap monitor.
+- Wayland uses the Linux evdev input devices directly, so the user must be
+  allowed to read `/dev/input/event*` devices.
 
 ## Build
 
@@ -38,6 +38,17 @@ Then run:
 java -jar apps/keeboarder/clients/linux/target/keeboarder-linux-client-0.1.0.jar
 ```
 
+On Wayland, grant the logged-in user access to input devices before starting
+the client. On Ubuntu/Debian, add the user to the `input` group and log in
+again:
+
+```bash
+sudo usermod -aG input "$USER"
+```
+
+The backend is selected automatically from `XDG_SESSION_TYPE`. It can be
+overridden with `KEEBOARDER_KEYBOARD_BACKEND=auto`, `x11`, or `evdev`.
+
 ## Behavior
 
 - Logs in to the auth server first using `clientId` and `clientSecret`.
@@ -47,7 +58,8 @@ java -jar apps/keeboarder/clients/linux/target/keeboarder-linux-client-0.1.0.jar
 
 ## Notes
 
-- Start the client from a logged-in X11 desktop session with `DISPLAY` set.
+- Start the client from a logged-in desktop session. Wayland uses evdev and
+  X11 uses `DISPLAY`.
 - The Keeboarder server serves its REST API and the websocket endpoint
   (`/ws/chat`) on the same HTTP port, typically `8025`; the auth server runs
   separately (typically `http://localhost:8081`).

@@ -11,24 +11,25 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntFunction;
 
-final class X11KeyboardMonitor {
+final class X11KeyboardMonitor implements KeyboardMonitor {
     private static final long POLL_INTERVAL_MS = 25L;
     private static final long REPEAT_DELAY_MS = 400L;
     private static final long REPEAT_INTERVAL_MS = 35L;
     private static final Set<String> NON_REPEATABLE_KEYS = Set.of("shift", "control", "alt", "super", "caps_lock");
 
-    private final KeyEventListener listener;
-    private final FailureListener failureListener;
+    private final KeyboardMonitors.KeyEventListener listener;
+    private final KeyboardMonitors.FailureListener failureListener;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final Map<Integer, Long> nextRepeatAtMillis = new java.util.concurrent.ConcurrentHashMap<>();
     private volatile Thread worker;
 
-    X11KeyboardMonitor(KeyEventListener listener, FailureListener failureListener) {
+    X11KeyboardMonitor(KeyboardMonitors.KeyEventListener listener,
+                       KeyboardMonitors.FailureListener failureListener) {
         this.listener = listener;
         this.failureListener = failureListener;
     }
 
-    void start() {
+    public void start() {
         if (!running.compareAndSet(false, true)) {
             return;
         }
@@ -37,7 +38,7 @@ final class X11KeyboardMonitor {
         worker.start();
     }
 
-    void stop() {
+    public void stop() {
         running.set(false);
         Thread thread = worker;
         if (thread != null && thread != Thread.currentThread()) {
@@ -141,16 +142,6 @@ final class X11KeyboardMonitor {
         NativeLong keysym = X11Library.INSTANCE.XkbKeycodeToKeysym(display, keyCode, 0, 0);
         String rawName = keysym.longValue() == 0 ? null : X11Library.INSTANCE.XKeysymToString(keysym);
         return X11KeyNames.normalize(rawName, keyCode);
-    }
-
-    @FunctionalInterface
-    interface KeyEventListener {
-        void onKeyEvent(String eventName, int keyCode, String keyName, List<String> modifiers);
-    }
-
-    @FunctionalInterface
-    interface FailureListener {
-        void onFailure(RuntimeException exception);
     }
 
     private record DisplayHandle(X11Library.Display display) implements AutoCloseable {

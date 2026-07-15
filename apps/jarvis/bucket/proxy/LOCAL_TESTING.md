@@ -71,7 +71,7 @@ starts it with:
 | `proxy.s3.path-style-access` | `true` | MinIO needs path-style bucket addressing |
 | `proxy.s3.server-side-encryption` | *(empty)* | Disable SSE-S3 (a bare MinIO has no KMS) |
 | `proxy.s3.bucket-name` | `keeboarder-recordings` | Local bucket name |
-| `proxy.auth-server.base-url` | `http://localhost:8081` | Local auth server |
+| `orwell.auth.base-url` | `http://localhost:8081` | Local auth server |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | `minioadmin` | MinIO root credentials |
 
 All of these default to production-safe values when unset: no endpoint override

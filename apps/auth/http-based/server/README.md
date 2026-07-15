@@ -44,17 +44,17 @@ All values are required. These values provide a local configuration.
 
 | Environment variable | Example | Purpose |
 | --- | --- | --- |
-| `AUTH_SERVER_PORT` | `8081` | HTTP port for the auth server. |
+| `SERVER_PORT` | `8081` | HTTP port for the auth server. |
 | `AUTH_DATASOURCE_URL` | `jdbc:postgresql://localhost:5433/auth` | PostgreSQL JDBC URL. |
 | `AUTH_DATASOURCE_USERNAME` | `auth` | Database username. |
 | `AUTH_DATASOURCE_PASSWORD` | `auth` | Database password. |
-| `AUTH_LOGGING_FILE_NAME` | `logs/auth-server.log` | File path for server logs. |
+| `LOGGING_FILE_NAME` | `logs/auth-server.log` | File path for server logs. |
 | `AUTH_JPA_HIBERNATE_DDL_AUTO` | `update` | Hibernate schema-management mode. |
 | `AUTH_JPA_JDBC_TIME_ZONE` | `UTC` | Hibernate JDBC timezone. |
 
 ## Logging
 
-Spring Boot writes normal logs to `AUTH_LOGGING_FILE_NAME`. A separate
+Spring Boot writes normal logs to `LOGGING_FILE_NAME`. A separate
 `auth-server.txt` audit log in the same directory records startup, login, token
 issuance, and token-check events. Raw secrets and bearer tokens are never
 logged.
@@ -192,7 +192,7 @@ curl -s http://localhost:8081/tokens/check \
 Run this auth server before starting the main app server. Configure the app server with this auth base URL:
 
 ```text
-CLIPPY_AUTH_BASE_URL=http://localhost:8081
+AUTH_BASE_URL=http://localhost:8081
 ```
 
 If you are building a separate module that depends on the generated auth client directly, install that client locally first:

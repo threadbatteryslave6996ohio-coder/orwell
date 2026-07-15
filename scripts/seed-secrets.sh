@@ -90,8 +90,8 @@ AUTH_GROUP=$(create_group "auth-server" "Authentication service (apps/auth)")
 AUTH_DB_URL=$(create_env "$AUTH_GROUP"  "AUTH_DATASOURCE_URL"      "jdbc:postgresql://localhost:5433/auth")
 AUTH_DB_USER=$(create_env "$AUTH_GROUP" "AUTH_DATASOURCE_USERNAME" "auth")
 AUTH_DB_PASS=$(create_env "$AUTH_GROUP" "AUTH_DATASOURCE_PASSWORD" "auth")
-AUTH_PORT=$(create_env "$AUTH_GROUP"    "AUTH_SERVER_PORT"         "8081")
-AUTH_LOG=$(create_env "$AUTH_GROUP"     "AUTH_LOGGING_FILE_NAME"   "logs/auth-server.log")
+AUTH_PORT=$(create_env "$AUTH_GROUP"    "SERVER_PORT"              "8081")
+AUTH_LOG=$(create_env "$AUTH_GROUP"     "LOGGING_FILE_NAME"         "logs/auth-server.log")
 AUTH_DDL=$(create_env "$AUTH_GROUP"     "AUTH_JPA_HIBERNATE_DDL_AUTO" "update")
 AUTH_TZ=$(create_env "$AUTH_GROUP"      "AUTH_JPA_JDBC_TIME_ZONE"  "UTC")
 
@@ -105,7 +105,7 @@ KLIP_DB_URL=$(create_env "$KLIP_GROUP"  "SPRING_DATASOURCE_URL"      "jdbc:postg
 KLIP_DB_USER=$(create_env "$KLIP_GROUP" "SPRING_DATASOURCE_USERNAME" "clippy")
 KLIP_DB_PASS=$(create_env "$KLIP_GROUP" "SPRING_DATASOURCE_PASSWORD" "clippy")
 KLIP_PORT=$(create_env "$KLIP_GROUP"    "SERVER_PORT"                "8082")
-KLIP_AUTH=$(create_env "$KLIP_GROUP"    "CLIPPY_AUTH_BASE_URL"       "http://localhost:8081")
+KLIP_AUTH=$(create_env "$KLIP_GROUP"    "AUTH_BASE_URL"              "http://localhost:8081")
 KLIP_LOG=$(create_env "$KLIP_GROUP"     "LOGGING_FILE_NAME"          "logs/clippy-server.log")
 KLIP_DDL=$(create_env "$KLIP_GROUP"     "SPRING_JPA_HIBERNATE_DDL_AUTO" "update")
 KLIP_TZ=$(create_env "$KLIP_GROUP"      "SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE" "UTC")
@@ -119,11 +119,11 @@ SEC_GROUP=$(create_group "secrets-server" "Secrets manager (apps/secrets-manager
 SEC_DB_URL=$(create_env "$SEC_GROUP"  "SECRETS_DATASOURCE_URL"      "jdbc:postgresql://localhost:5435/secrets")
 SEC_DB_USER=$(create_env "$SEC_GROUP" "SECRETS_DATASOURCE_USERNAME" "secrets")
 SEC_DB_PASS=$(create_env "$SEC_GROUP" "SECRETS_DATASOURCE_PASSWORD" "secrets")
-SEC_PORT=$(create_env "$SEC_GROUP"    "SECRETS_SERVER_PORT"         "8085")
-SEC_LOG=$(create_env "$SEC_GROUP"     "SECRETS_LOGGING_FILE_NAME"   "logs/secrets-server.log")
+SEC_PORT=$(create_env "$SEC_GROUP"    "SERVER_PORT"                  "8085")
+SEC_LOG=$(create_env "$SEC_GROUP"     "LOGGING_FILE_NAME"             "logs/secrets-server.log")
 SEC_DDL=$(create_env "$SEC_GROUP"     "SECRETS_JPA_HIBERNATE_DDL_AUTO" "update")
 SEC_TZ=$(create_env "$SEC_GROUP"      "SECRETS_JPA_JDBC_TIME_ZONE"  "UTC")
-SEC_AUTH=$(create_env "$SEC_GROUP"    "SECRETS_AUTH_BASE_URL"       "http://localhost:8081")
+SEC_AUTH=$(create_env "$SEC_GROUP"    "AUTH_BASE_URL"                "http://localhost:8081")
 
 # ============================================================================
 # 4. KEEBOARDER CHAT SERVER
@@ -131,11 +131,11 @@ SEC_AUTH=$(create_env "$SEC_GROUP"    "SECRETS_AUTH_BASE_URL"       "http://loca
 echo "[keeboarder-server]"
 
 KEEB_GROUP=$(create_group "keeboarder-server" "WebSocket chat server (apps/keeboarder)")
-KEEB_HTTP_HOST=$(create_env "$KEEB_GROUP" "HTTP_HOST"  "0.0.0.0")
-KEEB_HTTP_PORT=$(create_env "$KEEB_GROUP" "HTTP_PORT"  "8025")
+KEEB_HTTP_HOST=$(create_env "$KEEB_GROUP" "SERVER_ADDRESS"  "0.0.0.0")
+KEEB_HTTP_PORT=$(create_env "$KEEB_GROUP" "SERVER_PORT"    "8025")
 KEEB_REDIS_HOST=$(create_env "$KEEB_GROUP" "REDIS_HOST"   "localhost")
 KEEB_REDIS_PORT=$(create_env "$KEEB_GROUP" "REDIS_PORT"   "6379")
-KEEB_AUTH=$(create_env "$KEEB_GROUP"     "CLIPPY_AUTH_BASE_URL" "http://localhost:8081")
+KEEB_AUTH=$(create_env "$KEEB_GROUP"     "AUTH_BASE_URL" "http://localhost:8081")
 
 # ============================================================================
 # 6. JARVIS BUCKET PROXY
@@ -168,8 +168,8 @@ JARVIS_AUDIT=$(create_env "$JARVIS_GROUP"     "PROXY_LOGGING_AUDIT_FILE"        
 echo "[jarvis-detection]"
 
 DETECT_GROUP=$(create_group "jarvis-detection" "Person detection service (apps/jarvis/detection)")
-DETECT_HOST=$(create_env "$DETECT_GROUP"  "DETECTION_SERVER_HOST"       "127.0.0.1")
-DETECT_PORT=$(create_env "$DETECT_GROUP"  "DETECTION_SERVER_PORT"       "9001")
+DETECT_HOST=$(create_env "$DETECT_GROUP"  "SERVER_ADDRESS"       "127.0.0.1")
+DETECT_PORT=$(create_env "$DETECT_GROUP"  "SERVER_PORT"       "9001")
 DETECT_ALERT_URL=$(create_env "$DETECT_GROUP" "DETECTION_ALERT_URL"     "http://127.0.0.1:9000/alerts")
 DETECT_COOLDOWN=$(create_env "$DETECT_GROUP" "DETECTION_ALERT_COOLDOWN_SECONDS" "60")
 DETECT_CONFIDENCE=$(create_env "$DETECT_GROUP" "DETECTION_MIN_CONFIDENCE" "0.0")
@@ -180,8 +180,8 @@ DETECT_CONFIDENCE=$(create_env "$DETECT_GROUP" "DETECTION_MIN_CONFIDENCE" "0.0")
 echo "[jarvis-alerting]"
 
 ALERT_GROUP=$(create_group "jarvis-alerting" "Alert dispatch service (apps/jarvis/bucket/alerting)")
-ALERT_HOST=$(create_env "$ALERT_GROUP"  "ALERT_SERVER_HOST"       "127.0.0.1")
-ALERT_PORT=$(create_env "$ALERT_GROUP"  "ALERT_SERVER_PORT"       "9000")
+ALERT_HOST=$(create_env "$ALERT_GROUP"  "SERVER_ADDRESS"       "127.0.0.1")
+ALERT_PORT=$(create_env "$ALERT_GROUP"  "SERVER_PORT"       "9000")
 ALERT_EMAIL_ENABLED=$(create_env "$ALERT_GROUP" "ALERT_EMAIL_ENABLED" "false")
 ALERT_EMAIL_TO=$(create_env "$ALERT_GROUP"    "ALERT_EMAIL_TO"    "")
 ALERT_SMTP_HOST=$(create_env "$ALERT_GROUP"   "SMTP_HOST"         "")
