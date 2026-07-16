@@ -1,4 +1,4 @@
-package dev.orwell.bootstrap;
+package dev.orwell.bootstrap.web;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;

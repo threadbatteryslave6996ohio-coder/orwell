@@ -1,4 +1,4 @@
-package dev.orwell.bootstrap;
+package dev.orwell.bootstrap.auth;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

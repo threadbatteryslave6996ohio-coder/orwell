@@ -1,4 +1,4 @@
-package dev.orwell.bootstrap;
+package dev.orwell.bootstrap.launch;
 
 import dev.orwell.env.Env;
 import dev.orwell.env.EnvClassBuilder;

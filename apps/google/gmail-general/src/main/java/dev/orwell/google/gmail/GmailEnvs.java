@@ -1,6 +1,6 @@
 package dev.orwell.google.gmail;
 
-import dev.orwell.bootstrap.AppServerEnv;
+import dev.orwell.bootstrap.launch.AppServerEnv;
 import dev.orwell.env.EnvOption;
 import dev.orwell.env.EnvType;
 

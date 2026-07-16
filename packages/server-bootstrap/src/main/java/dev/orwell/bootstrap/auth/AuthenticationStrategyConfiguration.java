@@ -1,4 +1,4 @@
-package dev.orwell.bootstrap;
+package dev.orwell.bootstrap.auth;
 
 import dev.orwell.auth.AuthenticationContext;
 import dev.orwell.auth.AuthenticationStrategy;

@@ -1,7 +1,7 @@
 package dev.orwell.bucket.detection;
 
-import dev.orwell.bootstrap.AppServer;
-import dev.orwell.bootstrap.HealthDetailsProvider;
+import dev.orwell.bootstrap.launch.AppServer;
+import dev.orwell.bootstrap.health.HealthDetailsProvider;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 

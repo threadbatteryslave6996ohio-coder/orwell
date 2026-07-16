@@ -1,4 +1,4 @@
-package dev.orwell.bootstrap;
+package dev.orwell.bootstrap.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 

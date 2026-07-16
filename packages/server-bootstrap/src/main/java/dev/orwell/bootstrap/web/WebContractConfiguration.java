@@ -1,6 +1,8 @@
-package dev.orwell.bootstrap;
+package dev.orwell.bootstrap.web;
 
 import dev.orwell.auth.AuthenticationContext;
+import dev.orwell.bootstrap.auth.RequireAuthentication;
+import dev.orwell.bootstrap.auth.RequireAuthenticationInterceptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

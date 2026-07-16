@@ -1,4 +1,4 @@
-package dev.orwell.bootstrap;
+package dev.orwell.bootstrap.launch;
 
 import dev.orwell.logging.CustomLogger;
 import org.springframework.boot.SpringApplication;

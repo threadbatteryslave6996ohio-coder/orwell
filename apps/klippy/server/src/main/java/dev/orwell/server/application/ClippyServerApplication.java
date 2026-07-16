@@ -1,6 +1,6 @@
 package dev.orwell.server.application;
 
-import dev.orwell.bootstrap.AppServer;
+import dev.orwell.bootstrap.launch.AppServer;
 import dev.orwell.server.config.ServerEnvs;
 import dev.orwell.server.repository.ClipboardEntryRepository;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.orwell.auth.http.api.LoginHttpResponse;
 import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
-import dev.orwell.bootstrap.SharedJson;
+import dev.orwell.bootstrap.web.SharedJson;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 

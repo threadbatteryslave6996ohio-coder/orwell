@@ -1,6 +1,6 @@
 package dev.orwell.analyzer;
 
-import dev.orwell.bootstrap.RequireAuthentication;
+import dev.orwell.bootstrap.auth.RequireAuthentication;
 import dev.orwell.google.gmail.GmailMessage;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

@@ -1,7 +1,7 @@
 package dev.orwell.google.gmail;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.orwell.bootstrap.RequireAuthentication;
+import dev.orwell.bootstrap.auth.RequireAuthentication;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
