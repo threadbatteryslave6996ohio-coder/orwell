@@ -27,6 +27,24 @@ AUTH_BASE="http://localhost:$AUTH_PORT"
 CLIP_ID="linux-clip";  CLIP_SECRET="clip-secret-123"
 KEEB_ID="linux-keeb";  KEEB_SECRET="keeb-secret-123"
 
+detect_keeboarder_backend() {
+  case "${XDG_SESSION_TYPE:-}" in
+    wayland) echo "evdev" ;;
+    x11)     echo "x11" ;;
+    *)
+      if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+        echo "evdev"
+      elif [ -n "${DISPLAY:-}" ]; then
+        echo "x11"
+      else
+        echo "auto"
+      fi
+      ;;
+  esac
+}
+
+KEEBOARDER_BACKEND="$(detect_keeboarder_backend)"
+
 # name : jar-path pairs for every server we manage
 declare -A JARS=(
   [auth]="$ROOT/apps/auth/http-based/server/target/auth-http-server-$VERSION-exec.jar"
@@ -200,9 +218,9 @@ tmux send-keys -t "$SESSION:clip-client" \
 
 tmux new-window -t "$SESSION" -n keeboarder -c "$ROOT"
 tmux send-keys -t "$SESSION:keeboarder" \
-  "export KEEBOARDER_SERVER_URL=ws://localhost:$KEEBOARDER_PORT/ws/chat KEEBOARDER_AUTH_BASE_URL=$AUTH_BASE KEEBOARDER_CLIENT_ID=$KEEB_ID KEEBOARDER_CLIENT_SECRET=$KEEB_SECRET KEEBOARDER_CLIENT_NAME=My-Linux" C-m
+  "export KEEBOARDER_SERVER_URL=ws://localhost:$KEEBOARDER_PORT/ws/chat KEEBOARDER_AUTH_BASE_URL=$AUTH_BASE KEEBOARDER_CLIENT_ID=$KEEB_ID KEEBOARDER_CLIENT_SECRET=$KEEB_SECRET KEEBOARDER_CLIENT_NAME=My-Linux KEEBOARDER_KEYBOARD_BACKEND=$KEEBOARDER_BACKEND" C-m
 tmux send-keys -t "$SESSION:keeboarder" \
-  "echo '[keeboarder] X11 ONLY; needs DISPLAY. Press Enter to start:'" C-m
+  "echo '[keeboarder] starting Linux client with $KEEBOARDER_BACKEND keyboard backend'" C-m
 tmux send-keys -t "$SESSION:keeboarder" \
   "java -jar apps/keeboarder/clients/linux/target/keeboarder-linux-client-$VERSION.jar" C-m
 
@@ -219,5 +237,6 @@ echo "  klippy:     http://localhost:$KLIPPY_PORT"
 echo "  secrets:    http://localhost:$SECRETS_PORT"
 echo "  jarvis:     http://localhost:$PROXY_PORT"
 echo "  keeboarder: http://localhost:$KEEBOARDER_PORT   WebSocket: ws://localhost:$KEEBOARDER_PORT/ws/chat"
+echo "  keeboarder client: tmux window 'keeboarder' ($KEEBOARDER_BACKEND backend)"
 echo "Attach:  tmux attach -t $SESSION"
 echo "Stop:    $0 down"
