@@ -15,7 +15,7 @@
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-server-bootstrap</artifactId>
+            <artifactId>server-bootstrap</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
@@ -23,11 +23,11 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-utils</artifactId>
+            <artifactId>klippy-utils</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>http</artifactId>
+            <artifactId>env-http</artifactId>
         </dependency>
     </dependencies>
 

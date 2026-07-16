@@ -4,7 +4,7 @@ services:
     build:
       # Build from the monorepo root so Maven can resolve sibling modules.
       context: ../../../../..
-      dockerfile: eyes-and-ears/bucket/proxy/docker/deployment/Dockerfile
+      dockerfile: jarvis/bucket/proxy/docker/deployment/Dockerfile
     environment:
       SERVER_ADDRESS: "0.0.0.0"
       SERVER_PORT: "5000"

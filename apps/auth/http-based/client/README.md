@@ -1,4 +1,4 @@
-# Clippy HTTP Auth Client
+# Klippy HTTP Auth Client
 
 HTTP implementation of the shared `AuthenticationStrategy`, plus login support.
 

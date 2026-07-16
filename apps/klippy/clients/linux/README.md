@@ -1,6 +1,6 @@
-# Clippy Linux Client
+# Klippy Linux Client
 
-Java clipboard client for posting Linux text clipboard changes to the Clippy server.
+Java clipboard client for posting Linux text clipboard changes to the Klippy server.
 
 The client is an explicit foreground process. It reads the local text clipboard,
 checks for a change from the last successfully sent value, and posts changed
@@ -11,7 +11,7 @@ content to the server.
 - A graphical Linux desktop session
 - JDK 25+ with `javac` available on `PATH`
 - Maven 3.9+
-- A running Clippy auth server and app server
+- A running Klippy auth server and app server
 - `wl-clipboard` for GNOME Wayland, or `xclip`/`xsel` for X11
 
 Install the recommended Ubuntu packages:
@@ -73,7 +73,7 @@ Backend selection is automatic:
 
 The command backends run a short-lived helper on each poll. They are fallbacks
 because that process churn can produce transient application entries on some
-desktops. Clippy also removes desktop startup and activation metadata from
+desktops. Klippy also removes desktop startup and activation metadata from
 those helpers.
 
 Override automatic selection with `CLIPBOARD_BACKEND`:

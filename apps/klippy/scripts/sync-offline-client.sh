@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MAVEN_REPO_LOCAL="${MAVEN_REPO_LOCAL:-/tmp/clippy-m2}"
+MAVEN_REPO_LOCAL="${MAVEN_REPO_LOCAL:-/tmp/klippy-m2}"
 
 mkdir -p "$MAVEN_REPO_LOCAL"
 cd "$ROOT_DIR"
@@ -10,4 +10,4 @@ cd "$ROOT_DIR"
 mvn -q -Dmaven.repo.local="$MAVEN_REPO_LOCAL" \
   -pl clients/offline-sync -am -Dmaven.test.skip=true package
 
-exec java -jar clients/offline-sync/target/clippy-offline-sync-client-0.1.0-SNAPSHOT.jar "$@"
+exec java -jar clients/offline-sync/target/klippy-offline-sync-client-0.1.0-SNAPSHOT.jar "$@"

@@ -1,6 +1,6 @@
-# Clippy
+# Klippy
 
-Clippy records text clipboard changes from desktop and Android clients in a
+Klippy records text clipboard changes from desktop and Android clients in a
 Spring Boot server backed by PostgreSQL.
 
 The Java code is a JDK 25 multi-module Maven project. The Android client is a
@@ -75,9 +75,9 @@ mvn -pl apps/auth/http-based/server spring-boot:run
 # Terminal 2: clipboard server
 mvn -pl apps/klippy/server spring-boot:run
 # Terminal 3: file-locker
-mvn -pl apps/klippy/clients/file-locker -am package && java -jar apps/klippy/clients/file-locker/target/clippy-file-locker-0.1.0-SNAPSHOT-exec.jar
+mvn -pl apps/klippy/clients/file-locker -am package && java -jar apps/klippy/clients/file-locker/target/klippy-file-locker-0.1.0-SNAPSHOT-exec.jar
 # Terminal 4: linux client
-mvn -pl apps/klippy/clients/linux -am package && java -jar apps/klippy/clients/linux/target/clippy-linux-client-0.1.0-SNAPSHOT.jar
+mvn -pl apps/klippy/clients/linux -am package && java -jar apps/klippy/clients/linux/target/klippy-linux-client-0.1.0-SNAPSHOT.jar
 ```
 
 ## Client Authentication

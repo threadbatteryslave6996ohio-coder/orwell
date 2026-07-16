@@ -1,4 +1,4 @@
-# Clippy — production deployment connecting to external databases.
+# Klippy — production deployment connecting to external databases.
 #
 #   docker compose -p prod -f docker-compose.prod.yml up -d
 #
@@ -7,7 +7,7 @@
 
 services:
   auth-server:
-    image: clippy-app:local
+    image: klippy-app:local
     build:
       context: ../..
       dockerfile: apps/klippy/Dockerfile
@@ -19,11 +19,11 @@ services:
     restart: unless-stopped
 
   clipboard-server:
-    image: clippy-app:local
+    image: klippy-app:local
     build:
       context: ../..
       dockerfile: apps/klippy/Dockerfile
-    command: ["java", "-jar", "/app/clippy-server.jar"]
+    command: ["java", "-jar", "/app/klippy-server.jar"]
     env_file:
       - .env.prod
     ports:

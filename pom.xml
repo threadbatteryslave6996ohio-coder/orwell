@@ -67,52 +67,52 @@
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>clippy-client-core</artifactId>
+                <artifactId>klippy-client-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>clippy-file-locker</artifactId>
+                <artifactId>klippy-file-locker</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>clippy-server-bootstrap</artifactId>
+                <artifactId>server-bootstrap</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>clippy-server</artifactId>
+                <artifactId>klippy-server</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>core</artifactId>
+                <artifactId>env-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>http</artifactId>
+                <artifactId>env-http</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>clippy-logger</artifactId>
+                <artifactId>logger</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>clippy-utils</artifactId>
+                <artifactId>klippy-utils</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>clippy-primitives</artifactId>
+                <artifactId>primitives</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>secrets-server</artifactId>
+                <artifactId>secrets-manager-server</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -122,7 +122,7 @@
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>secrets-client</artifactId>
+                <artifactId>secrets-manager-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MAVEN_REPO_LOCAL="${MAVEN_REPO_LOCAL:-/tmp/clippy-m2}"
+MAVEN_REPO_LOCAL="${MAVEN_REPO_LOCAL:-/tmp/klippy-m2}"
 
 AUTH_SERVER_URL="${AUTH_SERVER_URL:-http://localhost:8081}"
 REMOTE_SERVER_URL="${REMOTE_SERVER_URL:-http://localhost:8080}"
@@ -45,7 +45,7 @@ login_token() {
 }
 
 build_dummy_client() {
-  if [ -f clients/dummy/target/clippy-dummy-client-0.1.0-SNAPSHOT.jar ]; then
+  if [ -f clients/dummy/target/klippy-dummy-client-0.1.0-SNAPSHOT.jar ]; then
     return
   fi
 
@@ -61,4 +61,4 @@ exec env \
   REMOTE_SERVER_URL="$REMOTE_SERVER_URL" \
   CLIENT_ID="$CLIENT_ID" \
   CLIENT_TOKEN="$CLIENT_TOKEN" \
-  java -jar clients/dummy/target/clippy-dummy-client-0.1.0-SNAPSHOT.jar "$CLIP_CONTENT"
+  java -jar clients/dummy/target/klippy-dummy-client-0.1.0-SNAPSHOT.jar "$CLIP_CONTENT"

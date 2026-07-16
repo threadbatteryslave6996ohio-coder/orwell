@@ -1,12 +1,12 @@
-# Clippy macOS Client
+# Klippy macOS Client
 
 Foreground Java client that posts changed macOS text clipboard content to the
-Clippy server.
+Klippy server.
 
 ## Requirements
 
 - JDK 25+ and Maven 3.9+
-- Running Clippy auth, clipboard, and file-locker services
+- Running Klippy auth, clipboard, and file-locker services
 - A logged-in graphical session so Java can access the system clipboard
 
 ## Configure
@@ -47,7 +47,7 @@ Then build and run the client in another terminal:
 
 ```bash
 mvn -pl apps/klippy/clients/mac -am package
-java -jar apps/klippy/clients/mac/target/clippy-mac-client-0.1.0-SNAPSHOT.jar
+java -jar apps/klippy/clients/mac/target/klippy-mac-client-0.1.0-SNAPSHOT.jar
 ```
 
 If a remote write fails, the client asks the file-locker to append the payload

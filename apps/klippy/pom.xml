@@ -10,7 +10,7 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>clippy</artifactId>
+    <artifactId>klippy</artifactId>
     <packaging>pom</packaging>
 
     <modules>

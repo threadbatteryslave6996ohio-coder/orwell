@@ -1,4 +1,4 @@
-# Clippy Azure Infrastructure
+# Klippy Azure Infrastructure
 
 Terraform for Azure infrastructure sized for Azure's 12-month free-account allowances where eligible:
 
@@ -7,7 +7,7 @@ Terraform for Azure infrastructure sized for Azure's 12-month free-account allow
 
 Azure free eligibility depends on your subscription offer, region, capacity, usage, and current Microsoft terms. Check the Azure portal cost estimate before applying. VM disks, static public IPs, network egress, and usage beyond included allowances may still create charges.
 
-The same Terraform can optionally create an Azure Linux VM as an EC2-style server host. The VM clones this repo, builds `server`, runs it with systemd, opens the configured server port, and persists logs under `/var/log/clippy`.
+The same Terraform can optionally create an Azure Linux VM as an EC2-style server host. The VM clones this repo, builds `server`, runs it with systemd, opens the configured server port, and persists logs under `/var/log/klippy`.
 
 ## Layout
 
@@ -94,17 +94,17 @@ storing credentials:
 az login --identity
 az storage blob list \
   --account-name <storage-account> \
-  --container-name clippy \
+  --container-name klippy \
   --auth-mode login \
   --output table
 ```
 
 The VM runs these services:
 
-- `clippy-server.service`: pulls the repo during first boot, builds the Spring Boot server, and runs it.
-- `clippy-log-keeper.service`: tails `/var/log/clippy/server.log` and writes a second persisted copy to `/var/log/clippy/server-kept.log`.
+- `klippy-server.service`: pulls the repo during first boot, builds the Spring Boot server, and runs it.
+- `klippy-log-keeper.service`: tails `/var/log/klippy/server.log` and writes a second persisted copy to `/var/log/klippy/server-kept.log`.
 
-Server logs are written to `/var/log/clippy/server.log` on the VM. Logrotate keeps 14 daily compressed rotations for `/var/log/clippy/*.log`.
+Server logs are written to `/var/log/klippy/server.log` on the VM. Logrotate keeps 14 daily compressed rotations for `/var/log/klippy/*.log`.
 
 ## Destroy
 

@@ -1,4 +1,4 @@
-# Clippy — separate auth and clipboard server deployment.
+# Klippy — separate auth and clipboard server deployment.
 #
 #   docker compose up --build
 #
@@ -6,19 +6,19 @@
 # and the clipboard server (port 8080).
 
 services:
-  db-clippy:
+  db-klippy:
     image: postgres:16-alpine
-    container_name: clippy-postgres
+    container_name: klippy-postgres
     environment:
-      POSTGRES_DB: clippy
-      POSTGRES_USER: clippy
-      POSTGRES_PASSWORD: clippy
+      POSTGRES_DB: klippy
+      POSTGRES_USER: klippy
+      POSTGRES_PASSWORD: klippy
     ports:
       - "5432:5432"
     volumes:
-      - clippy-pg-data:/var/lib/postgresql/data
+      - klippy-pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U clippy -d clippy"]
+      test: ["CMD-SHELL", "pg_isready -U klippy -d klippy"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -41,7 +41,7 @@ services:
       retries: 10
 
   auth-server:
-    image: clippy-app:local
+    image: klippy-app:local
     build:
       context: ../..
       dockerfile: apps/klippy/Dockerfile
@@ -64,31 +64,31 @@ services:
     restart: unless-stopped
 
   clipboard-server:
-    image: clippy-app:local
+    image: klippy-app:local
     build:
       context: ../..
       dockerfile: apps/klippy/Dockerfile
-    container_name: clippy-server
-    command: ["java", "-jar", "/app/clippy-server.jar"]
+    container_name: klippy-server
+    command: ["java", "-jar", "/app/klippy-server.jar"]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db-clippy:5432/clippy
-      SPRING_DATASOURCE_USERNAME: clippy
-      SPRING_DATASOURCE_PASSWORD: clippy
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db-klippy:5432/klippy
+      SPRING_DATASOURCE_USERNAME: klippy
+      SPRING_DATASOURCE_PASSWORD: klippy
       SERVER_PORT: "8080"
       AUTH_BASE_URL: http://auth-server:8081
-      LOGGING_FILE_NAME: logs/clippy-server.log
+      LOGGING_FILE_NAME: logs/klippy-server.log
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE: UTC
     ports:
       - "8080:8080"
       - "8025:8025"
     depends_on:
-      db-clippy:
+      db-klippy:
         condition: service_healthy
       auth-server:
         condition: service_started
     restart: unless-stopped
 
 volumes:
-  clippy-pg-data:
+  klippy-pg-data:
   auth-pg-data:

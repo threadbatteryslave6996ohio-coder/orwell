@@ -10,7 +10,7 @@ Requires: Docker, JDK 17+, Maven, `curl`.
 ## Quick start
 
 ```bash
-cd eyes-and-ears/bucket/proxy
+cd jarvis/bucket/proxy
 
 # 1. Start MinIO (S3) + PostgreSQL and create the bucket.
 scripts/local-stack.sh up

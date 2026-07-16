@@ -9,7 +9,7 @@
         <version>0.1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>secrets-client</artifactId>
+    <artifactId>secrets-manager-client</artifactId>
 
     <dependencies>
         <dependency>
@@ -19,7 +19,7 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>core</artifactId>
+            <artifactId>env-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

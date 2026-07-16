@@ -10,12 +10,12 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>clippy-logger</artifactId>
+    <artifactId>logger</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-primitives</artifactId>
+            <artifactId>primitives</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

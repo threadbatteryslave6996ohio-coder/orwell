@@ -5,12 +5,12 @@
 
     <parent>
         <groupId>dev.orwell</groupId>
-        <artifactId>clippy</artifactId>
+        <artifactId>klippy</artifactId>
         <version>0.1.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>clippy-file-locker</artifactId>
+    <artifactId>klippy-file-locker</artifactId>
 
     <properties>
         <mainClass>dev.orwell.clients.filelocker.OfflineFileLockerService</mainClass>
@@ -19,7 +19,7 @@
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-utils</artifactId>
+            <artifactId>klippy-utils</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

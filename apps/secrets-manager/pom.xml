@@ -32,12 +32,12 @@
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>secrets-server</artifactId>
+                <artifactId>secrets-manager-server</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
-                <artifactId>secrets-client</artifactId>
+                <artifactId>secrets-manager-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

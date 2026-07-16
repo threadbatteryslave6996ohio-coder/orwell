@@ -1,7 +1,7 @@
 # Offline Clipboard Sync Client
 
 This long-running Java client monitors clipboard records from the Linux client's
-`clippy-offline-clipboard.json` file and synchronizes changes to the Clippy
+`clippy-offline-clipboard.json` file and synchronizes changes to the Klippy
 server. It checks immediately at startup and then every 30 minutes.
 
 It queries the server for the file's inclusive timestamp range, compares records

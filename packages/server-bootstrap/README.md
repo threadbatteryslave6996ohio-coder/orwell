@@ -1,33 +1,49 @@
 # Spring Server Bootstrap
 
 Shared Spring Boot startup wiring for server applications across the repository.
+Classes live under `dev.orwell.bootstrap.{launch,auth,health,web,logging}`.
 
 ## Usage
 
-1. Create a launcher class that resolves environment variables (e.g. from `.env` files).
-2. Call `SpringServerBootstrap.start(applicationClass, envMap)`.
-3. The bootstrap applies the env map as Spring properties and starts the application.
+Declare one `AppServer` per application and delegate `main` to it:
 
-`AuthenticationStrategyConfiguration` is auto-configured: it provides an
-`HttpAuthenticationStrategy` bean wired to `orwell.auth.base-url`. Modules that
-need a different strategy can define their own `@Bean`; it takes precedence via
-`@ConditionalOnMissingBean`.
+```java
+public static final AppServer SERVER = new AppServer(
+        MyApplication.class, "my-app", MyEnvs.ENV);
 
-`HealthEndpointConfiguration` is also auto-configured: it provides a shared
-`HealthDetailsProvider` bean per app boundary for servlet apps. Apps
-contribute their own prefixed `GET /health` controllers and can add extra
-fields by overriding the matching named bean:
+public static void main(String[] args) {
+    SERVER.runOrExit(args);
+}
+```
 
-- `jarvisHealthDetailsProvider`
-- `clippyHealthDetailsProvider`
-- `secretsHealthDetailsProvider`
+`AppServerEnv` owns the common environment options (`SERVER_ADDRESS`, `SERVER_PORT`,
+`LOGGING_FILE_NAME`, `AUTH_BASE_URL`) and their Spring property mappings; apps add their own
+options on top. The validated env is published as Spring properties by
+`SpringServerBootstrap`.
+
+## Auto-configurations
+
+Registered in `src/main/resources/META-INF/spring/…AutoConfiguration.imports` — keep that file
+in sync if you move or rename these classes:
+
+- `auth.AuthenticationStrategyConfiguration` — default `HttpAuthenticationStrategy` wired to
+  `orwell.auth.base-url`, plus a request-scoped `AuthenticationContext`. Override by defining
+  your own `AuthenticationStrategy` bean (`@ConditionalOnMissingBean`).
+- `health.HealthEndpointConfiguration` — registers the shared `GET /health` endpoint
+  (`SharedHealthController`) on every servlet app. Apps add response fields by contributing
+  `HealthDetailsProvider` beans, or replace the endpoint by defining their own
+  `SharedHealthController` bean.
+- `web.WebContractConfiguration` — the invalid-JSON 400 envelope (`InvalidJsonBodyAdvice`) and
+  the `@RequireAuthentication` 401 guard.
+- `logging.LoggerConfiguration` — the app-wide `CustomLogger` bean named from
+  `orwell.app.name`.
 
 ## Maven dependency
 
 ```xml
 <dependency>
     <groupId>dev.orwell</groupId>
-    <artifactId>clippy-server-bootstrap</artifactId>
+    <artifactId>server-bootstrap</artifactId>
     <version>${project.version}</version>
 </dependency>
 ```
@@ -36,6 +52,9 @@ fields by overriding the matching named bean:
 
 | Class | Purpose |
 |---|---|
-| `SpringServerBootstrap` | Entry point: `start(Class<?>, Map<String, String>)` |
-| `AuthenticationStrategyConfiguration` | Provides default `AuthenticationStrategy` bean |
-| `HealthEndpointConfiguration` | Provides default named `HealthDetailsProvider` beans |
+| `launch.AppServer` | Per-app descriptor: `start(...)` / `runOrExit(args)` |
+| `launch.AppServerEnv` | Common env options + Spring property mappings |
+| `launch.SpringServerBootstrap` | Low-level Spring startup shell used by `AppServer` |
+| `auth.RequireAuthentication` | 401-guard annotation for controllers/methods |
+| `health.HealthDetailsProvider` | App hook to add fields to `GET /health` |
+| `web.SharedJson` | Shared static `ObjectMapper` |

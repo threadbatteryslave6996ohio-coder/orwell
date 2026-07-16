@@ -5,12 +5,12 @@
 
     <parent>
         <groupId>dev.orwell</groupId>
-        <artifactId>clippy</artifactId>
+        <artifactId>klippy</artifactId>
         <version>0.1.0-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>clippy-dummy-client</artifactId>
+    <artifactId>klippy-dummy-client</artifactId>
 
     <properties>
         <mainClass>dev.orwell.clients.dummy.DummyClientApp</mainClass>
@@ -19,11 +19,11 @@
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-client-core</artifactId>
+            <artifactId>klippy-client-core</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-utils</artifactId>
+            <artifactId>klippy-utils</artifactId>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>

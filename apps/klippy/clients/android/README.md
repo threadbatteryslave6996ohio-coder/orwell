@@ -1,15 +1,15 @@
-# Clippy Android
+# Klippy Android
 
-Kotlin Android client for posting text clipboard entries to the Clippy server.
+Kotlin Android client for posting text clipboard entries to the Klippy server.
 
 ## Behavior
 
 - Paste reads the current Android clipboard while the app is open.
 - Send posts the text to `POST /clipboard`.
 - Auto sync checks the clipboard every two seconds while the screen is open.
-- Android share sheet support accepts `text/plain` shares into Clippy.
+- Android share sheet support accepts `text/plain` shares into Klippy.
 
-Android does not allow a normal third-party app to silently monitor clipboard changes in the background like a desktop client. Keep the app open for polling, or share text into Clippy from another app.
+Android does not allow a normal third-party app to silently monitor clipboard changes in the background like a desktop client. Keep the app open for polling, or share text into Klippy from another app.
 
 ## Build
 
