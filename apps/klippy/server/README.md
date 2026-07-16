@@ -54,9 +54,9 @@ The launcher loads configuration from a `.env` file in the current directory or 
 All values are required. A local configuration is:
 
 ```text
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/klippy
-SPRING_DATASOURCE_USERNAME=klippy
-SPRING_DATASOURCE_PASSWORD=klippy
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/clippy
+SPRING_DATASOURCE_USERNAME=clippy
+SPRING_DATASOURCE_PASSWORD=clippy
 SERVER_ADDRESS=0.0.0.0
 SERVER_PORT=8080
 AUTH_BASE_URL=http://localhost:8081
@@ -107,7 +107,7 @@ content is limited to 1,000,000 characters.
 
 ## Logging
 
-The app server writes its normal Spring Boot logs to `LOGGING_FILE_NAME` and also writes a custom audit log file named `klippy-server.txt` in the configured directory.
+The app server writes its normal Spring Boot logs to `LOGGING_FILE_NAME` and also writes a custom audit log file named `clippy-server.txt` in the configured directory (the historic "clippy" spelling is baked into the logger name in code — see CLAUDE.md).
 
 Each successful `POST /clipboard` request records a line noting the `clientId`, generated entry id, and timestamp. Raw clipboard content is not written to the custom log.
 

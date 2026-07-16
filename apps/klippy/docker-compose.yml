@@ -6,19 +6,20 @@
 # and the clipboard server (port 8080).
 
 services:
-  db-klippy:
+  # Postgres identifiers keep the historic "clippy" name — existing volumes/roles hold data (see CLAUDE.md).
+  db-clippy:
     image: postgres:16-alpine
-    container_name: klippy-postgres
+    container_name: clippy-postgres
     environment:
-      POSTGRES_DB: klippy
-      POSTGRES_USER: klippy
-      POSTGRES_PASSWORD: klippy
+      POSTGRES_DB: clippy
+      POSTGRES_USER: clippy
+      POSTGRES_PASSWORD: clippy
     ports:
       - "5432:5432"
     volumes:
-      - klippy-pg-data:/var/lib/postgresql/data
+      - clippy-pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U klippy -d klippy"]
+      test: ["CMD-SHELL", "pg_isready -U clippy -d clippy"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -71,9 +72,9 @@ services:
     container_name: klippy-server
     command: ["java", "-jar", "/app/klippy-server.jar"]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db-klippy:5432/klippy
-      SPRING_DATASOURCE_USERNAME: klippy
-      SPRING_DATASOURCE_PASSWORD: klippy
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db-clippy:5432/clippy
+      SPRING_DATASOURCE_USERNAME: clippy
+      SPRING_DATASOURCE_PASSWORD: clippy
       SERVER_PORT: "8080"
       AUTH_BASE_URL: http://auth-server:8081
       LOGGING_FILE_NAME: logs/klippy-server.log
@@ -83,12 +84,12 @@ services:
       - "8080:8080"
       - "8025:8025"
     depends_on:
-      db-klippy:
+      db-clippy:
         condition: service_healthy
       auth-server:
         condition: service_started
     restart: unless-stopped
 
 volumes:
-  klippy-pg-data:
+  clippy-pg-data:
   auth-pg-data:

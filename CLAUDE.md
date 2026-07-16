@@ -13,12 +13,14 @@ scripts/dev-stack.sh              # local tmux stack (auth, klippy, secrets, pro
 ```
 
 Executable server jars are built as `<artifactId>-<version>-exec.jar` (Spring Boot `exec`
-classifier); client jars as `<artifactId>-<version>.jar`.
+classifier). Client jars are `<artifactId>-<version>.jar`, except `klippy-file-locker`, whose
+runnable jar is the shaded `<artifactId>-<version>-exec.jar`.
 
 ## Module map
 
-ArtifactIds match directory names. Java packages predate the renames and do NOT always match —
-use this table, don't guess:
+ArtifactIds are derived from directory paths (nested modules compound the path:
+`apps/jarvis/detection` → `jarvis-detection`, `apps/keeboarder/server` → `keeboarder-server`).
+Java packages predate the renames and do NOT always match — use this table, don't guess:
 
 | Directory | artifactId | Java package |
 |---|---|---|
@@ -34,7 +36,7 @@ use this table, don't guess:
 | `apps/keeboarder/clients/*` | `keeboarder-{client-core,linux-client,mac-client}` | `dev.orwell.keeboarder.*` |
 | `apps/klippy/server` | `klippy-server` | `dev.orwell.server` |
 | `apps/klippy/utils` | `klippy-utils` | `dev.orwell.utils` |
-| `apps/klippy/clients/*` | `klippy-{client-core,dummy,file-locker,linux,mac,offline-sync}-…` | `dev.orwell.clients.*` |
+| `apps/klippy/clients/*` | `klippy-client-core`, `klippy-dummy-client`, `klippy-file-locker`, `klippy-linux-client`, `klippy-mac-client`, `klippy-offline-sync-client` | `dev.orwell.clients.*` |
 | `apps/log-analyzer` | `log-analyzer` | `dev.orwell.loganalyzer` |
 | `apps/secrets-manager/server` | `secrets-manager-server` | `dev.orwell.secrets` |
 | `apps/secrets-manager/client` | `secrets-manager-client` | `dev.orwell.secrets.client` |
@@ -59,6 +61,11 @@ use this table, don't guess:
 - `apps/klippy/devops/*.tf` keeps `clippy` in Terraform resource names, Azure identifiers, and
   the default database name — renaming those would destroy/recreate deployed infrastructure.
   `apps/klippy/.env.prod.example` intentionally matches that database name.
+- Postgres identifiers likewise keep `clippy`: the compose service/container/volume names
+  (`db-clippy`, `clippy-postgres`, `clippy-pg-data`), `POSTGRES_DB`/`POSTGRES_USER`, and the
+  role/database dev-stack.sh creates. Existing volumes and roles hold real data; renaming them
+  orphans it. The audit-log stream name `clippy-server` (in `ClipboardEntryController`) is a
+  Java constant covered by the identifier rule above.
 
 ## Repo conventions
 

@@ -101,9 +101,9 @@ AUTH_TZ=$(create_env "$AUTH_GROUP"      "AUTH_JPA_JDBC_TIME_ZONE"  "UTC")
 echo "[klippy-server]"
 
 KLIP_GROUP=$(create_group "klippy-server" "Clipboard service (apps/klippy)")
-KLIP_DB_URL=$(create_env "$KLIP_GROUP"  "SPRING_DATASOURCE_URL"      "jdbc:postgresql://localhost:5432/klippy")
-KLIP_DB_USER=$(create_env "$KLIP_GROUP" "SPRING_DATASOURCE_USERNAME" "klippy")
-KLIP_DB_PASS=$(create_env "$KLIP_GROUP" "SPRING_DATASOURCE_PASSWORD" "klippy")
+KLIP_DB_URL=$(create_env "$KLIP_GROUP"  "SPRING_DATASOURCE_URL"      "jdbc:postgresql://localhost:5432/clippy")
+KLIP_DB_USER=$(create_env "$KLIP_GROUP" "SPRING_DATASOURCE_USERNAME" "clippy")
+KLIP_DB_PASS=$(create_env "$KLIP_GROUP" "SPRING_DATASOURCE_PASSWORD" "clippy")
 KLIP_PORT=$(create_env "$KLIP_GROUP"    "SERVER_PORT"                "8082")
 KLIP_AUTH=$(create_env "$KLIP_GROUP"    "AUTH_BASE_URL"              "http://localhost:8081")
 KLIP_LOG=$(create_env "$KLIP_GROUP"     "LOGGING_FILE_NAME"          "logs/klippy-server.log")

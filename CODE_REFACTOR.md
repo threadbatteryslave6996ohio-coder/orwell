@@ -80,21 +80,11 @@ re-declare the Spring BOM + compiler/surefire pluginManagement. Point them at th
   `apps/jarvis/detection/.../CooldownTracker.java`; `apps/log-analyzer`'s
   `AlertCooldownTracker` is a third, evolved variant of the same concept. Extract one shared
   implementation (log-analyzer's reservation semantics are the best starting point).
-- **`AuthenticationStrategy` bean wiring ×4**: near-identical `@Bean` methods in
-  klippy-server's `AuthClientConfiguration`, jarvis-bucket-proxy's
-  `AuthenticationConfiguration`, keeboarder-server's `KeeboarderServerConfiguration`, and
-  secrets-manager-server's `AuthClientConfiguration` — despite
-  `AuthenticationStrategyConfiguration` in server-bootstrap existing to replace exactly this.
 - **Secrets-manager DTO triplication**: the same response shapes exist as admin records,
   accessor records, and client records
   (`apps/secrets-manager/server/.../admin/*Response.java`, `accessor/*Response.java`,
   `apps/secrets-manager/client/.../dto/*.java`); the create/update request records also pair up
   near-identically. Merge into shared records.
-- **Bearer-token parsing ×2**: the same extraction logic in klippy-server's
-  `ClipboardEntryController` and secrets-manager-server's `AuthValidator`;
-  `dev.orwell.auth.BearerToken.extract` already exists — use it in both.
-- **`@RequestHeader` auth extraction repeated ~20×** across `SecretsAdminController` and
-  `SecretsAccessorController`; a base class or interceptor would collapse it.
 - **Maven shade plugin declared unconfigured in 4 klippy client poms**
   (linux/mac/dummy/offline-sync); declare once in a parent `pluginManagement`.
 - **Two logging facades**: alerting's app-local `JsonLogger` (JSON lines via the shared

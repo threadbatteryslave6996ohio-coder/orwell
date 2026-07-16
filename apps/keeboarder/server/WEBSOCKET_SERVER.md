@@ -47,15 +47,13 @@ Client connects → Register with clientId, name, token
 ## Building
 
 ```bash
-cd /home/kamina_goat/Desktop/keeboarder
-mvn -f ../../pom.xml -pl apps/auth/http-based/client -am install
-cd server
-mvn -DskipTests package
+# From the repository root:
+mvn -pl :keeboarder-server -am package -DskipTests
 ```
 
-This creates:
-- `target/keeboarder-server-0.1.0.jar` - Lightweight JAR
-- `target/keeboarder-server-0.1.0-jar-with-dependencies.jar` - Executable JAR with all dependencies
+This creates in `apps/keeboarder/server/target/`:
+- `keeboarder-server-0.1.0-SNAPSHOT.jar` - Lightweight JAR
+- `keeboarder-server-0.1.0-SNAPSHOT-exec.jar` - Executable Spring Boot JAR
 
 ## Running the Server
 
@@ -72,7 +70,7 @@ redis-server
 ### Start the WebSocket Server
 
 ```bash
-java -jar target/keeboarder-server-0.1.0-jar-with-dependencies.jar
+java -jar target/keeboarder-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
 ### Configuration via Environment Variables
@@ -90,7 +88,7 @@ Example with custom configuration:
 
 ```bash
 WEBSOCKET_HOST=0.0.0.0 WEBSOCKET_PORT=9000 REDIS_HOST=redis.example.com \
-  java -jar target/keeboarder-server-0.1.0-jar-with-dependencies.jar
+  java -jar target/keeboarder-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
 ## Message Protocol
@@ -310,7 +308,7 @@ Create a `Dockerfile`:
 ```dockerfile
 FROM openjdk:21-jdk-slim
 WORKDIR /app
-COPY target/keeboarder-server-0.1.0-jar-with-dependencies.jar app.jar
+COPY target/keeboarder-server-0.1.0-SNAPSHOT-exec.jar app.jar
 ENV WEBSOCKET_HOST=0.0.0.0
 ENV WEBSOCKET_PORT=8025
 ENV REDIS_HOST=redis

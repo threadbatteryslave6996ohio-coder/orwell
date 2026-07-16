@@ -39,14 +39,14 @@ cd "$SOURCE_DIR"
 mvn -f bucket/pom.xml package -DskipTests
 # The alerting service is now a standalone top-level app; build it (with its
 # reactor dependencies) from the root pom.
-mvn -f ../../pom.xml -pl apps/alerting -am package -DskipTests
+mvn -f ../../pom.xml -pl apps/alerting,apps/jarvis/detection -am package -DskipTests
 
 # The jarvis-bucket-proxy jar also carries the stream analysis worker as its
 # --mode=stream-worker mode (dev.orwell.bucket.proxy.streaming.AnalysisWorker),
 # so the executable fat jar doubles as the worker jar.
 cp bucket/proxy/target/jarvis-bucket-proxy-0.1.0-SNAPSHOT-exec.jar "$PROXY_DIR/publish/jarvis-bucket-proxy.jar"
 cp ../alerting/target/alerting-0.1.0-SNAPSHOT-exec.jar "$STREAM_PUBLISH_DIR/alerting.jar"
-cp bucket/detection/target/jarvis-detection-0.1.0-SNAPSHOT-exec.jar "$STREAM_PUBLISH_DIR/jarvis-detection.jar"
+cp detection/target/jarvis-detection-0.1.0-SNAPSHOT-exec.jar "$STREAM_PUBLISH_DIR/jarvis-detection.jar"
 
 cp bucket/proxy/scripts/record_stream.sh "$STREAM_SCRIPTS_DIR/record_stream.sh"
 cp bucket/proxy/scripts/analyze_stream.sh "$STREAM_SCRIPTS_DIR/analyze_stream.sh"

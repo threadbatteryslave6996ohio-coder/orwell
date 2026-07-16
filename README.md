@@ -37,8 +37,8 @@ mvn test             # run all tests
 mvn -pl <module> -am test   # build + test one module
 ```
 
-Maven artifactIds match directory names (e.g. `apps/klippy/server` builds `klippy-server`),
-so `mvn -pl :<artifactId>` and jar filenames line up with the tree. See `CLAUDE.md` for the
-full module map and repo conventions.
+Maven artifactIds are derived from directory paths (e.g. `apps/klippy/server` builds
+`klippy-server`), so `mvn -pl :<artifactId>` and jar filenames line up with the tree. See
+`CLAUDE.md` for the full module map and repo conventions.
 
 See each app's README for run and configuration details.

@@ -91,7 +91,7 @@ ensure_container orw-redis -p 6379:6379 redis:7-alpine
 
 echo -n "    waiting for postgres"
 for _ in $(seq 1 30); do docker exec orw-pg pg_isready -U postgres >/dev/null 2>&1 && break; echo -n .; sleep 1; done; echo
-for db in auth klippy secrets; do
+for db in auth clippy secrets; do
   docker exec orw-pg psql -U postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='$db'"    | grep -q 1 || docker exec orw-pg psql -U postgres -c "CREATE ROLE $db LOGIN PASSWORD '$db';" >/dev/null
   docker exec orw-pg psql -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 || docker exec orw-pg psql -U postgres -c "CREATE DATABASE $db OWNER $db;"        >/dev/null
 done
@@ -114,9 +114,9 @@ AUTH_JPA_JDBC_TIME_ZONE=UTC
 ENV
 
 write_env klippy <<ENV
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/klippy
-SPRING_DATASOURCE_USERNAME=klippy
-SPRING_DATASOURCE_PASSWORD=klippy
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/clippy
+SPRING_DATASOURCE_USERNAME=clippy
+SPRING_DATASOURCE_PASSWORD=clippy
 SERVER_PORT=$KLIPPY_PORT
 SERVER_ADDRESS=0.0.0.0
 AUTH_BASE_URL=$AUTH_BASE

@@ -3,8 +3,8 @@ services:
     image: jarvis-bucket-proxy:${PROXY_IMAGE_TAG:-local}
     build:
       # Build from the monorepo root so Maven can resolve sibling modules.
-      context: ../../../../..
-      dockerfile: jarvis/bucket/proxy/docker/deployment/Dockerfile
+      context: ../../../../../..
+      dockerfile: apps/jarvis/bucket/proxy/docker/deployment/Dockerfile
     environment:
       SERVER_ADDRESS: "0.0.0.0"
       SERVER_PORT: "5000"

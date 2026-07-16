@@ -7,18 +7,19 @@
 # and the clipboard server (port 8080).
 
 services:
-  db-klippy:
+  # Postgres identifiers keep the historic "clippy" name — existing volumes/roles hold data (see CLAUDE.md).
+  db-clippy:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: klippy
-      POSTGRES_USER: klippy
-      POSTGRES_PASSWORD: klippy
+      POSTGRES_DB: clippy
+      POSTGRES_USER: clippy
+      POSTGRES_PASSWORD: clippy
     ports:
       - "5432:5432"
     volumes:
-      - testing-klippy-pg-data:/var/lib/postgresql/data
+      - testing-clippy-pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U klippy -d klippy"]
+      test: ["CMD-SHELL", "pg_isready -U clippy -d clippy"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -66,12 +67,12 @@ services:
       - "8080:8080"
       - "8025:8025"
     depends_on:
-      db-klippy:
+      db-clippy:
         condition: service_healthy
       auth-server:
         condition: service_started
     restart: unless-stopped
 
 volumes:
-  testing-klippy-pg-data:
+  testing-clippy-pg-data:
   testing-auth-pg-data:
