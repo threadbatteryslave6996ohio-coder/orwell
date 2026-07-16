@@ -1,7 +1,7 @@
 package dev.orwell.bucket.detection;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.orwell.bootstrap.SharedJson;
+import dev.orwell.bootstrap.web.SharedJson;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 

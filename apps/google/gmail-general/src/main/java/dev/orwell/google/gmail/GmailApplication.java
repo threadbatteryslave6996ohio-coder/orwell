@@ -1,6 +1,6 @@
 package dev.orwell.google.gmail;
 
-import dev.orwell.bootstrap.AppServer;
+import dev.orwell.bootstrap.launch.AppServer;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**

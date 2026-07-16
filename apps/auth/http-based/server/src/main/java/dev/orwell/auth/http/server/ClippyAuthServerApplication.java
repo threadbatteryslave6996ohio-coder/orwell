@@ -1,7 +1,7 @@
 package dev.orwell.auth.http.server;
 
 import dev.orwell.auth.http.server.config.AuthServerEnvs;
-import dev.orwell.bootstrap.AppServer;
+import dev.orwell.bootstrap.launch.AppServer;
 import dev.orwell.env.Env;
 import dev.orwell.logging.CustomLogger;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

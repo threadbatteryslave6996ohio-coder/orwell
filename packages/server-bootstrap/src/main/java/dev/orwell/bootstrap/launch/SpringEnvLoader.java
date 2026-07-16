@@ -1,4 +1,4 @@
-package dev.orwell.bootstrap;
+package dev.orwell.bootstrap.launch;
 
 import java.io.IOException;
 import java.util.Map;

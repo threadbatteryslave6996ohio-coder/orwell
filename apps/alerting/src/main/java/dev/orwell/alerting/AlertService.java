@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.orwell.bootstrap.SharedJson;
+import dev.orwell.bootstrap.web.SharedJson;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

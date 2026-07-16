@@ -2,7 +2,7 @@ package dev.orwell.loganalyzer;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.orwell.bootstrap.SharedJson;
+import dev.orwell.bootstrap.web.SharedJson;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;

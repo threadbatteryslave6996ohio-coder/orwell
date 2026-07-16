@@ -1,6 +1,6 @@
 package dev.orwell.keeboarder.server;
 
-import dev.orwell.bootstrap.AppServer;
+import dev.orwell.bootstrap.launch.AppServer;
 import dev.orwell.keeboarder.server.config.KeeboarderEnvs;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 

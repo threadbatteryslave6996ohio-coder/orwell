@@ -1,7 +1,7 @@
 package dev.orwell.bucket.proxy;
 
-import dev.orwell.bootstrap.AppServer;
-import dev.orwell.bootstrap.HealthDetailsProvider;
+import dev.orwell.bootstrap.launch.AppServer;
+import dev.orwell.bootstrap.health.HealthDetailsProvider;
 import dev.orwell.bucket.proxy.storage.BucketStorage;
 import dev.orwell.bucket.proxy.streaming.AnalysisWorker;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
