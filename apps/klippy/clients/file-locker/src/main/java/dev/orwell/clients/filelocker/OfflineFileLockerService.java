@@ -165,7 +165,7 @@ public final class OfflineFileLockerService implements AutoCloseable {
             throw new IOException("Offline log path must have a parent directory: " + path);
         }
         Files.createDirectories(parent);
-        Path temporary = Files.createTempFile(parent, ".clippy-offline-", ".tmp");
+        Path temporary = Files.createTempFile(parent, ".klippy-offline-", ".tmp");
         try {
             Files.writeString(temporary, content, StandardCharsets.UTF_8,
                     StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);

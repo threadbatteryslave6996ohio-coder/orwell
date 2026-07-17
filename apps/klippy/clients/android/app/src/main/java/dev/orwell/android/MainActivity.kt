@@ -3,6 +3,7 @@ package dev.orwell.android
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -73,8 +74,8 @@ class MainActivity : ComponentActivity() {
         sharedText.value = intent.sharedText()
 
         setContent {
-            ClippyTheme {
-                ClippyApp(sharedText = sharedText.value)
+            KlippyTheme {
+                KlippyApp(sharedText = sharedText.value)
             }
         }
     }
@@ -88,9 +89,9 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ClippyApp(sharedText: String?) {
+private fun KlippyApp(sharedText: String?) {
     val context = LocalContext.current
-    val settings = remember { ClippySettings(context) }
+    val settings = remember { KlippySettings(context) }
     val scope = rememberCoroutineScope()
 
     var serverUrl by rememberSaveable { mutableStateOf(settings.serverUrl) }
@@ -160,7 +161,7 @@ private fun ClippyApp(sharedText: String?) {
         sending = true
         status = "Sending..."
         scope.launch {
-            val result = ClippyApi.send(normalizedServerUrl, normalizedClientId, normalizedClientToken, content)
+            val result = KlippyApi.send(normalizedServerUrl, normalizedClientId, normalizedClientToken, content)
             sending = false
             status = result.message
             if (result.success) {
@@ -189,7 +190,7 @@ private fun ClippyApp(sharedText: String?) {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Clippy",
+                        text = "Klippy",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -342,7 +343,7 @@ private fun ClippyApp(sharedText: String?) {
 }
 
 @Composable
-private fun ClippyTheme(content: @Composable () -> Unit) {
+private fun KlippyTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = lightColorScheme(
             primary = Color(0xFF2563EB),
@@ -355,8 +356,8 @@ private fun ClippyTheme(content: @Composable () -> Unit) {
     )
 }
 
-private class ClippySettings(context: Context) {
-    private val preferences = context.getSharedPreferences("clippy", Context.MODE_PRIVATE)
+private class KlippySettings(context: Context) {
+    private val preferences = migratedPreferences(context)
 
     var serverUrl: String
         get() = preferences.getString("serverUrl", "") ?: ""
@@ -373,9 +374,47 @@ private class ClippySettings(context: Context) {
     var autoSync: Boolean
         get() = preferences.getBoolean("autoSync", false)
         set(value) = preferences.edit().putBoolean("autoSync", value).apply()
+
+    private companion object {
+        const val PREFERENCES_NAME = "klippy"
+
+        /** Pre-rename file. Kept only to migrate forward; drop once installs have rolled over. */
+        const val LEGACY_PREFERENCES_NAME = "clippy"
+
+        /**
+         * Settings store, copying a pre-rename file forward the first time it is missing.
+         *
+         * Renaming the file without this would make every installed app forget its server URL,
+         * client id and token — silently, and with the old values still on disk but unread.
+         * Migrating is a no-op once the current file has anything in it, so it is safe on every
+         * launch.
+         */
+        fun migratedPreferences(context: Context): SharedPreferences {
+            val current = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            val legacy = context.getSharedPreferences(LEGACY_PREFERENCES_NAME, Context.MODE_PRIVATE)
+            if (current.all.isNotEmpty() || legacy.all.isEmpty()) {
+                return current
+            }
+
+            val editor = current.edit()
+            for ((key, value) in legacy.all) {
+                when (value) {
+                    is String -> editor.putString(key, value)
+                    is Boolean -> editor.putBoolean(key, value)
+                    is Int -> editor.putInt(key, value)
+                    is Long -> editor.putLong(key, value)
+                    is Float -> editor.putFloat(key, value)
+                    else -> Unit
+                }
+            }
+            editor.apply()
+            legacy.edit().clear().apply()
+            return current
+        }
+    }
 }
 
-private object ClippyApi {
+private object KlippyApi {
     suspend fun send(serverUrl: String, clientId: String, clientToken: String, content: String): SendResult =
         withContext(Dispatchers.IO) {
             try {

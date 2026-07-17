@@ -1,8 +1,13 @@
 # Offline Clipboard Sync Client
 
 This long-running Java client monitors clipboard records from the Linux client's
-`clippy-offline-clipboard.json` file and synchronizes changes to the Klippy
+`klippy-offline-clipboard.json` file and synchronizes changes to the Klippy
 server. It checks immediately at startup and then every 30 minutes.
+
+Both that file and its dead-letter sibling were spelled `clippy-…` before the rename. When run
+against the default location, the client moves an old pair forward on startup so nothing written
+by an earlier version is stranded. Passing an explicit path skips the migration entirely — that
+file is your choice, and nothing is moved out from under it.
 
 It queries the server for the file's inclusive timestamp range, compares records
 by `clientId`, `content`, and `timestamp`, and posts only records that are not
@@ -15,7 +20,7 @@ Malformed entries, unknown record types, and records rejected by the server
 with a record-specific `400`, `413`, `415`, or `422` response are appended to a
 sibling dead-letter file before synchronization continues. Known auth audit
 records remain intentionally ignored. For the default input, the dead-letter
-file is `clippy-offline-clipboard-dead-letter.json`. Each entry records the
+file is `klippy-offline-clipboard-dead-letter.json`. Each entry records the
 processing stage, rejection reason, and original JSON. Dead-letter appends are
 idempotent. The source snapshot is not cleared unless every rejected entry was
 safely recorded.
@@ -54,11 +59,11 @@ Keep the file-locker running, then sync in another terminal:
 ./apps/klippy/scripts/sync-offline-client.sh
 ```
 
-The default input is `clippy-offline-clipboard.json`. Pass another path as the
+The default input is `klippy-offline-clipboard.json`. Pass another path as the
 first argument when needed:
 
 ```bash
-./apps/klippy/scripts/sync-offline-client.sh /path/to/clippy-offline-clipboard.json
+./apps/klippy/scripts/sync-offline-client.sh /path/to/klippy-offline-clipboard.json
 ```
 
 The sync client obtains the JSON snapshot through the same Unix-domain socket

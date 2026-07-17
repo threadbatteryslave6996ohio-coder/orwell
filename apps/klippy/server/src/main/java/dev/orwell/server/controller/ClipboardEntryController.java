@@ -26,7 +26,7 @@ import java.util.Objects;
 
 @RestController
 public class ClipboardEntryController {
-    private static final CustomLogger LOGGER = new CustomLogger("clippy-server");
+    private static final CustomLogger LOGGER = new CustomLogger("klippy-server");
 
     private final ClipboardEntryRepository repository;
     private final ObjectProvider<AuthenticationContext> authenticationContextProvider;

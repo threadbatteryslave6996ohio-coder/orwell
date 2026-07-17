@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 class DummyClientAppTest {
     @Test
     void joinsCommandLineArguments() throws Exception {
-        assertEquals("hello world from clippy", invokeStaticString("joinArgs", new String[] {"hello", "world", "from", "clippy"}));
+        assertEquals("hello world from klippy", invokeStaticString("joinArgs", new String[] {"hello", "world", "from", "klippy"}));
     }
 
     @Test

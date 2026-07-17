@@ -9,6 +9,7 @@ import dev.orwell.clients.core.DesktopClientRunner;
 import dev.orwell.clients.core.DesktopClipboardMonitor;
 import dev.orwell.clients.core.MacClipboardPolicy;
 import dev.orwell.clients.core.OfflineFileLockerFactory;
+import dev.orwell.clients.core.OfflineLogPath;
 import dev.orwell.clients.core.PollIntervalValidator;
 import dev.orwell.clients.core.env.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
@@ -25,7 +26,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 
 public final class ClipboardClientApp {
-    private static final Path OFFLINE_LOG_PATH = Path.of("clippy-offline-clipboard.json");
+    private static final Path OFFLINE_LOG_PATH = OfflineLogPath.DEFAULT;
 
     private final DesktopClipboardMonitor monitor;
 
@@ -55,6 +56,7 @@ public final class ClipboardClientApp {
     }
 
     public static void main(String[] args) throws IOException {
+        OfflineLogPath.migrateLegacyIfPresent();
         Env env = ClientEnvs.load();
         ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("client-"));
         long pollIntervalMs = env.has(ClientEnvs.CLIPBOARD_POLL_INTERVAL_MS)

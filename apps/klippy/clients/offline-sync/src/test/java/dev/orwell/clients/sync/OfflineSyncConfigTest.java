@@ -64,10 +64,10 @@ class OfflineSyncConfigTest {
     void derivesDeadLetterPathAlongsideOfflineLog() {
         Env env = ClientEnvs.from(Map.of("REMOTE_SERVER_URL", "http://localhost:8080"));
 
-        OfflineSyncConfig config = OfflineSyncConfig.load(env, Path.of("/data/clippy-offline-clipboard.json"));
+        OfflineSyncConfig config = OfflineSyncConfig.load(env, Path.of("/data/klippy-offline-clipboard.json"));
 
         assertEquals(
-                Path.of("/data/clippy-offline-clipboard-dead-letter.json"),
+                Path.of("/data/klippy-offline-clipboard-dead-letter.json"),
                 config.deadLetterLog());
     }
 }

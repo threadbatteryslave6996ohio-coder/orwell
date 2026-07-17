@@ -32,4 +32,4 @@ devops/
 *.tfstate.*
 *.backup
 *.deb
-clippy-offline-clipboard.json
+klippy-offline-clipboard.json

@@ -6,30 +6,24 @@ logger/health/auth/JSON auto-configs, the invalid-JSON `@RestControllerAdvice`, 
 `@RequireAuthentication` guard, the shared Testcontainers base, the removal of
 combined-server, and the orphaned `ClippyServerLauncherTest` — are done.)
 
-## 0. The clippy → klippy rename: what's left
+## 0. The clippy → klippy rename (done — one follow-up)
 
-The JVM identifiers, local dev Postgres, Terraform labels and everything user-facing are renamed.
-Three groups still say `clippy` **on purpose** — each is a contract, not a label:
+Everything is renamed: JVM and Kotlin identifiers, local dev Postgres, the audit log stream, the
+client data files, the file-locker socket, the Android preferences, and every user-facing name.
+The Azure Terraform was deleted rather than renamed; it is no longer used.
 
-- **Audit log stream** `clippy-server` → `clippy-server.txt` (`ClipboardEntryController`, and the
-  app name in `KlippyServerApplication`). Cheap to rename, but nothing in-repo reads the file
-  except one test, so it fails silently in whatever ships the logs. Needs someone to confirm no
-  external tooling keys on the name.
-- **Deployed Azure infra** — resolved: `apps/klippy/devops` was deleted, it is no longer used.
-  Note the `.tf` files never controlled anything by existing; if those Azure resources are still
-  running, deleting the code left them unmanaged rather than destroyed.
-- **Client contracts** — `clippy-offline-clipboard.json` and `/tmp/clippy-offline-file-locker.sock`.
-  The socket is the sharper one: a renamed client and an old locker bind different paths, never
-  meet, and the lock stops excluding — two processes then write the same file. Needs a
-  read-both-write-new release plus a deprecation window before the fallback drops.
+**Follow-up: drop the three legacy fallbacks once clients have rolled over.** They exist only to
+carry pre-rename data forward, and each is listed in CLAUDE.md: `OfflineLogPath.LEGACY`,
+`OfflineFileLockerClient.LEGACY_SOCKET_PATH`, and `KlippySettings.LEGACY_PREFERENCES_NAME`. Deleting
+one early strands exactly the data it was added to save, so this is gated on rollout — no
+pre-rename client, locker, or Android install still running — not on a release number.
 
-**The Android client is untouched and is its own project.** It builds with Gradle, outside the
-Maven reactor, so the JVM rename never reached it: `ClippyApp`/`ClippyTheme`/`ClippySettings`/
-`ClippyApi` in `MainActivity.kt`, `Theme.Clippy`, `rootProject.name = "ClippyAndroid"`, and the
-user-visible `app_name` string still say Clippy. Renaming the Kotlin identifiers is compile-checked
-like the Java was — but `getSharedPreferences("clippy", …)` is a **data contract**: change that key
-and every installed app forgets its server URL and client token. Rename the identifiers and
-`app_name` freely; migrate the preferences key only by reading the old one and writing the new.
+Two things worth knowing if you touch this again:
+
+- **The Android module is not in the Maven reactor.** It builds with Gradle, so `mvn test` proves
+  nothing about it. Its rename is unverified by CI here and wants a real Gradle build.
+- **External log tooling.** The audit file is now `klippy-server.txt`. Nothing in-repo reads it but
+  its test, so anything shipping or rotating logs by the old name fails silently.
 
 ## 1. Common `springProperties` keys → `AppServerEnv` descriptor (completed)
 

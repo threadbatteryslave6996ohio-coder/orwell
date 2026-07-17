@@ -15,7 +15,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public final class OfflineFileLockerClient {
-    public static final Path DEFAULT_SOCKET_PATH = Path.of("/tmp/clippy-offline-file-locker.sock");
+    public static final Path DEFAULT_SOCKET_PATH = Path.of("/tmp/klippy-offline-file-locker.sock");
+
+    /**
+     * Socket a pre-rename service still listens on. Clients fall back to it so a new client keeps
+     * working against a locker that has not been restarted yet; the service is told which file to
+     * write on every request, so an older one handles the current paths fine. Safe to delete once
+     * no pre-rename file-locker is running anywhere.
+     */
+    public static final Path LEGACY_SOCKET_PATH = Path.of("/tmp/clippy-offline-file-locker.sock");
+
     private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
     private final UnixDomainSocketAddress address;

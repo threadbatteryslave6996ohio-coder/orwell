@@ -2,6 +2,7 @@ package dev.orwell.clients.sync;
 
 import dev.orwell.clients.core.ClientAuthInitializer;
 import dev.orwell.clients.core.OfflineFileLockerFactory;
+import dev.orwell.clients.core.OfflineLogPath;
 import dev.orwell.clients.core.env.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.clients.filelocker.OfflineFileLockerClient;
@@ -19,7 +20,7 @@ import java.util.stream.Collectors;
  * first snapshot, resolve the client id, initialize auth, then start the monitor loop.
  */
 public final class OfflineSyncBootstrap {
-    private static final Path DEFAULT_OFFLINE_LOG = Path.of("clippy-offline-clipboard.json");
+    private static final Path DEFAULT_OFFLINE_LOG = OfflineLogPath.DEFAULT;
 
     private final OfflineSyncConfig config;
     private final OfflineFileLockerClient fileLocker;
@@ -30,6 +31,11 @@ public final class OfflineSyncBootstrap {
     }
 
     public static OfflineSyncBootstrap fromArgs(String[] args) throws java.io.IOException {
+        // Only the default location migrates: an explicit path is the caller's choice, and
+        // nothing should be moved out from under it.
+        if (args.length == 0) {
+            OfflineLogPath.migrateLegacyIfPresent();
+        }
         Path offlineLog = args.length == 0 ? DEFAULT_OFFLINE_LOG : Path.of(args[0]);
         Env env = ClientEnvs.load();
         OfflineFileLockerClient fileLocker = OfflineFileLockerFactory.create(env);

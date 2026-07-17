@@ -23,7 +23,7 @@ class EnvFilesTest {
                 """
                         # comment
                         REMOTE_SERVER_URL = "http://localhost:8080"
-                        CLIENT_ID='clippy-client'
+                        CLIENT_ID='klippy-client'
                         CLIENT_TOKEN=token-123
                         EMPTY_LINE=
                         INVALID_LINE
@@ -33,7 +33,7 @@ class EnvFilesTest {
         Map<String, String> values = EnvFiles.load(nestedDirectory);
 
         assertEquals("http://localhost:8080", values.get("REMOTE_SERVER_URL"));
-        assertEquals("clippy-client", values.get("CLIENT_ID"));
+        assertEquals("klippy-client", values.get("CLIENT_ID"));
         assertEquals("token-123", values.get("CLIENT_TOKEN"));
     }
 

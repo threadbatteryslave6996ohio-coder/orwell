@@ -32,6 +32,12 @@ OFFLINE_FILE_LOCKER_SOCKET=/run/user/1000/klippy-file-locker.sock
 The service removes a stale socket at startup, refuses to replace a socket with
 an active listener, and removes its own socket during normal shutdown.
 
+The socket was `/tmp/clippy-offline-file-locker.sock` before the rename. If only that one exists —
+a service still running from before the rename — clients use it and log a note asking you to
+restart the service. Requests carry the file path, so an older service handles the current file
+names correctly. An explicit `OFFLINE_FILE_LOCKER_SOCKET` disables the fallback and is used as
+given.
+
 ## Test
 
 ```bash

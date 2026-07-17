@@ -16,7 +16,7 @@ public class KlippyServerApplication {
      * {@code SERVER.start(...)} / {@code runOrExit}; the core never reads {@code .env} files itself.
      */
     public static final AppServer SERVER =
-            new AppServer(KlippyServerApplication.class, "clippy-server", ServerEnvs.ENV);
+            new AppServer(KlippyServerApplication.class, "klippy-server", ServerEnvs.ENV);
 
     public static void main(String[] args) {
         SERVER.runOrExit(args);

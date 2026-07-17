@@ -46,7 +46,7 @@ class ClipboardEntryControllerTest {
             assertThat(response.clientId()).isEqualTo("android-pixel-8");
             assertThat(response.id()).isEqualTo(42L);
 
-            String content = Files.readString(tempDir.resolve("clippy-server.txt"));
+            String content = Files.readString(tempDir.resolve("klippy-server.txt"));
             assertThat(content).contains("Added clipboard entry for clientId=android-pixel-8");
             assertThat(content).contains("entryId=42");
             assertThat(content).doesNotContain("clipboard text");
