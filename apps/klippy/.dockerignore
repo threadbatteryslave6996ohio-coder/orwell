@@ -3,7 +3,6 @@
 # Local secrets / config (root .env carries real credentials — never bake it in)
 .env
 .env.*
-!combined-server/docker-combined.env
 
 # Maven / Java build output
 **/target/

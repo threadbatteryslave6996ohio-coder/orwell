@@ -6,7 +6,6 @@
 **/.terraform
 .env
 .env.*
-!apps/klippy/combined-server/docker-combined.env
 !**/.env.example
 !**/.env.*.example
 *.class

@@ -6,7 +6,7 @@
   </defs>
 
   <rect x="0" y="0" width="1180" height="810" fill="#f8fafc"/>
-  <text x="40" y="46" font-size="24" font-weight="700" fill="#0f172a">Clippy — Maven module dependency graph</text>
+  <text x="40" y="46" font-size="24" font-weight="700" fill="#0f172a">Klippy — Maven module dependency graph</text>
   <text x="40" y="70" font-size="13" fill="#64748b">Arrows mean “depends on”. Transitively-implied edges (e.g. every app also reaches klippy-utils) are omitted for clarity.</text>
 
   <!-- tier labels -->
@@ -25,12 +25,10 @@
   <!-- ================= EDGES ================= -->
   <g stroke="#94a3b8" stroke-width="1.6" fill="none" marker-end="url(#arrow)" opacity="0.85">
     <!-- apps -> services -->
-    <line x1="180" y1="137" x2="180" y2="273"/>            <!-- combined -> auth-server -->
-    <line x1="200" y1="137" x2="372" y2="273"/>            <!-- combined -> server -->
-    <line x1="500" y1="137" x2="690" y2="273"/>            <!-- mac -> client-core -->
-    <line x1="680" y1="137" x2="705" y2="273"/>            <!-- linux -> client-core -->
-    <line x1="860" y1="137" x2="715" y2="273"/>            <!-- offline-sync -> client-core -->
-    <line x1="1040" y1="137" x2="722" y2="273"/>           <!-- dummy -> client-core -->
+    <line x1="180" y1="137" x2="690" y2="273"/>            <!-- mac -> client-core -->
+    <line x1="360" y1="137" x2="705" y2="273"/>            <!-- linux -> client-core -->
+    <line x1="540" y1="137" x2="715" y2="273"/>            <!-- offline-sync -> client-core -->
+    <line x1="720" y1="137" x2="722" y2="273"/>            <!-- dummy -> client-core -->
     <!-- services -> infra / core -->
     <line x1="180" y1="327" x2="180" y2="653"/>            <!-- auth-server -> server-bootstrap -->
     <line x1="212" y1="327" x2="372" y2="653"/>            <!-- auth-server -> auth-api -->
@@ -51,25 +49,21 @@
 
   <!-- APPS tier (cy=110) -->
   <g>
-    <rect x="105" y="83" width="150" height="54" rx="9" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6" stroke-dasharray="0"/>
-    <text x="180" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">combined-server</text>
-    <text x="180" y="123" text-anchor="middle" font-size="10.5" fill="#3b5bdb">auth + clipboard in 1 JVM</text>
+    <rect x="105" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <text x="180" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">client (mac)</text>
+    <text x="180" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">macOS desktop app</text>
 
-    <rect x="425" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
-    <text x="500" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">client (mac)</text>
-    <text x="500" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">macOS desktop app</text>
+    <rect x="285" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <text x="360" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">linux-client</text>
+    <text x="360" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">Linux desktop app</text>
 
-    <rect x="605" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
-    <text x="680" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">linux-client</text>
-    <text x="680" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">Linux desktop app</text>
+    <rect x="465" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <text x="540" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">offline-sync-client</text>
+    <text x="540" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">drains log → server</text>
 
-    <rect x="785" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
-    <text x="860" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">offline-sync-client</text>
-    <text x="860" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">drains log → server</text>
-
-    <rect x="965" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
-    <text x="1040" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">dummy-client</text>
-    <text x="1040" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">CLI sender / tests</text>
+    <rect x="645" y="83" width="150" height="54" rx="9" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <text x="720" y="106" text-anchor="middle" font-size="13" font-weight="700" fill="#14532d">dummy-client</text>
+    <text x="720" y="123" text-anchor="middle" font-size="10.5" fill="#15803d">CLI sender / tests</text>
   </g>
 
   <!-- SERVICES tier (cy=300) -->

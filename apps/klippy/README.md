@@ -55,16 +55,11 @@ The simplest complete deployment uses Docker Compose:
 ```bash
 # Nginx proxy on 8080; auth and clipboard stay on the Docker network
 docker compose -f apps/klippy/docker-compose.yml up --build
-
-# Combined deployment (auth + clipboard routes in one JVM on 8080)
-docker compose -f apps/combined-server/docker-compose.yml up --build
 ```
 
-The separate deployment uses `http://localhost:8080/auth` for auth and
-`http://localhost:8080/clipboard` for clipboard requests. The combined deployment uses
-`http://localhost:8080/auth` and `http://localhost:8080/api` for auth and
-clipboard respectively, and also launches the bucket proxy from the same
-combined env file.
+Nginx is the single entrypoint: auth is served at `http://localhost:8080/auth` and
+clipboard requests at `http://localhost:8080/clipboard`. Set `KLIPPY_HTTP_PORT` to
+publish the proxy on a port other than 8080.
 
 For a host-based Linux development stack, configure the repository-root `.env`
 and start each service in its own terminal:
@@ -106,7 +101,6 @@ Shell environment variables override `.env` values.
 ## Documentation
 
 - [Clipboard server](server/README.md)
-- [Combined server](../combined-server/README.md)
 - [Shared server bootstrap](../../packages/server-bootstrap/README.md)
 - [Authentication modules](../auth/README.md)
 - [HTTP auth server](../auth/http-based/server/README.md)
