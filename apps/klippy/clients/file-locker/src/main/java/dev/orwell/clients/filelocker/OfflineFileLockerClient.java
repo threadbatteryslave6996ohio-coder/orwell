@@ -51,7 +51,7 @@ public final class OfflineFileLockerClient {
 
     private String request(int operation, Path path, String content) throws IOException {
         FutureTask<String> request = new FutureTask<>(() -> requestBlocking(operation, path, content));
-        Thread.ofVirtual().name("clippy-file-locker-request").start(request);
+        Thread.ofVirtual().name("klippy-file-locker-request").start(request);
         try {
             return request.get(requestTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException exception) {

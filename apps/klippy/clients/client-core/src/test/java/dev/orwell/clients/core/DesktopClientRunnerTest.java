@@ -18,10 +18,10 @@ class DesktopClientRunnerTest {
         ));
         ClientConfig config = ClientConfig.load(env, "fallback");
 
-        String banner = DesktopClientRunner.startupBanner("Clippy client started.", config, 1L, Map.of());
+        String banner = DesktopClientRunner.startupBanner("Klippy client started.", config, 1L, Map.of());
 
         assertEquals(
-                "Clippy client started. clientId=mac-host endpoint=http://localhost:8080/clipboard "
+                "Klippy client started. clientId=mac-host endpoint=http://localhost:8080/clipboard "
                         + "authServer=unset pollIntervalMs=1 tokenSource=CLIENT_TOKEN",
                 banner);
     }
@@ -37,10 +37,10 @@ class DesktopClientRunnerTest {
         ClientConfig config = ClientConfig.load(env, "fallback");
 
         String banner = DesktopClientRunner.startupBanner(
-                "Clippy Linux client started.", config, 1000L, Map.of("clipboardBackend", "awt"));
+                "Klippy Linux client started.", config, 1000L, Map.of("clipboardBackend", "awt"));
 
         assertEquals(
-                "Clippy Linux client started. clientId=linux-host endpoint=http://localhost:8080/clipboard "
+                "Klippy Linux client started. clientId=linux-host endpoint=http://localhost:8080/clipboard "
                         + "authServer=http://localhost:9090 pollIntervalMs=1000 clipboardBackend=awt "
                         + "tokenSource=CLIENT_SECRET",
                 banner);

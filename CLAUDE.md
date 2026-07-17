@@ -49,11 +49,20 @@ Java packages predate the renames and do NOT always match — use this table, do
 
 ## Naming history (don't "fix" these)
 
-- "Klippy" was historically spelled "Clippy". Java identifiers keep the old spelling
-  (`ClippyServerApplication`, `ClippyAuthServerApplication`) and the runtime data file
-  `clippy-offline-clipboard.json` is a client contract baked into Java constants — renaming it
-  breaks deployed clients. Everything user-facing (artifactIds, jars, docker images, docs) says
-  "klippy".
+- "Klippy" was historically spelled "Clippy". Java identifiers have been renamed to the current
+  spelling (`KlippyServerApplication`, `KlippyAuthServerApplication`) — the compiler covers those,
+  so they were safe to move. What survives is spelled `clippy` **only where the string is a
+  contract**, and those are load-bearing:
+  - `clippy-offline-clipboard.json` (+ its `-dead-letter` variant) and the file-locker socket
+    `/tmp/clippy-offline-file-locker.sock` are client contracts baked into Java constants.
+    Renaming either strands unsynced data on deployed clients; renaming the socket alone lets a
+    new client and an old locker miss each other, so the lock stops excluding and two processes
+    write the same file. They only move together, behind a read-both-write-new migration.
+  - The audit-log stream `clippy-server` (`ClipboardEntryController`, and the app name in
+    `KlippyServerApplication`) names the on-disk file `clippy-server.txt`. Nothing in-repo reads
+    it but the test, so renaming it fails silently in whatever ships the logs.
+
+  Everything user-facing (artifactIds, jars, docker images, docs, env vars) says "klippy".
 - Jarvis's Java packages live under `dev.orwell.bucket.*`; klippy-server's under
   `dev.orwell.server`. Grep by package when tracing code, by artifactId when tracing builds.
 - `apps/combined-server` was deleted deliberately. Do not recreate it; ignore references to it
@@ -64,8 +73,7 @@ Java packages predate the renames and do NOT always match — use this table, do
 - Postgres identifiers likewise keep `clippy`: the compose service/container/volume names
   (`db-clippy`, `clippy-postgres`, `clippy-pg-data`), `POSTGRES_DB`/`POSTGRES_USER`, and the
   role/database dev-stack.sh creates. Existing volumes and roles hold real data; renaming them
-  orphans it. The audit-log stream name `clippy-server` (in `ClipboardEntryController`) is a
-  Java constant covered by the identifier rule above.
+  orphans it.
 
 ## Repo conventions
 

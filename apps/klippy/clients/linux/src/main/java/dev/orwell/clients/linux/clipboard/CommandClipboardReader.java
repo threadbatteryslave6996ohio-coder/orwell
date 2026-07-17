@@ -40,7 +40,7 @@ public final class CommandClipboardReader implements LinuxClipboardReader {
         ProcessBuilder processBuilder = new ProcessBuilder(command)
                 .redirectErrorStream(true);
         // Poll helpers are not desktop applications and must not inherit the
-        // launch identity of the terminal or IDE that started Clippy.
+        // launch identity of the terminal or IDE that started Klippy.
         ProcessEnvironmentSanitizer.stripDesktopLaunchEnvironment(processBuilder.environment());
         Process process = processBuilder.start();
         CompletableFuture<byte[]> output = CompletableFuture.supplyAsync(() -> {

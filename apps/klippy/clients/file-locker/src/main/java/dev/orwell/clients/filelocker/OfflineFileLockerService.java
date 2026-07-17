@@ -40,7 +40,7 @@ public final class OfflineFileLockerService implements AutoCloseable {
                 : Path.of(args[0]);
         try (OfflineFileLockerService service = new OfflineFileLockerService(socketPath)) {
             Runtime.getRuntime().addShutdownHook(new Thread(service::close));
-            System.out.printf("Clippy file-locker service listening at %s%n", socketPath.toAbsolutePath());
+            System.out.printf("Klippy file-locker service listening at %s%n", socketPath.toAbsolutePath());
             service.run();
         }
     }

@@ -7,16 +7,16 @@ import dev.orwell.logging.CustomLogger;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class ClippyAuthServerApplication {
+public class KlippyAuthServerApplication {
     /**
      * Server descriptor: how the environment is fetched stays with whoever calls
      * {@code SERVER.start(...)} / {@code runOrExit}; the core never reads {@code .env} files itself.
      */
     public static final AppServer SERVER = new AppServer(
-            ClippyAuthServerApplication.class,
+            KlippyAuthServerApplication.class,
             "auth-server",
             AuthServerEnvs.ENV,
-            ClippyAuthServerApplication::logLocalDatabaseIfApplicable);
+            KlippyAuthServerApplication::logLocalDatabaseIfApplicable);
 
     public static void main(String[] args) {
         SERVER.runOrExit(args);

@@ -38,7 +38,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <classifier>exec</classifier>
-                    <mainClass>dev.orwell.auth.http.server.ClippyAuthServerApplication</mainClass>
+                    <mainClass>dev.orwell.auth.http.server.KlippyAuthServerApplication</mainClass>
                 </configuration>
                 <executions>
                     <execution>

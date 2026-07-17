@@ -74,6 +74,6 @@ public final class ClipboardClientApp {
 
         ClipboardClientApp app = new ClipboardClientApp(
                 clipboard, config.endpoint(), config.authServerUrl(), config.clientId(), config.authSession(), fileLocker);
-        new DesktopClientRunner(app.monitor, pollIntervalMs).start("Clippy client started.", config);
+        new DesktopClientRunner(app.monitor, pollIntervalMs).start("Klippy client started.", config);
     }
 }

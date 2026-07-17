@@ -67,7 +67,7 @@ public final class LinuxClipboardClientApp {
                 clipboardReader, config.endpoint(), config.authServerUrl(), config.clientId(),
                 config.authSession(), fileLocker, auditLogger);
         new DesktopClientRunner(app.monitor, pollIntervalMs)
-                .start("Clippy Linux client started.", config, Map.of("clipboardBackend", clipboardReader.name()));
+                .start("Klippy Linux client started.", config, Map.of("clipboardBackend", clipboardReader.name()));
     }
 
     private static void initializeAuth(ClientConfig config, AuthAuditLogger auditLogger) {

@@ -1,7 +1,7 @@
 package dev.orwell.server;
 
 import dev.orwell.auth.AuthenticationStrategy;
-import dev.orwell.server.application.ClippyServerApplication;
+import dev.orwell.server.application.KlippyServerApplication;
 import dev.orwell.server.dto.ClipboardEntryResponse;
 import dev.orwell.server.model.ClipboardEntry;
 import dev.orwell.server.repository.ClipboardEntryRepository;
@@ -26,7 +26,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(
-        classes = {ClippyServerApplication.class, ClipboardEntryHttpIntegrationTest.TestConfig.class},
+        classes = {KlippyServerApplication.class, ClipboardEntryHttpIntegrationTest.TestConfig.class},
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 class ClipboardEntryHttpIntegrationTest extends PostgresIntegrationTest {

@@ -47,7 +47,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <classifier>exec</classifier>
-                    <mainClass>dev.orwell.server.application.ClippyServerApplication</mainClass>
+                    <mainClass>dev.orwell.server.application.KlippyServerApplication</mainClass>
                 </configuration>
                 <executions>
                     <execution>
