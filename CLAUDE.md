@@ -70,10 +70,14 @@ Java packages predate the renames and do NOT always match — use this table, do
 - `apps/klippy/devops/*.tf` keeps `clippy` in Terraform resource names, Azure identifiers, and
   the default database name — renaming those would destroy/recreate deployed infrastructure.
   `apps/klippy/.env.prod.example` intentionally matches that database name.
-- Postgres identifiers likewise keep `clippy`: the compose service/container/volume names
-  (`db-clippy`, `clippy-postgres`, `clippy-pg-data`), `POSTGRES_DB`/`POSTGRES_USER`, and the
-  role/database dev-stack.sh creates. Existing volumes and roles hold real data; renaming them
-  orphans it.
+- **Local dev** Postgres now says `klippy` — compose service `db-klippy`, container
+  `klippy-postgres`, the `*-klippy-pg-data` volumes, `POSTGRES_DB`/`POSTGRES_USER`, and the
+  role/database `dev-stack.sh` creates — matching how the `auth` and `secrets` databases are
+  already named after their app. Nothing migrates a pre-rename `clippy-pg-data` volume: it stays
+  on disk as an orphan and you re-seed. `docker volume ls` still showing one is expected.
+- The **deployed** database is a separate question from the local one, and still `clippy` — see
+  the devops rule above. `apps/klippy/.env.prod.example` and `docker-compose.prod.yml` point at
+  it, so they keep the old spelling on purpose; don't "finish" the rename by touching them.
 
 ## Repo conventions
 

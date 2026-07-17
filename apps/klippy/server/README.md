@@ -54,9 +54,9 @@ The launcher loads configuration from a `.env` file in the current directory or 
 All values are required. A local configuration is:
 
 ```text
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/clippy
-SPRING_DATASOURCE_USERNAME=clippy
-SPRING_DATASOURCE_PASSWORD=clippy
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/klippy
+SPRING_DATASOURCE_USERNAME=klippy
+SPRING_DATASOURCE_PASSWORD=klippy
 SERVER_ADDRESS=0.0.0.0
 SERVER_PORT=8080
 AUTH_BASE_URL=http://localhost:8081

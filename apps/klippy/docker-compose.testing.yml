@@ -6,19 +6,18 @@
 # Brings up two Postgres databases plus one published HTTP entrypoint on port 8080.
 
 services:
-  # Postgres identifiers keep the historic "clippy" name — existing volumes/roles hold data (see CLAUDE.md).
-  db-clippy:
+  db-klippy:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: clippy
-      POSTGRES_USER: clippy
-      POSTGRES_PASSWORD: clippy
+      POSTGRES_DB: klippy
+      POSTGRES_USER: klippy
+      POSTGRES_PASSWORD: klippy
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - testing-clippy-pg-data:/var/lib/postgresql/data
+      - testing-klippy-pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U clippy -d clippy"]
+      test: ["CMD-SHELL", "pg_isready -U klippy -d klippy"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -69,10 +68,10 @@ services:
     environment:
       SERVER_ADDRESS: 0.0.0.0
       SERVER_PORT: "80"
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db-clippy/clippy
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db-klippy/klippy
       AUTH_BASE_URL: http://auth-server/auth
     depends_on:
-      db-clippy:
+      db-klippy:
         condition: service_healthy
       auth-server:
         condition: service_started
@@ -92,5 +91,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  testing-clippy-pg-data:
+  testing-klippy-pg-data:
   testing-auth-pg-data:
