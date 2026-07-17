@@ -59,7 +59,7 @@ services:
       AUTH_DATASOURCE_PASSWORD: auth
       SERVER_ADDRESS: 0.0.0.0
       SERVER_PORT: "80"
-      CLIPPY_AUTH_ROUTE_PREFIX: /auth
+      AUTH_ROUTE_PREFIX: /auth
       LOGGING_FILE_NAME: logs/auth-server.log
       AUTH_JPA_HIBERNATE_DDL_AUTO: update
       AUTH_JPA_JDBC_TIME_ZONE: UTC

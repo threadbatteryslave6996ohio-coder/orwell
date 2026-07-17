@@ -40,11 +40,12 @@ java -jar apps/auth/http-based/server/target/auth-http-server-0.1.0-SNAPSHOT-exe
 The launcher loads `.env` from the current directory or a parent, applies
 nonblank shell values as overrides, and passes the result into the auth core.
 
-All values are required. These values provide a local configuration.
+All values are required unless marked optional. These values provide a local configuration.
 
 | Environment variable | Example | Purpose |
 | --- | --- | --- |
 | `SERVER_PORT` | `8081` | HTTP port for the auth server. |
+| `AUTH_ROUTE_PREFIX` | `/auth` | Optional. Path prefix the auth routes are served under, published as `orwell.auth.route-prefix`. Defaults to empty, serving routes at the root; set it when the server sits behind a shared reverse proxy. `/health` is never prefixed. |
 | `AUTH_DATASOURCE_URL` | `jdbc:postgresql://localhost:5433/auth` | PostgreSQL JDBC URL. |
 | `AUTH_DATASOURCE_USERNAME` | `auth` | Database username. |
 | `AUTH_DATASOURCE_PASSWORD` | `auth` | Database password. |

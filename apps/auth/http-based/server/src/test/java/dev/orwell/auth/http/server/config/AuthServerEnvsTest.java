@@ -58,7 +58,7 @@ class AuthServerEnvsTest {
                 "LOGGING_FILE_NAME", "/tmp/auth.log",
                 "AUTH_JPA_HIBERNATE_DDL_AUTO", "validate",
                 "AUTH_JPA_JDBC_TIME_ZONE", "UTC",
-                "CLIPPY_AUTH_ROUTE_PREFIX", "/auth"
+                "AUTH_ROUTE_PREFIX", "/auth"
         ));
 
         assertEquals(Map.of(
@@ -70,7 +70,7 @@ class AuthServerEnvsTest {
                 "logging.file.name", "/tmp/auth.log",
                 "spring.jpa.hibernate.ddl-auto", "validate",
                 "spring.jpa.properties.hibernate.jdbc.time_zone", "UTC",
-                "clippy.auth.route-prefix", "/auth"
+                "orwell.auth.route-prefix", "/auth"
         ), AuthServerEnvs.ENV.springProperties(env));
     }
 }

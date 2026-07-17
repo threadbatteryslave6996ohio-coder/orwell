@@ -17,7 +17,7 @@ services:
     environment:
       SERVER_ADDRESS: 0.0.0.0
       SERVER_PORT: "80"
-      CLIPPY_AUTH_ROUTE_PREFIX: /auth
+      AUTH_ROUTE_PREFIX: /auth
       LOGGING_FILE_NAME: logs/auth-server.log
     restart: unless-stopped
 
