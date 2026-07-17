@@ -1,17 +1,17 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: clippy-postgres
+    container_name: klippy-postgres
     environment:
-      POSTGRES_DB: clippy
-      POSTGRES_USER: clippy
-      POSTGRES_PASSWORD: clippy
+      POSTGRES_DB: klippy
+      POSTGRES_USER: klippy
+      POSTGRES_PASSWORD: klippy
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U clippy -d clippy"]
+      test: ["CMD-SHELL", "pg_isready -U klippy -d klippy"]
       interval: 5s
       timeout: 5s
       retries: 10
