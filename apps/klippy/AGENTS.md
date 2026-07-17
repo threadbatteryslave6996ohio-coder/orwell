@@ -17,7 +17,6 @@ Read the root `README.md` and the README for the component being changed before 
 - `clients/mac`, `clients/linux`, `clients/dummy`, `clients/offline-sync`: Java clients.
 - `clients/android`: standalone Android/Kotlin client.
 - `scripts`: local build and launch helpers.
-- `devops`: Terraform and cloud-init configuration.
 
 ## Development rules
 

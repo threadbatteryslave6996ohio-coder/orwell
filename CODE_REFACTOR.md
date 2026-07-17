@@ -15,10 +15,9 @@ Three groups still say `clippy` **on purpose** — each is a contract, not a lab
   app name in `KlippyServerApplication`). Cheap to rename, but nothing in-repo reads the file
   except one test, so it fails silently in whatever ships the logs. Needs someone to confirm no
   external tooling keys on the name.
-- **Deployed Azure infra** — `name_prefix`, `postgres_database_name`, `storage_container_name`,
-  `postgres_admin_username`, the cloud-init paths. `administrator_login` and `custom_data` are
-  both ForceNew: renaming replaces the Postgres server and the VM. Only worth doing as a
-  blue/green migration, and only if that infrastructure is moving anyway.
+- **Deployed Azure infra** — resolved: `apps/klippy/devops` was deleted, it is no longer used.
+  Note the `.tf` files never controlled anything by existing; if those Azure resources are still
+  running, deleting the code left them unmanaged rather than destroyed.
 - **Client contracts** — `clippy-offline-clipboard.json` and `/tmp/clippy-offline-file-locker.sock`.
   The socket is the sharper one: a renamed client and an old locker bind different paths, never
   meet, and the lock stops excluding — two processes then write the same file. Needs a

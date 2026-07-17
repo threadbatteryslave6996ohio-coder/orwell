@@ -112,7 +112,6 @@ Shell environment variables override `.env` values.
 - [Offline file-locker](clients/file-locker/README.md)
 - [Dummy client](clients/dummy/README.md)
 - [Android client](clients/android/README.md)
-- [Azure infrastructure](devops/README.md)
 
 The server READMEs document the HTTP contracts, configuration, and deployment
 details. Each client README covers only that client's setup and behavior.
