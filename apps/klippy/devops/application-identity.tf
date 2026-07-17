@@ -16,7 +16,7 @@ resource "azuread_application_password" "applications" {
 }
 
 resource "azurerm_role_assignment" "applications_storage_blob_contributor" {
-  scope                = azurerm_storage_account.clippy.id
+  scope                = azurerm_storage_account.klippy.id
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azuread_service_principal.applications.object_id
 }

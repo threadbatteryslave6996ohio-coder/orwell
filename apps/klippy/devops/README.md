@@ -1,5 +1,24 @@
 # Klippy Azure Infrastructure
 
+> **Read this before your first apply on an existing deployment.**
+>
+> The resource labels were renamed `clippy` → `klippy` (`azurerm_resource_group.clippy` →
+> `azurerm_resource_group.klippy`, and five more). Azure resource names did not change and
+> nothing in the cloud is affected — but a label is the address Terraform stores state under.
+> Until the state is moved, Terraform sees the old addresses as deleted and **plans to destroy
+> and recreate the database, storage account and VM.**
+>
+> Run this once, before any apply:
+>
+> ```bash
+> cd apps/klippy/devops && ./migrate-state-klippy-rename.sh
+> ```
+>
+> It moves each address, is safe to re-run, and finishes with a `terraform plan` that must report
+> **no changes**. If the plan proposes destroying anything, stop — a resource is still tracked
+> under its old address, and applying will take the real one down with it. A fresh workspace with
+> no state needs nothing.
+
 Terraform for Azure infrastructure sized for Azure's 12-month free-account allowances where eligible:
 
 - Azure Database for PostgreSQL Flexible Server: Burstable B1MS with 32 GB storage.
@@ -18,6 +37,8 @@ The same Terraform can optionally create an Azure Linux VM as an EC2-style serve
 - `compute.tf`: optional server VM, networking, security group, and VM bootstrap wiring.
 - `variables.tf`: module inputs.
 - `outputs.tf`: module outputs.
+- `migrate-state-klippy-rename.sh`: one-shot state migration for the label rename; see the note
+  at the top of this file.
 
 ## Deploy
 

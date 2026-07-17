@@ -67,9 +67,19 @@ Java packages predate the renames and do NOT always match — use this table, do
   `dev.orwell.server`. Grep by package when tracing code, by artifactId when tracing builds.
 - `apps/combined-server` was deleted deliberately. Do not recreate it; ignore references to it
   in old commits.
-- `apps/klippy/devops/*.tf` keeps `clippy` in Terraform resource names, Azure identifiers, and
-  the default database name — renaming those would destroy/recreate deployed infrastructure.
-  `apps/klippy/.env.prod.example` intentionally matches that database name.
+- `apps/klippy/devops/*.tf` splits two ways, and the difference is the whole ballgame:
+  - **Resource labels** are renamed (`azurerm_resource_group.klippy`, …). A label is only a
+    Terraform-side address, so this changes nothing in Azure — *provided* the state is moved.
+    `migrate-state-klippy-rename.sh` does that and must run before the first apply on an existing
+    deployment, or Terraform destroys and recreates the DB, storage account and VM. Its closing
+    `terraform plan` reporting "no changes" is the proof the rename was address-only.
+  - **Values still say `clippy`** and must stay that way: `name_prefix`, `postgres_database_name`,
+    `storage_container_name`, `postgres_admin_username` (`clippyadmin`), the `clippy-server` NSG
+    rule, and every `/opt/clippy`, `/etc/clippy`, `/var/log/clippy` path in the cloud-init
+    template. These are real Azure names and VM paths. `administrator_login` is ForceNew, so
+    renaming it replaces the entire Postgres server; `custom_data` is ForceNew, so touching the
+    cloud-init template — even its prose — replaces the VM. `apps/klippy/.env.prod.example` and
+    `docker-compose.prod.yml` point at that database and match it on purpose.
 - **Local dev** Postgres now says `klippy` — compose service `db-klippy`, container
   `klippy-postgres`, the `*-klippy-pg-data` volumes, `POSTGRES_DB`/`POSTGRES_USER`, and the
   role/database `dev-stack.sh` creates — matching how the `auth` and `secrets` databases are

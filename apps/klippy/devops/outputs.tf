@@ -1,11 +1,11 @@
 output "postgres_host" {
   description = "PostgreSQL server hostname."
-  value       = azurerm_postgresql_flexible_server.clippy.fqdn
+  value       = azurerm_postgresql_flexible_server.klippy.fqdn
 }
 
 output "spring_datasource_url" {
   description = "JDBC URL for the Klippy Spring Boot server."
-  value       = "jdbc:postgresql://${azurerm_postgresql_flexible_server.clippy.fqdn}:5432/${azurerm_postgresql_flexible_server_database.clippy.name}?sslmode=require"
+  value       = "jdbc:postgresql://${azurerm_postgresql_flexible_server.klippy.fqdn}:5432/${azurerm_postgresql_flexible_server_database.klippy.name}?sslmode=require"
 }
 
 output "spring_datasource_username" {
@@ -15,12 +15,12 @@ output "spring_datasource_username" {
 
 output "storage_account_name" {
   description = "Storage account created for the Klippy bucket-equivalent."
-  value       = azurerm_storage_account.clippy.name
+  value       = azurerm_storage_account.klippy.name
 }
 
 output "storage_container_name" {
   description = "Private blob container created in the storage account."
-  value       = azurerm_storage_container.clippy.name
+  value       = azurerm_storage_container.klippy.name
 }
 
 output "server_managed_identity_principal_id" {
@@ -35,8 +35,8 @@ output "application_credentials" {
     tenant_id              = data.azuread_client_config.current.tenant_id
     client_id              = azuread_application.applications.client_id
     client_secret          = azuread_application_password.applications.value
-    storage_account_name   = azurerm_storage_account.clippy.name
-    storage_container_name = azurerm_storage_container.clippy.name
+    storage_account_name   = azurerm_storage_account.klippy.name
+    storage_container_name = azurerm_storage_container.klippy.name
   }
 }
 

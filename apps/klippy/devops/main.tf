@@ -27,7 +27,7 @@ resource "random_string" "suffix" {
   special = false
 }
 
-resource "azurerm_resource_group" "clippy" {
+resource "azurerm_resource_group" "klippy" {
   name     = "${var.name_prefix}-rg"
   location = var.location
 }

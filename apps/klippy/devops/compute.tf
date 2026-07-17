@@ -1,18 +1,18 @@
-resource "azurerm_virtual_network" "clippy" {
+resource "azurerm_virtual_network" "klippy" {
   count = var.create_server_vm ? 1 : 0
 
   name                = "${var.name_prefix}-vnet"
   address_space       = [var.vm_vnet_address_space]
-  location            = azurerm_resource_group.clippy.location
-  resource_group_name = azurerm_resource_group.clippy.name
+  location            = azurerm_resource_group.klippy.location
+  resource_group_name = azurerm_resource_group.klippy.name
 }
 
 resource "azurerm_subnet" "server" {
   count = var.create_server_vm ? 1 : 0
 
   name                 = "${var.name_prefix}-server-subnet"
-  resource_group_name  = azurerm_resource_group.clippy.name
-  virtual_network_name = azurerm_virtual_network.clippy[0].name
+  resource_group_name  = azurerm_resource_group.klippy.name
+  virtual_network_name = azurerm_virtual_network.klippy[0].name
   address_prefixes     = [var.vm_subnet_address_prefix]
 }
 
@@ -20,8 +20,8 @@ resource "azurerm_public_ip" "server" {
   count = var.create_server_vm ? 1 : 0
 
   name                = "${var.name_prefix}-server-pip"
-  location            = azurerm_resource_group.clippy.location
-  resource_group_name = azurerm_resource_group.clippy.name
+  location            = azurerm_resource_group.klippy.location
+  resource_group_name = azurerm_resource_group.klippy.name
   allocation_method   = "Static"
   sku                 = "Standard"
 }
@@ -30,8 +30,8 @@ resource "azurerm_network_security_group" "server" {
   count = var.create_server_vm ? 1 : 0
 
   name                = "${var.name_prefix}-server-nsg"
-  location            = azurerm_resource_group.clippy.location
-  resource_group_name = azurerm_resource_group.clippy.name
+  location            = azurerm_resource_group.klippy.location
+  resource_group_name = azurerm_resource_group.klippy.name
 
   security_rule {
     name                       = "ssh"
@@ -62,8 +62,8 @@ resource "azurerm_network_interface" "server" {
   count = var.create_server_vm ? 1 : 0
 
   name                = "${var.name_prefix}-server-nic"
-  location            = azurerm_resource_group.clippy.location
-  resource_group_name = azurerm_resource_group.clippy.name
+  location            = azurerm_resource_group.klippy.location
+  resource_group_name = azurerm_resource_group.klippy.name
 
   ip_configuration {
     name                          = "primary"
@@ -84,8 +84,8 @@ resource "azurerm_linux_virtual_machine" "server" {
   count = var.create_server_vm ? 1 : 0
 
   name                  = "${var.name_prefix}-server"
-  location              = azurerm_resource_group.clippy.location
-  resource_group_name   = azurerm_resource_group.clippy.name
+  location              = azurerm_resource_group.klippy.location
+  resource_group_name   = azurerm_resource_group.klippy.name
   network_interface_ids = [azurerm_network_interface.server[0].id]
   size                  = var.vm_size
   admin_username        = var.vm_admin_username
@@ -93,7 +93,7 @@ resource "azurerm_linux_virtual_machine" "server" {
     repo_url_b64               = base64encode(var.server_repo_url)
     repo_ref_b64               = base64encode(var.server_repo_ref)
     server_port                = var.server_port
-    spring_datasource_url      = jsonencode("jdbc:postgresql://${azurerm_postgresql_flexible_server.clippy.fqdn}:5432/${azurerm_postgresql_flexible_server_database.clippy.name}?sslmode=require")
+    spring_datasource_url      = jsonencode("jdbc:postgresql://${azurerm_postgresql_flexible_server.klippy.fqdn}:5432/${azurerm_postgresql_flexible_server_database.klippy.name}?sslmode=require")
     spring_datasource_username = jsonencode(var.postgres_admin_username)
     spring_datasource_password = jsonencode(var.postgres_admin_password)
     logging_file_name          = jsonencode("/var/log/clippy/server.log")
