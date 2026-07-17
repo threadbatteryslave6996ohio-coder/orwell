@@ -46,7 +46,9 @@ services:
       dockerfile: apps/klippy/Dockerfile
     container_name: auth-server
     command: ["java", "-jar", "/app/auth-server.jar"]
+    mem_limit: 384m
     environment:
+      JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
       AUTH_DATASOURCE_URL: jdbc:postgresql://db-auth/auth
       AUTH_DATASOURCE_USERNAME: auth
       AUTH_DATASOURCE_PASSWORD: auth
@@ -68,7 +70,9 @@ services:
       dockerfile: apps/klippy/Dockerfile
     container_name: klippy-server
     command: ["java", "-jar", "/app/klippy-server.jar"]
+    mem_limit: 384m
     environment:
+      JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
       SPRING_DATASOURCE_URL: jdbc:postgresql://db-klippy/klippy
       SPRING_DATASOURCE_USERNAME: klippy
       SPRING_DATASOURCE_PASSWORD: klippy

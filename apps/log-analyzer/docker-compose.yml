@@ -13,9 +13,11 @@ services:
       dockerfile: apps/log-analyzer/Dockerfile
     container_name: log-analyzer-alerting
     command: ["java", "-jar", "/app/alerting.jar"]
+    mem_limit: 256m
     env_file:
       - ../alerting/.env.example
     environment:
+      JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
       SERVER_ADDRESS: 0.0.0.0
       SERVER_PORT: 80
     restart: unless-stopped
@@ -26,9 +28,11 @@ services:
       dockerfile: apps/log-analyzer/Dockerfile
     container_name: log-analyzer
     command: ["java", "-jar", "/app/log-analyzer.jar"]
+    mem_limit: 256m
     env_file:
       - ./.env.example
     environment:
+      JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
       SERVER_ADDRESS: 0.0.0.0
       SERVER_PORT: 80
       ALERT_URL: http://alerting/alerts

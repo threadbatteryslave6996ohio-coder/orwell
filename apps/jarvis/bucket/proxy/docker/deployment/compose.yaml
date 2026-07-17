@@ -5,7 +5,9 @@ services:
       # Build from the monorepo root so Maven can resolve sibling modules.
       context: ../../../../../..
       dockerfile: apps/jarvis/bucket/proxy/docker/deployment/Dockerfile
+    mem_limit: 512m
     environment:
+      JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
       SERVER_ADDRESS: "0.0.0.0"
       SERVER_PORT: "5000"
       JARVIS_SERVER_ROUTE_PREFIX: ${JARVIS_SERVER_ROUTE_PREFIX:-/jarvis}

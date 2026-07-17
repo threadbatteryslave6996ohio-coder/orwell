@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 # Runtime stage: a single image that carries both executable jars. The
 # compose file picks which one to run per service.
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:25-jdk AS runtime
+FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
 
 COPY --from=build /workspace/apps/klippy/server/target/*-exec.jar /app/klippy-server.jar

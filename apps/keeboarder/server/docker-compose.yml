@@ -17,9 +17,11 @@ services:
     build:
       context: ../../..
       dockerfile: apps/keeboarder/server/Dockerfile
+    mem_limit: 256m
     env_file:
       - ./.env.example
     environment:
+      JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
       SERVER_ADDRESS: 0.0.0.0
       SERVER_PORT: "8025"
       REDIS_HOST: redis
