@@ -3,8 +3,34 @@
 Remaining extraction/cleanup work, ordered by value. (Earlier items — the apps/packages split,
 the Spring migration of all servers, the `AppServer.spring()` descriptor, shared
 logger/health/auth/JSON auto-configs, the invalid-JSON `@RestControllerAdvice`, the
-`@RequireAuthentication` guard, the shared Testcontainers base, and the removal of
-combined-server — are done.)
+`@RequireAuthentication` guard, the shared Testcontainers base, the removal of
+combined-server, and the orphaned `ClippyServerLauncherTest` — are done.)
+
+## 0. The clippy → klippy rename: what's left
+
+The JVM identifiers, local dev Postgres, Terraform labels and everything user-facing are renamed.
+Three groups still say `clippy` **on purpose** — each is a contract, not a label:
+
+- **Audit log stream** `clippy-server` → `clippy-server.txt` (`ClipboardEntryController`, and the
+  app name in `KlippyServerApplication`). Cheap to rename, but nothing in-repo reads the file
+  except one test, so it fails silently in whatever ships the logs. Needs someone to confirm no
+  external tooling keys on the name.
+- **Deployed Azure infra** — `name_prefix`, `postgres_database_name`, `storage_container_name`,
+  `postgres_admin_username`, the cloud-init paths. `administrator_login` and `custom_data` are
+  both ForceNew: renaming replaces the Postgres server and the VM. Only worth doing as a
+  blue/green migration, and only if that infrastructure is moving anyway.
+- **Client contracts** — `clippy-offline-clipboard.json` and `/tmp/clippy-offline-file-locker.sock`.
+  The socket is the sharper one: a renamed client and an old locker bind different paths, never
+  meet, and the lock stops excluding — two processes then write the same file. Needs a
+  read-both-write-new release plus a deprecation window before the fallback drops.
+
+**The Android client is untouched and is its own project.** It builds with Gradle, outside the
+Maven reactor, so the JVM rename never reached it: `ClippyApp`/`ClippyTheme`/`ClippySettings`/
+`ClippyApi` in `MainActivity.kt`, `Theme.Clippy`, `rootProject.name = "ClippyAndroid"`, and the
+user-visible `app_name` string still say Clippy. Renaming the Kotlin identifiers is compile-checked
+like the Java was — but `getSharedPreferences("clippy", …)` is a **data contract**: change that key
+and every installed app forgets its server URL and client token. Rename the identifiers and
+`app_name` freely; migrate the preferences key only by reading the old one and writing the new.
 
 ## 1. Common `springProperties` keys → `AppServerEnv` descriptor (completed)
 
