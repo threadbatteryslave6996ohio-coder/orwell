@@ -33,13 +33,13 @@ variable "postgres_admin_password" {
 }
 
 variable "postgres_database_name" {
-  description = "Database name for the Clippy server."
+  description = "Database name for the Klippy server."
   type        = string
   default     = "clippy"
 }
 
 variable "storage_container_name" {
-  description = "Blob container name for the Clippy storage account."
+  description = "Blob container name for the Klippy storage account."
   type        = string
   default     = "clippy"
 
@@ -119,7 +119,7 @@ variable "vm_admin_ssh_public_key" {
 }
 
 variable "vm_size" {
-  description = "Azure VM size for the Clippy server. Standard_B2pts_v2 matches Azure's current 12-month free Linux VM allowance where eligible."
+  description = "Azure VM size for the Klippy server. Standard_B2pts_v2 matches Azure's current 12-month free Linux VM allowance where eligible."
   type        = string
   default     = "Standard_B2pts_v2"
 }

@@ -4,7 +4,7 @@ output "postgres_host" {
 }
 
 output "spring_datasource_url" {
-  description = "JDBC URL for the Clippy Spring Boot server."
+  description = "JDBC URL for the Klippy Spring Boot server."
   value       = "jdbc:postgresql://${azurerm_postgresql_flexible_server.clippy.fqdn}:5432/${azurerm_postgresql_flexible_server_database.clippy.name}?sslmode=require"
 }
 
@@ -14,7 +14,7 @@ output "spring_datasource_username" {
 }
 
 output "storage_account_name" {
-  description = "Storage account created for the Clippy bucket-equivalent."
+  description = "Storage account created for the Klippy bucket-equivalent."
   value       = azurerm_storage_account.clippy.name
 }
 
@@ -41,16 +41,16 @@ output "application_credentials" {
 }
 
 output "server_vm_public_ip" {
-  description = "Public IP for the optional Clippy server VM."
+  description = "Public IP for the optional Klippy server VM."
   value       = var.create_server_vm ? azurerm_public_ip.server[0].ip_address : null
 }
 
 output "server_url" {
-  description = "HTTP URL for the optional Clippy server VM."
+  description = "HTTP URL for the optional Klippy server VM."
   value       = var.create_server_vm ? "http://${azurerm_public_ip.server[0].ip_address}:${var.server_port}" : null
 }
 
 output "server_ssh_command" {
-  description = "SSH command for the optional Clippy server VM."
+  description = "SSH command for the optional Klippy server VM."
   value       = var.create_server_vm ? "ssh ${var.vm_admin_username}@${azurerm_public_ip.server[0].ip_address}" : null
 }

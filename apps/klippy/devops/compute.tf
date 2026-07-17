@@ -133,7 +133,7 @@ resource "azurerm_linux_virtual_machine" "server" {
 
     precondition {
       condition     = !strcontains(var.server_repo_url, "replace-me")
-      error_message = "server_repo_url must be set to the real Clippy repository URL when create_server_vm is true."
+      error_message = "server_repo_url must be set to the real Klippy repository URL when create_server_vm is true."
     }
   }
 }

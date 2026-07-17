@@ -2,7 +2,7 @@ data "azuread_client_config" "current" {}
 
 resource "azuread_application" "applications" {
   display_name            = "applications"
-  description             = "Shared application identity for Clippy storage access."
+  description             = "Shared application identity for Klippy storage access."
   prevent_duplicate_names = true
 }
 
