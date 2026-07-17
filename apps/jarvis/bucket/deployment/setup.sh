@@ -22,7 +22,7 @@ fi
 
 apt-get update
 apt-get upgrade -y
-apt-get install -y openjdk-17-jdk maven git nginx curl ca-certificates docker.io ffmpeg
+apt-get install -y openjdk-17-jdk maven git curl ca-certificates docker.io ffmpeg
 
 mkdir -p "$APP_ROOT" "$PROXY_DIR/publish" "$STREAM_SCRIPTS_DIR" "$STREAM_PUBLISH_DIR" "$STREAM_LOG_DIR" "$STREAM_RECORD_DIR"
 
@@ -220,38 +220,11 @@ StandardError=journal
 WantedBy=multi-user.target
 SERVICEEOF
 
-cat > /etc/nginx/sites-available/s3-proxy <<'NGINXEOF'
-server {
-    listen 80;
-    listen [::]:80;
-    server_name _;
-
-    client_max_body_size 5G;
-
-    location / {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_request_buffering off;
-        proxy_buffering off;
-        proxy_read_timeout 600s;
-        proxy_send_timeout 600s;
-    }
-}
-NGINXEOF
-
-ln -sf /etc/nginx/sites-available/s3-proxy /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
-nginx -t
-
 docker pull bluenviron/mediamtx:v1.19.1
 
 systemctl daemon-reload
-systemctl enable s3-proxy nginx mediamtx stream-alert stream-detection stream-recorder stream-analyzer
-systemctl restart s3-proxy nginx
+systemctl enable s3-proxy mediamtx stream-alert stream-detection stream-recorder stream-analyzer
+systemctl restart s3-proxy
 systemctl restart mediamtx stream-alert stream-detection stream-recorder stream-analyzer
 
 echo "Java bucket service setup complete."

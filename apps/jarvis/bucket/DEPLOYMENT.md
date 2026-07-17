@@ -20,7 +20,7 @@ terraform apply
 
 The bootstrap script:
 
-- installs Java 17, Maven, Nginx, Docker, and ffmpeg
+- installs Java 17, Maven, Docker, and ffmpeg
 - clones the repository from `source_repo_url`
 - builds `bucket/pom.xml`
 - installs the proxy, alerting, detection, and streaming jars
@@ -54,9 +54,13 @@ Set these in `terraform.tfvars`:
 After `terraform apply`, check the proxy health endpoint and service logs:
 
 ```bash
-curl http://$PROXY_IP/health
+curl http://$PROXY_IP:5000/health
 sudo journalctl -u s3-proxy -n 50
 ```
+
+The repo does not install or manage a reverse proxy. If you want the service on
+`80` or `443`, provide that separately and forward to `127.0.0.1:5000` or
+`$PROXY_IP:5000`.
 
 ## Cleanup
 

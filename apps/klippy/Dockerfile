@@ -10,9 +10,8 @@ WORKDIR /workspace
 # logs, Terraform state, and local secrets out of the build context.
 COPY . .
 
-RUN --mount=type=cache,target=/root/.m2 \
-    mvn -B -DskipTests \
-        -pl :clippy-server,:auth-http-server -am \
+RUN mvn -B -DskipTests \
+        -pl apps/klippy/server,apps/auth/http-based/server -am \
         package
 
 # ---------------------------------------------------------------------------
@@ -22,8 +21,8 @@ RUN --mount=type=cache,target=/root/.m2 \
 FROM eclipse-temurin:25-jdk AS runtime
 WORKDIR /app
 
-COPY --from=build /workspace/apps/klippy/server/target/clippy-server-0.1.0-SNAPSHOT-exec.jar /app/clippy-server.jar
-COPY --from=build /workspace/apps/auth/http-based/server/target/auth-http-server-0.1.0-SNAPSHOT-exec.jar /app/auth-server.jar
+COPY --from=build /workspace/apps/klippy/server/target/*-exec.jar /app/clippy-server.jar
+COPY --from=build /workspace/apps/auth/http-based/server/target/*-exec.jar /app/auth-server.jar
 
 # Spring Boot writes to the LOGGING_FILE_NAME path (relative to /app).
 RUN mkdir -p /app/logs /app/config

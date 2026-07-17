@@ -1,9 +1,8 @@
-# Clippy — separate auth and clipboard server deployment.
+# Clippy — separate auth and clipboard server deployment behind an internal Nginx proxy.
 #
 #   docker compose up --build
 #
-# Brings up two Postgres databases, the auth server (port 8081),
-# and the clipboard server (port 8080).
+# Brings up two Postgres databases plus one published HTTP entrypoint on port 8080.
 
 services:
   db-clippy:
@@ -14,7 +13,7 @@ services:
       POSTGRES_USER: clippy
       POSTGRES_PASSWORD: clippy
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - clippy-pg-data:/var/lib/postgresql/data
     healthcheck:
@@ -31,7 +30,7 @@ services:
       POSTGRES_USER: auth
       POSTGRES_PASSWORD: auth
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - auth-pg-data:/var/lib/postgresql/data
     healthcheck:
@@ -48,16 +47,15 @@ services:
     container_name: auth-server
     command: ["java", "-jar", "/app/auth-server.jar"]
     environment:
-      AUTH_DATASOURCE_URL: jdbc:postgresql://db-auth:5432/auth
+      AUTH_DATASOURCE_URL: jdbc:postgresql://db-auth/auth
       AUTH_DATASOURCE_USERNAME: auth
       AUTH_DATASOURCE_PASSWORD: auth
       SERVER_ADDRESS: 0.0.0.0
-      SERVER_PORT: "8081"
+      SERVER_PORT: "80"
+      CLIPPY_AUTH_ROUTE_PREFIX: /auth
       LOGGING_FILE_NAME: logs/auth-server.log
       AUTH_JPA_HIBERNATE_DDL_AUTO: update
       AUTH_JPA_JDBC_TIME_ZONE: UTC
-    ports:
-      - "8081:8081"
     depends_on:
       db-auth:
         condition: service_healthy
@@ -71,22 +69,33 @@ services:
     container_name: clippy-server
     command: ["java", "-jar", "/app/clippy-server.jar"]
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db-clippy:5432/clippy
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db-clippy/clippy
       SPRING_DATASOURCE_USERNAME: clippy
       SPRING_DATASOURCE_PASSWORD: clippy
-      SERVER_PORT: "8080"
-      AUTH_BASE_URL: http://auth-server:8081
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "80"
+      AUTH_BASE_URL: http://auth-server/auth
       LOGGING_FILE_NAME: logs/clippy-server.log
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE: UTC
-    ports:
-      - "8080:8080"
-      - "8025:8025"
     depends_on:
       db-clippy:
         condition: service_healthy
       auth-server:
         condition: service_started
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      auth-server:
+        condition: service_started
+      clipboard-server:
+        condition: service_started
+    ports:
+      - "${CLIPPY_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./nginx/clippy.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
 
 volumes:

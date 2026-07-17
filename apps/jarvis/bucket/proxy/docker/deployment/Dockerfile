@@ -6,7 +6,7 @@ WORKDIR /workspace
 # The proxy depends on modules elsewhere in the monorepo. Build from the root
 # reactor and include only the proxy plus the modules it requires.
 COPY . .
-RUN mvn -B -DskipTests -pl :bucket-proxy -am package
+RUN mvn -B -DskipTests -pl apps/jarvis/bucket/proxy -am package
 
 FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
@@ -17,7 +17,7 @@ RUN groupadd --system bucketproxy \
     && chown -R bucketproxy:bucketproxy /app
 
 COPY --from=build --chown=bucketproxy:bucketproxy \
-    /workspace/apps/jarvis/bucket/proxy/target/bucket-proxy-0.1.0-SNAPSHOT-exec.jar \
+    /workspace/apps/jarvis/bucket/proxy/target/*-exec.jar \
     /app/bucket-proxy.jar
 
 USER bucketproxy

@@ -53,15 +53,15 @@ for the available toolchain and tasks.
 The simplest complete deployment uses Docker Compose:
 
 ```bash
-# Auth server on 8081 and clipboard server on 8080
+# Nginx proxy on 8080; auth and clipboard stay on the Docker network
 docker compose -f apps/klippy/docker-compose.yml up --build
 
 # Combined deployment (auth + clipboard routes in one JVM on 8080)
 docker compose -f apps/combined-server/docker-compose.yml up --build
 ```
 
-The separate deployment uses `http://localhost:8081` for auth and
-`http://localhost:8080` for clipboard requests. The combined deployment uses
+The separate deployment uses `http://localhost:8080/auth` for auth and
+`http://localhost:8080/clipboard` for clipboard requests. The combined deployment uses
 `http://localhost:8080/auth` and `http://localhost:8080/api` for auth and
 clipboard respectively, and also launches the bucket proxy from the same
 combined env file.
@@ -85,7 +85,7 @@ mvn -pl apps/klippy/clients/linux -am package && java -jar apps/klippy/clients/l
 Create an identity once on the auth server:
 
 ```bash
-curl -i http://localhost:8081/identities \
+curl -i http://localhost:8080/auth/identities \
   -H 'Content-Type: application/json' \
   -d '{"clientId":"dummy","secret":"change-me-please"}'
 ```
@@ -95,7 +95,7 @@ repository-root `.env` configuration:
 
 ```dotenv
 REMOTE_SERVER_URL=http://localhost:8080
-AUTH_SERVER_URL=http://localhost:8081
+AUTH_SERVER_URL=http://localhost:8080/auth
 CLIENT_ID=dummy
 CLIENT_SECRET=change-me-please
 ```

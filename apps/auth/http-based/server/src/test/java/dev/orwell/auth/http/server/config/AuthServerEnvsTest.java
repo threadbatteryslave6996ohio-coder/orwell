@@ -30,6 +30,7 @@ class AuthServerEnvsTest {
                 "AUTH_DATASOURCE_URL=jdbc:postgresql://example:5432/auth\n" +
                         "AUTH_DATASOURCE_USERNAME=example-user\n" +
                         "AUTH_DATASOURCE_PASSWORD=example-pass\n" +
+                        "SERVER_ADDRESS=0.0.0.0\n" +
                         "SERVER_PORT=9090\n" +
                         "LOGGING_FILE_NAME=/tmp/auth.log\n" +
                         "AUTH_JPA_HIBERNATE_DDL_AUTO=validate\n" +
@@ -41,6 +42,7 @@ class AuthServerEnvsTest {
         assertEquals("jdbc:postgresql://example:5432/auth", env.get(AuthServerEnvs.AUTH_DATASOURCE_URL));
         assertEquals("example-user", env.get(AuthServerEnvs.AUTH_DATASOURCE_USERNAME));
         assertEquals("example-pass", env.get(AuthServerEnvs.AUTH_DATASOURCE_PASSWORD));
+        assertEquals("0.0.0.0", env.get(AuthServerEnvs.ENV.SERVER_ADDRESS));
         assertEquals(9090, env.get(AuthServerEnvs.ENV.SERVER_PORT));
         assertEquals("/tmp/auth.log", env.get(AuthServerEnvs.ENV.LOGGING_FILE_NAME));
     }
@@ -55,7 +57,8 @@ class AuthServerEnvsTest {
                 "SERVER_PORT", "9091",
                 "LOGGING_FILE_NAME", "/tmp/auth.log",
                 "AUTH_JPA_HIBERNATE_DDL_AUTO", "validate",
-                "AUTH_JPA_JDBC_TIME_ZONE", "UTC"
+                "AUTH_JPA_JDBC_TIME_ZONE", "UTC",
+                "CLIPPY_AUTH_ROUTE_PREFIX", "/auth"
         ));
 
         assertEquals(Map.of(
@@ -66,7 +69,8 @@ class AuthServerEnvsTest {
                 "server.port", 9091,
                 "logging.file.name", "/tmp/auth.log",
                 "spring.jpa.hibernate.ddl-auto", "validate",
-                "spring.jpa.properties.hibernate.jdbc.time_zone", "UTC"
+                "spring.jpa.properties.hibernate.jdbc.time_zone", "UTC",
+                "clippy.auth.route-prefix", "/auth"
         ), AuthServerEnvs.ENV.springProperties(env));
     }
 }

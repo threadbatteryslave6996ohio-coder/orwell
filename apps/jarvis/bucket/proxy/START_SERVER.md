@@ -96,6 +96,8 @@ sudo journalctl -u s3-proxy -f
 ```
 
 Production runs from `/opt/s3-proxy/publish/bucket-proxy.jar`.
+By default it listens on `0.0.0.0:5000`; any public reverse proxy or TLS setup
+is managed outside this repo.
 
 The audit log is written to `/var/log/s3-proxy/audit.log`.
 

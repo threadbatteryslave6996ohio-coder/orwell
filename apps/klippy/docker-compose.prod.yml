@@ -1,4 +1,4 @@
-# Clippy — production deployment connecting to external databases.
+# Clippy — production deployment connecting to external databases through an internal Nginx proxy.
 #
 #   docker compose -p prod -f docker-compose.prod.yml up -d
 #
@@ -14,8 +14,11 @@ services:
     command: ["java", "-jar", "/app/auth-server.jar"]
     env_file:
       - .env.prod
-    ports:
-      - "8081:8081"
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "80"
+      CLIPPY_AUTH_ROUTE_PREFIX: /auth
+      LOGGING_FILE_NAME: logs/auth-server.log
     restart: unless-stopped
 
   clipboard-server:
@@ -26,10 +29,24 @@ services:
     command: ["java", "-jar", "/app/clippy-server.jar"]
     env_file:
       - .env.prod
-    ports:
-      - "8080:8080"
-      - "8025:8025"
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "80"
+      AUTH_BASE_URL: http://auth-server/auth
     depends_on:
       auth-server:
         condition: service_started
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      auth-server:
+        condition: service_started
+      clipboard-server:
+        condition: service_started
+    ports:
+      - "${CLIPPY_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./nginx/clippy.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped

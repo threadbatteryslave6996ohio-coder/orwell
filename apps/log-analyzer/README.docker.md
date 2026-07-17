@@ -23,12 +23,12 @@ Edit `.env.example` before starting and set:
 
 The analyzer already points its alert target at the compose service name:
 
-- `ALERT_URL=http://alerting:9000/alerts`
+- `ALERT_URL=http://alerting/alerts`
 
 ## Included services
 
-- `alerting` on `localhost:9000`
-- `log-analyzer` on `localhost:9010`
+- `alerting` through `http://localhost:9010/alerting`
+- `log-analyzer` through `http://localhost:9010/log-analyzer`
 
 ## Notes
 
