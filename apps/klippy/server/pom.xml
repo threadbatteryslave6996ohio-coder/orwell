@@ -10,12 +10,12 @@
         <relativePath>../../../packages/server-parent/pom.xml</relativePath>
     </parent>
 
-    <artifactId>clippy-server</artifactId>
+    <artifactId>klippy-server</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-server-bootstrap</artifactId>
+            <artifactId>server-bootstrap</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
@@ -27,11 +27,11 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-utils</artifactId>
+            <artifactId>klippy-utils</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>http</artifactId>
+            <artifactId>env-http</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
@@ -47,7 +47,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <classifier>exec</classifier>
-                    <mainClass>dev.orwell.server.application.ClippyServerApplication</mainClass>
+                    <mainClass>dev.orwell.server.application.KlippyServerApplication</mainClass>
                 </configuration>
                 <executions>
                     <execution>

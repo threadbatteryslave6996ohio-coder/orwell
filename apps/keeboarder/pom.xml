@@ -11,7 +11,7 @@
     </parent>
 
     <groupId>dev.orwell</groupId>
-    <artifactId>keeboarder-parent</artifactId>
+    <artifactId>keeboarder</artifactId>
     <packaging>pom</packaging>
 
     <properties>

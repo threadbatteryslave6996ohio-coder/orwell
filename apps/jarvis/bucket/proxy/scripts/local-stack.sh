@@ -94,11 +94,11 @@ cmd_auth() {
 
 cmd_proxy() {
     local jar
-    jar="$(ls "$PROXY_DIR"/target/bucket-proxy-*.jar 2>/dev/null | grep -v original | head -n1)"
+    jar="$(ls "$PROXY_DIR"/target/jarvis-bucket-proxy-*.jar 2>/dev/null | grep -v original | head -n1)"
     if [ -z "$jar" ]; then
         log "Building proxy jar..."
         (cd "$PROXY_DIR" && mvn -q package -DskipTests) || die "proxy build failed"
-        jar="$(ls "$PROXY_DIR"/target/bucket-proxy-*.jar 2>/dev/null | grep -v original | head -n1)"
+        jar="$(ls "$PROXY_DIR"/target/jarvis-bucket-proxy-*.jar 2>/dev/null | grep -v original | head -n1)"
     fi
     log "Running proxy on :$PROXY_PORT against MinIO (SSE disabled for local MinIO)"
     # AWS_* creds are the MinIO root credentials; SSE is disabled because a local

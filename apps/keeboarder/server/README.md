@@ -1,7 +1,7 @@
 # Keeboarder Server
 
 Java WebSocket server with Redis-backed client registry and a small HTTP API.
-The server authenticates against the Clippy auth server configured through
+The server authenticates against the Klippy auth server configured through
 `AUTH_BASE_URL`.
 
 ## Requirements
@@ -9,7 +9,7 @@ The server authenticates against the Clippy auth server configured through
 - JDK 25+
 - Maven 3.9+
 - Redis
-- Running Clippy auth server
+- Running Klippy auth server
 
 ## Build And Run
 
@@ -17,7 +17,14 @@ From the repository root:
 
 ```bash
 mvn -pl apps/keeboarder/server -am package
-java -jar apps/keeboarder/server/target/websocket-redis-server-0.1.0-SNAPSHOT-exec.jar
+java -jar apps/keeboarder/server/target/keeboarder-server-0.1.0-SNAPSHOT-exec.jar
+```
+
+For Docker Compose with the same internal-Nginx pattern used in the other app
+stacks:
+
+```bash
+docker compose -f apps/keeboarder/server/docker-compose.yml up --build
 ```
 
 The launcher loads `.env` from the current directory or any parent, then applies
@@ -34,20 +41,22 @@ The main runtime settings are:
 - `AUTH_BASE_URL` for token validation
 - `KEEBOARDER_SERVER_ROUTE_PREFIX` for the HTTP API prefix
 
-Defaults are `0.0.0.0:8025`, `/ws` for the WebSocket context path, and `/api`
-for the HTTP route prefix — so the WebSocket endpoint is
-`ws://localhost:8025/ws/chat` out of the box.
+In the Compose setup here, the service listens internally on port `8025`, uses
+`/keeboarder/api` for the HTTP route prefix, and `/keeboarder/ws` for the
+WebSocket path prefix. Nginx publishes that stack on `localhost:8025` by
+default.
 
 ## Endpoints
 
-Connect to the WebSocket endpoint at `ws://localhost:8025/ws/chat` by default.
+Connect to the WebSocket endpoint at
+`ws://localhost:8025/keeboarder/ws/chat` by default in the Docker setup.
 The register message must include `type=register`, `clientId`, `name`, and
 `token`.
 
-The HTTP API is rooted at `/api` by default and exposes:
+The HTTP API is rooted at `/keeboarder/api` in the Docker setup and exposes:
 
-- `GET /api/clients`
-- `POST /api/send`
+- `GET /keeboarder/api/clients`
+- `POST /keeboarder/api/send`
 
 Both HTTP routes require `Authorization: Bearer <token>` and
 `X-Client-Id: <clientId>`.

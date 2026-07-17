@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public final class OfflineFileLockerClient {
-    public static final Path DEFAULT_SOCKET_PATH = Path.of("/tmp/clippy-offline-file-locker.sock");
+    public static final Path DEFAULT_SOCKET_PATH = Path.of("/tmp/klippy-offline-file-locker.sock");
     private static final Duration DEFAULT_REQUEST_TIMEOUT = Duration.ofSeconds(10);
 
     private final UnixDomainSocketAddress address;
@@ -51,7 +51,7 @@ public final class OfflineFileLockerClient {
 
     private String request(int operation, Path path, String content) throws IOException {
         FutureTask<String> request = new FutureTask<>(() -> requestBlocking(operation, path, content));
-        Thread.ofVirtual().name("clippy-file-locker-request").start(request);
+        Thread.ofVirtual().name("klippy-file-locker-request").start(request);
         try {
             return request.get(requestTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException exception) {

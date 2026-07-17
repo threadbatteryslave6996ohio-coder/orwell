@@ -10,17 +10,17 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>pg-backup</artifactId>
+    <artifactId>backup</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>core</artifactId>
+            <artifactId>env-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>http</artifactId>
+            <artifactId>env-http</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

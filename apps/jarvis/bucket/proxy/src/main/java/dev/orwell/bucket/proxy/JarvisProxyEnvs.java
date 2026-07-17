@@ -25,6 +25,7 @@ public final class JarvisProxyEnvs {
     public static final EnvOption<String> PROXY_LOGGING_AUDIT_FILE;
     public static final EnvOption<String> PROXY_SERVER_URL;
     public static final EnvOption<String> STREAM_ANALYSIS_ENDPOINT;
+    public static final EnvOption<String> JARVIS_SERVER_ROUTE_PREFIX;
 
     static {
         PROXY_STORAGE_PROVIDER = ENV.optional("PROXY_STORAGE_PROVIDER", EnvType.string(), "aws");
@@ -46,6 +47,7 @@ public final class JarvisProxyEnvs {
         PROXY_LOGGING_AUDIT_FILE = ENV.optional("PROXY_LOGGING_AUDIT_FILE", EnvType.string(), "logs/audit.log");
         PROXY_SERVER_URL = ENV.optional("PROXY_SERVER_URL", EnvType.string(), "");
         STREAM_ANALYSIS_ENDPOINT = ENV.optional("STREAM_ANALYSIS_ENDPOINT", EnvType.string(), "");
+        JARVIS_SERVER_ROUTE_PREFIX = ENV.optional("JARVIS_SERVER_ROUTE_PREFIX", EnvType.string(), "");
         ENV.property("proxy.storage.provider", PROXY_STORAGE_PROVIDER);
         ENV.property("proxy.storage.max-file-size", PROXY_STORAGE_MAX_FILE_SIZE);
         ENV.property("proxy.s3.bucket-name", PROXY_S3_BUCKET_NAME);
@@ -65,6 +67,7 @@ public final class JarvisProxyEnvs {
         ENV.property("proxy.cors.allowed-origins", PROXY_CORS_ALLOWED_ORIGINS);
         ENV.property("proxy.logging.audit-file", PROXY_LOGGING_AUDIT_FILE);
         ENV.property("proxy.server.url", PROXY_SERVER_URL);
+        ENV.property("jarvis.server.route-prefix", JARVIS_SERVER_ROUTE_PREFIX);
     }
 
     private JarvisProxyEnvs() {

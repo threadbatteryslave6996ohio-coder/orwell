@@ -24,11 +24,12 @@ scripts and the deployment bootstrap.
 2. Set `source_repo_url` and the other deployment variables
 3. Run `terraform init`, `terraform plan`, and `terraform apply` from `deployment/`
 
-The EC2 user-data script installs Java 25, Maven, Nginx, Docker, and ffmpeg, then builds `bucket/pom.xml` and installs the generated jars.
+The EC2 user-data script installs Java 25, Maven, Docker, and ffmpeg, then builds `bucket/pom.xml` and installs the generated jars.
 
 ## Proxy API
 
-The proxy exposes the upload and management endpoints on port 80 through Nginx.
+The proxy runs as a standalone HTTP service on port `5000`. Reverse proxy and
+TLS termination are intentionally left outside this repo.
 See [proxy/README.md](proxy/README.md) for the endpoint list and local run instructions.
 
 ## Stream Flow

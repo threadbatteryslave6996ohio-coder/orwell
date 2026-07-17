@@ -26,7 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 
 @RestController
-@RequestMapping("${clippy.auth.route-prefix:}")
+@RequestMapping("${orwell.auth.route-prefix:}")
 public class AuthController {
     private final ClientIdentityRepository identities;
     private final ClientTokenRepository tokens;

@@ -1,6 +1,6 @@
-# Clippy
+# Klippy
 
-Clippy records text clipboard changes from desktop and Android clients in a
+Klippy records text clipboard changes from desktop and Android clients in a
 Spring Boot server backed by PostgreSQL.
 
 The Java code is a JDK 25 multi-module Maven project. The Android client is a
@@ -53,18 +53,13 @@ for the available toolchain and tasks.
 The simplest complete deployment uses Docker Compose:
 
 ```bash
-# Auth server on 8081 and clipboard server on 8080
+# Nginx proxy on 8080; auth and clipboard stay on the Docker network
 docker compose -f apps/klippy/docker-compose.yml up --build
-
-# Combined deployment (auth + clipboard routes in one JVM on 8080)
-docker compose -f apps/combined-server/docker-compose.yml up --build
 ```
 
-The separate deployment uses `http://localhost:8081` for auth and
-`http://localhost:8080` for clipboard requests. The combined deployment uses
-`http://localhost:8080/auth` and `http://localhost:8080/api` for auth and
-clipboard respectively, and also launches the bucket proxy from the same
-combined env file.
+Nginx is the single entrypoint: auth is served at `http://localhost:8080/auth` and
+clipboard requests at `http://localhost:8080/clipboard`. Set `KLIPPY_HTTP_PORT` to
+publish the proxy on a port other than 8080.
 
 For a host-based Linux development stack, configure the repository-root `.env`
 and start each service in its own terminal:
@@ -75,9 +70,9 @@ mvn -pl apps/auth/http-based/server spring-boot:run
 # Terminal 2: clipboard server
 mvn -pl apps/klippy/server spring-boot:run
 # Terminal 3: file-locker
-mvn -pl apps/klippy/clients/file-locker -am package && java -jar apps/klippy/clients/file-locker/target/clippy-file-locker-0.1.0-SNAPSHOT-exec.jar
+mvn -pl apps/klippy/clients/file-locker -am package && java -jar apps/klippy/clients/file-locker/target/klippy-file-locker-0.1.0-SNAPSHOT-exec.jar
 # Terminal 4: linux client
-mvn -pl apps/klippy/clients/linux -am package && java -jar apps/klippy/clients/linux/target/clippy-linux-client-0.1.0-SNAPSHOT.jar
+mvn -pl apps/klippy/clients/linux -am package && java -jar apps/klippy/clients/linux/target/klippy-linux-client-0.1.0-SNAPSHOT.jar
 ```
 
 ## Client Authentication
@@ -85,7 +80,7 @@ mvn -pl apps/klippy/clients/linux -am package && java -jar apps/klippy/clients/l
 Create an identity once on the auth server:
 
 ```bash
-curl -i http://localhost:8081/identities \
+curl -i http://localhost:8080/auth/identities \
   -H 'Content-Type: application/json' \
   -d '{"clientId":"dummy","secret":"change-me-please"}'
 ```
@@ -95,7 +90,7 @@ repository-root `.env` configuration:
 
 ```dotenv
 REMOTE_SERVER_URL=http://localhost:8080
-AUTH_SERVER_URL=http://localhost:8081
+AUTH_SERVER_URL=http://localhost:8080/auth
 CLIENT_ID=dummy
 CLIENT_SECRET=change-me-please
 ```
@@ -106,7 +101,6 @@ Shell environment variables override `.env` values.
 ## Documentation
 
 - [Clipboard server](server/README.md)
-- [Combined server](../combined-server/README.md)
 - [Shared server bootstrap](../../packages/server-bootstrap/README.md)
 - [Authentication modules](../auth/README.md)
 - [HTTP auth server](../auth/http-based/server/README.md)
@@ -118,7 +112,6 @@ Shell environment variables override `.env` values.
 - [Offline file-locker](clients/file-locker/README.md)
 - [Dummy client](clients/dummy/README.md)
 - [Android client](clients/android/README.md)
-- [Azure infrastructure](devops/README.md)
 
 The server READMEs document the HTTP contracts, configuration, and deployment
 details. Each client README covers only that client's setup and behavior.

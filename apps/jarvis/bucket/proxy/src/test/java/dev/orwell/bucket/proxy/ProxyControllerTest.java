@@ -81,14 +81,41 @@ class ProxyControllerTest {
         assertThat(servletResponse.getHeader(HttpHeaders.SET_COOKIE)).contains("Secure");
     }
 
+    @Test
+    void adminLoginUsesRoutePrefixForRedirectsAndCookiePath() {
+        ProxyController controller = newController(
+                new StubAuthServerClient(loginResult(true, HttpStatus.OK.value(), "client", "token")),
+                new StubS3Service(),
+                properties("http://proxy.example.com/jarvis")
+        );
+        MockHttpServletResponse servletResponse = new MockHttpServletResponse();
+
+        ResponseEntity<String> response = controller.adminLogin("admin", "password", servletResponse);
+
+        assertThat(response.getHeaders().getLocation()).hasToString("/jarvis/admin");
+        assertThat(servletResponse.getHeader(HttpHeaders.SET_COOKIE)).contains("Path=/jarvis/");
+    }
+
     private static ProxyController newController(AuthServerClient authServerClient, BucketStorage storage, ProxyProperties properties) {
+        String routePrefix = "";
+        if (properties.server() != null && properties.server().url() != null) {
+            try {
+                String path = java.net.URI.create(properties.server().url()).getPath();
+                if (path != null && !path.isBlank() && !"/".equals(path)) {
+                    routePrefix = path.replaceAll("/+$", "");
+                }
+            } catch (IllegalArgumentException ignored) {
+                routePrefix = "";
+            }
+        }
         return new ProxyController(
                 properties,
                 authServerClient,
                 provider(AuthenticationContext.authenticated("client", 1L)),
                 storage,
                 newFileAuditLogger(properties),
-                new ManagementSessionService(properties)
+                new ManagementSessionService(properties),
+                routePrefix
         );
     }
 

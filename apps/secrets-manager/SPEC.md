@@ -14,10 +14,10 @@ Orwell auth service.
 apps/secrets-manager/
 ├── pom.xml                              # Parent POM (packaging: pom)
 ├── server/
-│   ├── pom.xml                          # secrets-server (Spring Boot app)
+│   ├── pom.xml                          # secrets-manager-server (Spring Boot app)
 │   └── src/main/java/dev/orwell/secrets/
 └── client/
-    ├── pom.xml                          # secrets-client (Java library)
+    ├── pom.xml                          # secrets-manager-client (Java library)
     └── src/main/java/dev/orwell/secrets/client/
         ├── SecretsManagerApplication.java
         ├── SecretsManagerLauncher.java
@@ -161,7 +161,7 @@ Follow the exact same patterns as auth and klippy modules:
 
 ---
 
-## Java Client (`secrets-client`)
+## Java Client (`secrets-manager-client`)
 
 A lightweight HTTP client for accessing secrets manager data (groups, envs, bundles).
 
@@ -196,7 +196,7 @@ BundleDetail detail = client.getBundle(bundles.get(0).id());
 
 Same set used by `klippy-server` and `auth-http-server`:
 
-- `clippy-server-bootstrap`
+- `server-bootstrap`
 - `auth-core` (for `AuthenticationStrategy` interface)
 - `auth-http-client` (for `HttpAuthenticationStrategy`)
 - `spring-boot-starter-data-jpa`

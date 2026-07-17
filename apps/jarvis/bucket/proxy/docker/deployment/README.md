@@ -19,13 +19,13 @@ cp .env.example .env
 # Fill in the storage, auth, and management settings in .env.
 docker compose up --build -d
 docker compose ps
-curl http://localhost:5000/health
+curl http://localhost:5000/jarvis/health
 ```
 
 For an auth server running on the Docker host, keep
-`PROXY_AUTH_SERVER_BASE_URL=http://host.docker.internal:8081`. If the auth
-server is on a shared Docker network, use its service name instead and attach
-the proxy service to that network.
+`AUTH_BASE_URL=http://host.docker.internal:8081`. If the auth server is on a
+shared Docker network, use its service name instead, for example
+`AUTH_BASE_URL=http://auth-server/auth`.
 
 ## Logs
 

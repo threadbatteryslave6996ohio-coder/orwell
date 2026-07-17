@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseCookie;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.CookieValue;
@@ -36,12 +37,14 @@ import java.util.Map;
 @RestController
 @RequestMapping("${jarvis.server.route-prefix:}")
 public class ProxyController {
+    private static final String DEFAULT_ROUTE_PREFIX = "";
     private final ProxyProperties properties;
     private final AuthServerClient authServerClient;
     private final ObjectProvider<AuthenticationContext> authenticationContextProvider;
     private final BucketStorage storage;
     private final FileAuditLogger audit;
     private final ManagementSessionService sessions;
+    private final String routePrefix;
 
     public ProxyController(
             ProxyProperties properties,
@@ -49,7 +52,8 @@ public class ProxyController {
             ObjectProvider<AuthenticationContext> authenticationContextProvider,
             BucketStorage storage,
             FileAuditLogger audit,
-            ManagementSessionService sessions
+            ManagementSessionService sessions,
+            @Value("${jarvis.server.route-prefix:}") String routePrefix
         ) {
         this.properties = properties;
         this.authServerClient = authServerClient;
@@ -57,6 +61,7 @@ public class ProxyController {
         this.storage = storage;
         this.audit = audit;
         this.sessions = sessions;
+        this.routePrefix = normalizeRoutePrefix(routePrefix);
     }
 
     @PostMapping("/login")
@@ -173,16 +178,16 @@ public class ProxyController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(adminLoginPage("Invalid username or password."));
         }
         String token = sessions.createSession(username, Instant.now().plusSeconds(8 * 3600));
-        ResponseCookie cookie = ResponseCookie.from("s3proxy_admin", token).httpOnly(true).secure(useSecureCookies()).path("/").sameSite("Strict").maxAge(8 * 3600).build();
+        ResponseCookie cookie = ResponseCookie.from("s3proxy_admin", token).httpOnly(true).secure(useSecureCookies()).path(routePath("/")).sameSite("Strict").maxAge(8 * 3600).build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, "/admin").body(adminDashboard(username, ""));
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, routePath("/admin")).body(adminDashboard(username, ""));
     }
 
     @PostMapping(value = "/admin/logout", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public ResponseEntity<String> adminLogout(@CookieValue(value = "s3proxy_admin", required = false) String token, HttpServletResponse response) {
-        ResponseCookie cookie = ResponseCookie.from("s3proxy_admin", "").httpOnly(true).secure(useSecureCookies()).path("/").sameSite("Strict").maxAge(0).build();
+        ResponseCookie cookie = ResponseCookie.from("s3proxy_admin", "").httpOnly(true).secure(useSecureCookies()).path(routePath("/")).sameSite("Strict").maxAge(0).build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, "/admin").body(adminLoginPage(""));
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, routePath("/admin")).body(adminLoginPage(""));
     }
 
     @PostMapping(value = "/admin/users", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
@@ -217,18 +222,38 @@ public class ProxyController {
 
     private String adminLoginPage(String message) {
         return "<!doctype html><html><body><h1>S3 Proxy Admin</h1><p>" + escapeHtml(message) + "</p>" +
-                "<form method='post' action='/admin/login'><input name='username'><input name='password' type='password'><button>Sign in</button></form></body></html>";
+                "<form method='post' action='" + routePath("/admin/login") + "'><input name='username'><input name='password' type='password'><button>Sign in</button></form></body></html>";
     }
 
     private String adminDashboard(String user, String message) {
         return "<!doctype html><html><body><h1>S3 Proxy Admin</h1><p>Signed in as " + escapeHtml(user) + "</p><p>" + escapeHtml(message) + "</p>" +
-                "<form method='post' action='/admin/logout'><button>Sign out</button></form>" +
-                "<form method='post' action='/admin/users'><input name='clientId'><input name='secret' type='password'><button>Create identity</button></form></body></html>";
+                "<form method='post' action='" + routePath("/admin/logout") + "'><button>Sign out</button></form>" +
+                "<form method='post' action='" + routePath("/admin/users") + "'><input name='clientId'><input name='secret' type='password'><button>Create identity</button></form></body></html>";
     }
 
     private boolean useSecureCookies() {
         String url = properties.server() == null ? null : properties.server().url();
         return StringUtils.hasText(url) && url.trim().toLowerCase(java.util.Locale.ROOT).startsWith("https://");
+    }
+
+    private String routePath(String path) {
+        return routePrefix + path;
+    }
+
+    private static String normalizeRoutePrefix(String serverUrl) {
+        if (!StringUtils.hasText(serverUrl)) {
+            return DEFAULT_ROUTE_PREFIX;
+        }
+        try {
+            String path = java.net.URI.create(serverUrl.trim()).getPath();
+            if (!StringUtils.hasText(path) || "/".equals(path)) {
+                return DEFAULT_ROUTE_PREFIX;
+            }
+            String normalized = path.replaceAll("/+$", "");
+            return normalized.startsWith("/") ? normalized : "/" + normalized;
+        } catch (IllegalArgumentException exception) {
+            return DEFAULT_ROUTE_PREFIX;
+        }
     }
 
     public record ProxyLoginRequest(@NotBlank String username, @NotBlank String password) {}

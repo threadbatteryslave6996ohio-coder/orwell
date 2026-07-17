@@ -26,7 +26,7 @@ public final class DesktopClientRunner {
     /**
      * Prints the startup banner, installs the shutdown hook, and schedules polling.
      *
-     * @param label       leading text of the banner, e.g. {@code "Clippy client started."}
+     * @param label       leading text of the banner, e.g. {@code "Klippy client started."}
      * @param config      client configuration used to render the shared banner fields
      * @param extraFields additional {@code key=value} banner fields, inserted before
      *                    {@code tokenSource} in iteration order

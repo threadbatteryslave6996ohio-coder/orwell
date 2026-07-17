@@ -3,8 +3,17 @@
 Remaining extraction/cleanup work, ordered by value. (Earlier items — the apps/packages split,
 the Spring migration of all servers, the `AppServer.spring()` descriptor, shared
 logger/health/auth/JSON auto-configs, the invalid-JSON `@RestControllerAdvice`, the
-`@RequireAuthentication` guard, the shared Testcontainers base, and the removal of
-combined-server — are done.)
+`@RequireAuthentication` guard, the shared Testcontainers base, the removal of combined-server,
+the orphaned launcher test, and the klippy naming pass — are done.)
+
+## 0. Operational notes from the naming pass
+
+Not backlog items, but worth knowing:
+
+- **The Android module is not in the Maven reactor.** It builds with Gradle, so `mvn test` proves
+  nothing about it. Changes there are unverified by CI here and want a real Gradle build.
+- **The audit log is `klippy-server.txt`.** Nothing in-repo reads it but its test, so any external
+  tooling shipping or rotating logs by an older name fails silently.
 
 ## 1. Common `springProperties` keys → `AppServerEnv` descriptor (completed)
 
@@ -46,8 +55,6 @@ re-declare the Spring BOM + compiler/surefire pluginManagement. Point them at th
   `AlertClient` to a shared module and use it from both. Add connect/request timeouts either way.
 - **Dead `from(Map)` wrappers**: `AnalyzerEnvs`/`GmailEnvs`/`AlertEnvs`/`LogAnalyzerEnvs` each
   ship a zero-caller `from(Map)` alias; delete them (callers can use `X.ENV.from(map)`).
-- **Orphaned test**: `ClippyServerLauncherTest` is named after a deleted class and only tests
-  `EnvFiles.load` (already covered in `packages/env`); delete or move the assertion.
 - **`GmailService.gmail()` 401-retry** rebuilds the identical `HttpRequest` twice; extract a
   `request(url, body, token)` helper so the primary and retry paths cannot drift.
 - **Gmail webhook auth**: `GmailService.save()` still hand-attaches auth headers; the
@@ -57,8 +64,6 @@ re-declare the Spring BOM + compiler/surefire pluginManagement. Point them at th
 - **`KeeboarderWebSocketRuntime`** reduces to a
   `@Bean(destroyMethod = "close") @ConditionalOnBooleanProperty RedisClientCache` whose bean
   method calls `ChatEndpoint.initialize(...)` — the holder class and its mutable state disappear.
-- **`AppServer.Builder.build()`** copies its fields into shadow locals before lambda capture;
-  capture the fields directly.
 - **Logger fallback name**: `LoggerConfiguration` defaults to `"app"` when `orwell.app.name` is
   missing (a context booted outside the descriptor logs to the wrong stream silently). Consider
   failing fast instead, or deriving from `spring.application.name`.
@@ -74,3 +79,26 @@ re-declare the Spring BOM + compiler/surefire pluginManagement. Point them at th
   their 401 responses (different bodies: Spring default error JSON, empty body,
   `{"status":"unauthorized"}`). Adopting the shared guard means aligning those response
   contracts first; klippy/proxy also do clientId-match checks that stay in the controller.
+
+## 4. Live duplication (folded in from the retired removing-redundant-code.md)
+
+- **`CooldownTracker` byte-for-byte duplicate**: identical classes (only the package line
+  differs) in `apps/alerting/.../CooldownTracker.java` and
+  `apps/jarvis/detection/.../CooldownTracker.java`; `apps/log-analyzer`'s
+  `AlertCooldownTracker` is a third, evolved variant of the same concept. Extract one shared
+  implementation (log-analyzer's reservation semantics are the best starting point).
+- **Secrets-manager DTO triplication**: the same response shapes exist as admin records,
+  accessor records, and client records
+  (`apps/secrets-manager/server/.../admin/*Response.java`, `accessor/*Response.java`,
+  `apps/secrets-manager/client/.../dto/*.java`); the create/update request records also pair up
+  near-identically. Merge into shared records.
+- **Maven shade plugin declared unconfigured in 4 klippy client poms**
+  (linux/mac/dummy/offline-sync); declare once in a parent `pluginManagement`.
+- **Two logging facades**: alerting's app-local `JsonLogger` (JSON lines via the shared
+  `JsonLineFileWriter`) coexists with the shared `dev.orwell.logging.Logger`/`CustomLogger`
+  (plain text). Pick one contract; today "add a log line" has two conflicting answers.
+- **Dead code**: `packages/primitives/.../Flag.java` has zero consumers — delete it.
+- **Unguarded auto-config registry**: nothing tests that the four entries in server-bootstrap's
+  `META-INF/spring/...AutoConfiguration.imports` resolve; a typo silently drops the shared
+  `/health` endpoint, 401 guard, logger, and auth-strategy beans. Add a `@SpringBootTest`
+  asserting those beans exist.

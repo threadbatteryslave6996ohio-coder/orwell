@@ -101,26 +101,26 @@ AUTH_TZ=$(create_env "$AUTH_GROUP"      "AUTH_JPA_JDBC_TIME_ZONE"  "UTC")
 echo "[klippy-server]"
 
 KLIP_GROUP=$(create_group "klippy-server" "Clipboard service (apps/klippy)")
-KLIP_DB_URL=$(create_env "$KLIP_GROUP"  "SPRING_DATASOURCE_URL"      "jdbc:postgresql://localhost:5432/clippy")
-KLIP_DB_USER=$(create_env "$KLIP_GROUP" "SPRING_DATASOURCE_USERNAME" "clippy")
-KLIP_DB_PASS=$(create_env "$KLIP_GROUP" "SPRING_DATASOURCE_PASSWORD" "clippy")
+KLIP_DB_URL=$(create_env "$KLIP_GROUP"  "SPRING_DATASOURCE_URL"      "jdbc:postgresql://localhost:5432/klippy")
+KLIP_DB_USER=$(create_env "$KLIP_GROUP" "SPRING_DATASOURCE_USERNAME" "klippy")
+KLIP_DB_PASS=$(create_env "$KLIP_GROUP" "SPRING_DATASOURCE_PASSWORD" "klippy")
 KLIP_PORT=$(create_env "$KLIP_GROUP"    "SERVER_PORT"                "8082")
 KLIP_AUTH=$(create_env "$KLIP_GROUP"    "AUTH_BASE_URL"              "http://localhost:8081")
-KLIP_LOG=$(create_env "$KLIP_GROUP"     "LOGGING_FILE_NAME"          "logs/clippy-server.log")
+KLIP_LOG=$(create_env "$KLIP_GROUP"     "LOGGING_FILE_NAME"          "logs/klippy-server.log")
 KLIP_DDL=$(create_env "$KLIP_GROUP"     "SPRING_JPA_HIBERNATE_DDL_AUTO" "update")
 KLIP_TZ=$(create_env "$KLIP_GROUP"      "SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE" "UTC")
 
 # ============================================================================
 # 3. SECRETS MANAGER SERVER
 # ============================================================================
-echo "[secrets-server]"
+echo "[secrets-manager-server]"
 
-SEC_GROUP=$(create_group "secrets-server" "Secrets manager (apps/secrets-manager)")
+SEC_GROUP=$(create_group "secrets-manager-server" "Secrets manager (apps/secrets-manager)")
 SEC_DB_URL=$(create_env "$SEC_GROUP"  "SECRETS_DATASOURCE_URL"      "jdbc:postgresql://localhost:5435/secrets")
 SEC_DB_USER=$(create_env "$SEC_GROUP" "SECRETS_DATASOURCE_USERNAME" "secrets")
 SEC_DB_PASS=$(create_env "$SEC_GROUP" "SECRETS_DATASOURCE_PASSWORD" "secrets")
 SEC_PORT=$(create_env "$SEC_GROUP"    "SERVER_PORT"                  "8085")
-SEC_LOG=$(create_env "$SEC_GROUP"     "LOGGING_FILE_NAME"             "logs/secrets-server.log")
+SEC_LOG=$(create_env "$SEC_GROUP"     "LOGGING_FILE_NAME"             "logs/secrets-manager-server.log")
 SEC_DDL=$(create_env "$SEC_GROUP"     "SECRETS_JPA_HIBERNATE_DDL_AUTO" "update")
 SEC_TZ=$(create_env "$SEC_GROUP"      "SECRETS_JPA_JDBC_TIME_ZONE"  "UTC")
 SEC_AUTH=$(create_env "$SEC_GROUP"    "AUTH_BASE_URL"                "http://localhost:8081")
@@ -279,7 +279,7 @@ echo ""
 echo "=== Seeding complete ==="
 echo ""
 echo "Groups created:"
-echo "  auth-server, klippy-server, secrets-server"
+echo "  auth-server, klippy-server, secrets-manager-server"
 echo "  keeboarder-server, jarvis-proxy, jarvis-detection"
 echo "  jarvis-alerting, jarvis-streaming, klippy-client"
 echo ""

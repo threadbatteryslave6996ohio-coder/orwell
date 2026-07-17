@@ -10,17 +10,17 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>clippy-server-bootstrap</artifactId>
+    <artifactId>server-bootstrap</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>core</artifactId>
+            <artifactId>env-core</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>http</artifactId>
+            <artifactId>env-http</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -46,7 +46,7 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-logger</artifactId>
+            <artifactId>logger</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

@@ -1,6 +1,7 @@
 package dev.orwell.clients.sync;
 
 import dev.orwell.clients.core.ClipboardEndpoint;
+import dev.orwell.clients.core.OfflineLogPath;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.env.Env;
 import dev.orwell.env.EnvOption;
@@ -59,12 +60,7 @@ public record OfflineSyncConfig(
     }
 
     private static Path deadLetterPath(Path offlineLog) {
-        String fileName = offlineLog.getFileName() == null ? "offline" : offlineLog.getFileName().toString();
-        int extension = fileName.lastIndexOf('.');
-        String deadLetterName = extension > 0
-                ? fileName.substring(0, extension) + "-dead-letter" + fileName.substring(extension)
-                : fileName + "-dead-letter.json";
-        return offlineLog.toAbsolutePath().normalize().resolveSibling(deadLetterName);
+        return OfflineLogPath.deadLetterFor(offlineLog);
     }
 
     private static String optional(Env env, EnvOption<String> option) {

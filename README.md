@@ -6,10 +6,16 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 
 | App | Directory | Purpose |
 |---|---|---|
+| Alerting | `apps/alerting` | Email alert dispatch with per-source cooldowns |
+| Analyzer | `apps/analyzer` | Analysis service |
 | Auth | `apps/auth` | Client identity and token management |
-| Clippy | `apps/klippy` | Clipboard history sync |
-| Jarvis | `apps/jarvis` | Surveillance (bucket proxy, streaming, alerting) |
+| Backup | `apps/backup` | Postgres backup runner |
+| Google | `apps/google` | Gmail integration service |
+| Jarvis | `apps/jarvis` | Surveillance (bucket proxy, streaming, detection) |
 | Keeboarder | `apps/keeboarder` | Keyboard/message relay |
+| Klippy | `apps/klippy` | Clipboard history sync |
+| Log analyzer | `apps/log-analyzer` | AI-assisted log triage feeding the alerting service |
+| Secrets manager | `apps/secrets-manager` | Secret bundle/environment management |
 
 ## Packages
 
@@ -30,5 +36,9 @@ mvn package          # build everything
 mvn test             # run all tests
 mvn -pl <module> -am test   # build + test one module
 ```
+
+Maven artifactIds are derived from directory paths (e.g. `apps/klippy/server` builds
+`klippy-server`), so `mvn -pl :<artifactId>` and jar filenames line up with the tree. See
+`CLAUDE.md` for the full module map and repo conventions.
 
 See each app's README for run and configuration details.

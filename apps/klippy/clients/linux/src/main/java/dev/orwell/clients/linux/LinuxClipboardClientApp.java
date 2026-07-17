@@ -9,6 +9,7 @@ import dev.orwell.clients.core.DesktopClipboardMonitor;
 import dev.orwell.clients.core.ExceptionMessages;
 import dev.orwell.clients.core.LinuxClipboardPolicy;
 import dev.orwell.clients.core.OfflineFileLockerFactory;
+import dev.orwell.clients.core.OfflineLogPath;
 import dev.orwell.clients.core.PollIntervalValidator;
 import dev.orwell.clients.core.env.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
@@ -25,7 +26,7 @@ import java.time.Duration;
 import java.util.Map;
 
 public final class LinuxClipboardClientApp {
-    private static final Path OFFLINE_LOG_PATH = Path.of("clippy-offline-clipboard.json");
+    private static final Path OFFLINE_LOG_PATH = OfflineLogPath.DEFAULT;
 
     private final DesktopClipboardMonitor monitor;
 
@@ -67,7 +68,7 @@ public final class LinuxClipboardClientApp {
                 clipboardReader, config.endpoint(), config.authServerUrl(), config.clientId(),
                 config.authSession(), fileLocker, auditLogger);
         new DesktopClientRunner(app.monitor, pollIntervalMs)
-                .start("Clippy Linux client started.", config, Map.of("clipboardBackend", clipboardReader.name()));
+                .start("Klippy Linux client started.", config, Map.of("clipboardBackend", clipboardReader.name()));
     }
 
     private static void initializeAuth(ClientConfig config, AuthAuditLogger auditLogger) {

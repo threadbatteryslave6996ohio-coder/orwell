@@ -1,4 +1,4 @@
-# Clippy Dummy Client
+# Klippy Dummy Client
 
 Command-line Java client that sends text as clipboard content without reading a
 system clipboard.
@@ -34,14 +34,14 @@ Build and send one command from the repository root:
 
 ```bash
 mvn -pl apps/klippy/clients/dummy -am package
-java -jar apps/klippy/clients/dummy/target/clippy-dummy-client-0.1.0-SNAPSHOT.jar "ping"
+java -jar apps/klippy/clients/dummy/target/klippy-dummy-client-0.1.0-SNAPSHOT.jar "ping"
 ```
 
 You can also pipe commands on standard input. Each non-empty line is sent as a
 separate request:
 
 ```bash
-printf 'ping\nstatus\n' | java -jar apps/klippy/clients/dummy/target/clippy-dummy-client-0.1.0-SNAPSHOT.jar
+printf 'ping\nstatus\n' | java -jar apps/klippy/clients/dummy/target/klippy-dummy-client-0.1.0-SNAPSHOT.jar
 ```
 
 One-shot commands exit with status `1` when the server is unreachable or

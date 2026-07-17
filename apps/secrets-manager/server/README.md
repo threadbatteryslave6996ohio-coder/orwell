@@ -17,7 +17,7 @@ From the repository root:
 
 ```bash
 mvn -pl apps/secrets-manager/server -am package
-java -jar apps/secrets-manager/server/target/secrets-server-0.1.0-SNAPSHOT-exec.jar
+java -jar apps/secrets-manager/server/target/secrets-manager-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
 The launcher loads `.env` from the current directory or any parent, then applies

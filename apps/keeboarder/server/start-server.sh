@@ -31,4 +31,4 @@ fi
 echo "Starting Keeboarder server..."
 export SERVER_ADDRESS SERVER_PORT REDIS_HOST REDIS_PORT
 export AUTH_BASE_URL="${AUTH_BASE_URL:-http://localhost:8081}"
-java -jar target/websocket-redis-server-0.1.0-SNAPSHOT-exec.jar
+java -jar target/keeboarder-server-0.1.0-SNAPSHOT-exec.jar

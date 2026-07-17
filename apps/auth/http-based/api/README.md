@@ -1,6 +1,6 @@
-# Clippy HTTP Auth API
+# Klippy HTTP Auth API
 
-Shared Java request and response records for the Clippy authentication HTTP API.
+Shared Java request and response records for the Klippy authentication HTTP API.
 This module contains transport contracts only: it has no HTTP client, Spring
 controller, persistence, or credential-processing logic.
 

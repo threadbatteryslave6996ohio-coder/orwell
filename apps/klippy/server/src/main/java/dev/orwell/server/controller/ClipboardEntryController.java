@@ -14,7 +14,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,9 +25,8 @@ import java.util.List;
 import java.util.Objects;
 
 @RestController
-@RequestMapping("${clippy.server.route-prefix:}")
 public class ClipboardEntryController {
-    private static final CustomLogger LOGGER = new CustomLogger("clippy-server");
+    private static final CustomLogger LOGGER = new CustomLogger("klippy-server");
 
     private final ClipboardEntryRepository repository;
     private final ObjectProvider<AuthenticationContext> authenticationContextProvider;

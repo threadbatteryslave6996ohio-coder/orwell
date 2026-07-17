@@ -2,7 +2,7 @@
 
 These are the remaining **low-severity hardening items** from the code review of the
 streaming/proxy unification (folding the standalone stream worker into the
-`bucket-proxy` app as `--mode=stream-worker`). None are correctness regressions or
+`jarvis-bucket-proxy` app as `--mode=stream-worker`). None are correctness regressions or
 release blockers — they only bite on pathological or large-frame input that the
 default 640px-width MJPEG pipeline does not produce. Captured here so they aren't lost.
 

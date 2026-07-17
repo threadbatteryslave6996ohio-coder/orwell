@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Clippy records clipboard changes from desktop and Android clients in a Spring Boot server backed by PostgreSQL. The main codebase is a Java 25 multi-module Maven project. The Android client is a separate Kotlin/Gradle project under `clients/android`.
+Klippy records clipboard changes from desktop and Android clients in a Spring Boot server backed by PostgreSQL. The main codebase is a Java 25 multi-module Maven project. The Android client is a separate Kotlin/Gradle project under `clients/android`.
 
 Read the root `README.md` and the README for the component being changed before editing it.
 
@@ -17,7 +17,6 @@ Read the root `README.md` and the README for the component being changed before 
 - `clients/mac`, `clients/linux`, `clients/dummy`, `clients/offline-sync`: Java clients.
 - `clients/android`: standalone Android/Kotlin client.
 - `scripts`: local build and launch helpers.
-- `devops`: Terraform and cloud-init configuration.
 
 ## Development rules
 

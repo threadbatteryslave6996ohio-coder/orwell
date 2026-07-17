@@ -14,9 +14,9 @@ class ProcessEnvironmentSanitizerTest {
                 "PATH", "/usr/bin",
                 "DESKTOP_STARTUP_ID", "startup-id",
                 "XDG_ACTIVATION_TOKEN", "activation-token",
-                "GIO_LAUNCHED_DESKTOP_FILE", "/tmp/clippy.desktop",
+                "GIO_LAUNCHED_DESKTOP_FILE", "/tmp/klippy.desktop",
                 "GIO_LAUNCHED_DESKTOP_FILE_PID", "123",
-                "BAMF_DESKTOP_FILE_HINT", "/tmp/clippy.desktop"
+                "BAMF_DESKTOP_FILE_HINT", "/tmp/klippy.desktop"
         ));
 
         ProcessEnvironmentSanitizer.stripDesktopLaunchEnvironment(environment);

@@ -73,8 +73,8 @@ class MainActivity : ComponentActivity() {
         sharedText.value = intent.sharedText()
 
         setContent {
-            ClippyTheme {
-                ClippyApp(sharedText = sharedText.value)
+            KlippyTheme {
+                KlippyApp(sharedText = sharedText.value)
             }
         }
     }
@@ -88,9 +88,9 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ClippyApp(sharedText: String?) {
+private fun KlippyApp(sharedText: String?) {
     val context = LocalContext.current
-    val settings = remember { ClippySettings(context) }
+    val settings = remember { KlippySettings(context) }
     val scope = rememberCoroutineScope()
 
     var serverUrl by rememberSaveable { mutableStateOf(settings.serverUrl) }
@@ -160,7 +160,7 @@ private fun ClippyApp(sharedText: String?) {
         sending = true
         status = "Sending..."
         scope.launch {
-            val result = ClippyApi.send(normalizedServerUrl, normalizedClientId, normalizedClientToken, content)
+            val result = KlippyApi.send(normalizedServerUrl, normalizedClientId, normalizedClientToken, content)
             sending = false
             status = result.message
             if (result.success) {
@@ -189,7 +189,7 @@ private fun ClippyApp(sharedText: String?) {
             TopAppBar(
                 title = {
                     Text(
-                        text = "Clippy",
+                        text = "Klippy",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -342,7 +342,7 @@ private fun ClippyApp(sharedText: String?) {
 }
 
 @Composable
-private fun ClippyTheme(content: @Composable () -> Unit) {
+private fun KlippyTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = lightColorScheme(
             primary = Color(0xFF2563EB),
@@ -355,8 +355,8 @@ private fun ClippyTheme(content: @Composable () -> Unit) {
     )
 }
 
-private class ClippySettings(context: Context) {
-    private val preferences = context.getSharedPreferences("clippy", Context.MODE_PRIVATE)
+private class KlippySettings(context: Context) {
+    private val preferences = context.getSharedPreferences("klippy", Context.MODE_PRIVATE)
 
     var serverUrl: String
         get() = preferences.getString("serverUrl", "") ?: ""
@@ -375,7 +375,7 @@ private class ClippySettings(context: Context) {
         set(value) = preferences.edit().putBoolean("autoSync", value).apply()
 }
 
-private object ClippyApi {
+private object KlippyApi {
     suspend fun send(serverUrl: String, clientId: String, clientToken: String, content: String): SendResult =
         withContext(Dispatchers.IO) {
             try {

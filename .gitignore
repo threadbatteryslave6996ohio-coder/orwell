@@ -43,7 +43,7 @@ hs_err_pid*
 *.swp
 *.swo
 *~
-clippy-offline-clipboard.json
+klippy-offline-clipboard.json
 
 # Screen/audio recordings and capture output
 **/recordings/

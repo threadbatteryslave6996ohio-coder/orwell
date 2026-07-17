@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ClippyAndroid"
+rootProject.name = "KlippyAndroid"
 include(":app")

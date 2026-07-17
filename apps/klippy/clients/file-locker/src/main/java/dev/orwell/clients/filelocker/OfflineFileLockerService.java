@@ -40,7 +40,7 @@ public final class OfflineFileLockerService implements AutoCloseable {
                 : Path.of(args[0]);
         try (OfflineFileLockerService service = new OfflineFileLockerService(socketPath)) {
             Runtime.getRuntime().addShutdownHook(new Thread(service::close));
-            System.out.printf("Clippy file-locker service listening at %s%n", socketPath.toAbsolutePath());
+            System.out.printf("Klippy file-locker service listening at %s%n", socketPath.toAbsolutePath());
             service.run();
         }
     }
@@ -165,7 +165,7 @@ public final class OfflineFileLockerService implements AutoCloseable {
             throw new IOException("Offline log path must have a parent directory: " + path);
         }
         Files.createDirectories(parent);
-        Path temporary = Files.createTempFile(parent, ".clippy-offline-", ".tmp");
+        Path temporary = Files.createTempFile(parent, ".klippy-offline-", ".tmp");
         try {
             Files.writeString(temporary, content, StandardCharsets.UTF_8,
                     StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
