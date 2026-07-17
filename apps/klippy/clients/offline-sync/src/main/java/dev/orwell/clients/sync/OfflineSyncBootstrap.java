@@ -31,11 +31,6 @@ public final class OfflineSyncBootstrap {
     }
 
     public static OfflineSyncBootstrap fromArgs(String[] args) throws java.io.IOException {
-        // Only the default location migrates: an explicit path is the caller's choice, and
-        // nothing should be moved out from under it.
-        if (args.length == 0) {
-            OfflineLogPath.migrateLegacyIfPresent();
-        }
         Path offlineLog = args.length == 0 ? DEFAULT_OFFLINE_LOG : Path.of(args[0]);
         Env env = ClientEnvs.load();
         OfflineFileLockerClient fileLocker = OfflineFileLockerFactory.create(env);

@@ -4,11 +4,6 @@ This long-running Java client monitors clipboard records from the Linux client's
 `klippy-offline-clipboard.json` file and synchronizes changes to the Klippy
 server. It checks immediately at startup and then every 30 minutes.
 
-Both that file and its dead-letter sibling were spelled `clippy-…` before the rename. When run
-against the default location, the client moves an old pair forward on startup so nothing written
-by an earlier version is stranded. Passing an explicit path skips the migration entirely — that
-file is your choice, and nothing is moved out from under it.
-
 It queries the server for the file's inclusive timestamp range, compares records
 by `clientId`, `content`, and `timestamp`, and posts only records that are not
 already stored. Auth audit records (`"type": "auth"`) are ignored because they

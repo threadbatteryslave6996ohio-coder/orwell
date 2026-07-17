@@ -47,33 +47,15 @@ Java packages predate the renames and do NOT always match — use this table, do
 | `packages/server-parent` | `server-parent` (parent POM) | — |
 | `packages/server-test-support` | `server-test-support` | `dev.orwell.testing` |
 
-## Naming history
+## Conventions and history
 
-- "Klippy" was historically spelled "Clippy". **The rename is complete — everything says
-  "klippy".** Nothing is spelled `clippy` any more except the three legacy constants below, which
-  exist solely to carry old data forward and are the only `clippy` you should ever see.
-- The legacy constants, and why each exists. **Do not delete one to "finish" the rename** — each
-  is what stops an upgrade from silently eating user data:
-  - `OfflineLogPath.LEGACY` (`clippy-offline-clipboard.json`) — moved to the current name on
-    client startup, along with its `-dead-letter` sibling. Without it, a user's unsynced entries
-    stay in the old file, unread. Only the default location migrates; an explicit path is left
-    alone.
-  - `OfflineFileLockerClient.LEGACY_SOCKET_PATH` (`/tmp/clippy-offline-file-locker.sock`) — used
-    when only the old socket exists, i.e. a file-locker still running from before the rename.
-    Requests carry the file path, so an older service handles current names fine.
-  - `KlippySettings.LEGACY_PREFERENCES_NAME` (`"clippy"`, Android) — copied forward on first
-    launch. Without it every installed app forgets its server URL, client id and token.
-
-  Each is safe to delete once no pre-rename client, locker, or install is running anywhere — that
-  is a rollout decision, not a code cleanliness one.
-- The audit log is now `klippy-server.txt` (`ClipboardEntryController`, and the app name in
-  `KlippyServerApplication`). It was `clippy-server.txt`; nothing in-repo reads it but its test,
-  so anything shipping or rotating those logs needs the new name and will not tell you if it
-  misses.
-- A useful rule of thumb from the rename: renaming a **Java/Kotlin identifier** is free — the
-  compiler proves it. Renaming a **string** is where the risk lives, because a string is usually
-  someone else's contract: a file on a user's disk, a socket path, a log name, a database. When
-  something still looks misspelled, check which of the two it is before touching it.
+- The app is **klippy** everywhere — identifiers, files, sockets, log names, databases, docs.
+  There is no dual spelling to preserve; if you find an older one, it is a straggler to fix, not
+  a contract to protect.
+- A rule of thumb worth keeping when renaming anything here: renaming a **Java/Kotlin identifier**
+  is free — the compiler proves it. Renaming a **string** is where the risk lives, because a
+  string is usually someone else's contract: a file on a user's disk, a socket path, a log name, a
+  database. Check which of the two you have before touching it.
 - Jarvis's Java packages live under `dev.orwell.bucket.*`; klippy-server's under
   `dev.orwell.server`. Grep by package when tracing code, by artifactId when tracing builds.
 - `apps/combined-server` was deleted deliberately. Do not recreate it; ignore references to it
@@ -81,11 +63,9 @@ Java packages predate the renames and do NOT always match — use this table, do
 - `apps/klippy/devops` (Terraform + cloud-init for Azure) was deleted deliberately — it is no
   longer used. Don't recreate it; ignore references to it in old commits. `apps/jarvis` keeps its
   own unrelated Terraform under `bucket/deployment`.
-- Postgres identifiers say `klippy` — compose service `db-klippy`, container `klippy-postgres`,
-  the `*-klippy-pg-data` volumes, `POSTGRES_DB`/`POSTGRES_USER`, and the role/database
-  `dev-stack.sh` creates — matching how the `auth` and `secrets` databases are already named after
-  their app. Nothing migrates a pre-rename `clippy-pg-data` volume: it stays on disk as an orphan
-  and you re-seed. `docker volume ls` still showing one is expected.
+- Postgres identifiers are named after their app — `db-klippy`/`klippy`, `db-auth`/`auth`,
+  `secrets` — in compose services, `POSTGRES_DB`/`POSTGRES_USER`, volumes, and the roles
+  `dev-stack.sh` creates.
 
 ## Repo conventions
 

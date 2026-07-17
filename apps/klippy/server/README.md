@@ -107,7 +107,7 @@ content is limited to 1,000,000 characters.
 
 ## Logging
 
-The app server writes its normal Spring Boot logs to `LOGGING_FILE_NAME` and also writes a custom audit log file named `klippy-server.txt` in the configured directory. It was called `clippy-server.txt` before the rename; anything that ships or rotates these logs needs the new name.
+The app server writes its normal Spring Boot logs to `LOGGING_FILE_NAME` and also writes a custom audit log file named `klippy-server.txt` in the configured directory.
 
 Each successful `POST /clipboard` request records a line noting the `clientId`, generated entry id, and timestamp. Raw clipboard content is not written to the custom log.
 

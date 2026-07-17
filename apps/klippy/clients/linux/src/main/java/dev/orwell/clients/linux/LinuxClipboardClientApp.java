@@ -51,7 +51,6 @@ public final class LinuxClipboardClientApp {
     }
 
     public static void main(String[] args) throws IOException {
-        OfflineLogPath.migrateLegacyIfPresent();
         Env env = ClientEnvs.load();
         ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("linux-"));
         long pollIntervalMs = env.has(ClientEnvs.CLIPBOARD_POLL_INTERVAL_MS)

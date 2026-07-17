@@ -56,7 +56,6 @@ public final class ClipboardClientApp {
     }
 
     public static void main(String[] args) throws IOException {
-        OfflineLogPath.migrateLegacyIfPresent();
         Env env = ClientEnvs.load();
         ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("client-"));
         long pollIntervalMs = env.has(ClientEnvs.CLIPBOARD_POLL_INTERVAL_MS)

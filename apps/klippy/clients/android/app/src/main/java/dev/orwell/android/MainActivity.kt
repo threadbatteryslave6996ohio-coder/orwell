@@ -3,7 +3,6 @@ package dev.orwell.android
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -357,7 +356,7 @@ private fun KlippyTheme(content: @Composable () -> Unit) {
 }
 
 private class KlippySettings(context: Context) {
-    private val preferences = migratedPreferences(context)
+    private val preferences = context.getSharedPreferences("klippy", Context.MODE_PRIVATE)
 
     var serverUrl: String
         get() = preferences.getString("serverUrl", "") ?: ""
@@ -374,44 +373,6 @@ private class KlippySettings(context: Context) {
     var autoSync: Boolean
         get() = preferences.getBoolean("autoSync", false)
         set(value) = preferences.edit().putBoolean("autoSync", value).apply()
-
-    private companion object {
-        const val PREFERENCES_NAME = "klippy"
-
-        /** Pre-rename file. Kept only to migrate forward; drop once installs have rolled over. */
-        const val LEGACY_PREFERENCES_NAME = "clippy"
-
-        /**
-         * Settings store, copying a pre-rename file forward the first time it is missing.
-         *
-         * Renaming the file without this would make every installed app forget its server URL,
-         * client id and token — silently, and with the old values still on disk but unread.
-         * Migrating is a no-op once the current file has anything in it, so it is safe on every
-         * launch.
-         */
-        fun migratedPreferences(context: Context): SharedPreferences {
-            val current = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-            val legacy = context.getSharedPreferences(LEGACY_PREFERENCES_NAME, Context.MODE_PRIVATE)
-            if (current.all.isNotEmpty() || legacy.all.isEmpty()) {
-                return current
-            }
-
-            val editor = current.edit()
-            for ((key, value) in legacy.all) {
-                when (value) {
-                    is String -> editor.putString(key, value)
-                    is Boolean -> editor.putBoolean(key, value)
-                    is Int -> editor.putInt(key, value)
-                    is Long -> editor.putLong(key, value)
-                    is Float -> editor.putFloat(key, value)
-                    else -> Unit
-                }
-            }
-            editor.apply()
-            legacy.edit().clear().apply()
-            return current
-        }
-    }
 }
 
 private object KlippyApi {

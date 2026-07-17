@@ -54,10 +54,6 @@ If a remote write fails, the client asks the file-locker to append the payload
 to `klippy-offline-clipboard.json`. The client exits at startup when the
 file-locker is unavailable, preventing uncoordinated file writes.
 
-This file was called `clippy-offline-clipboard.json` before the rename. The client moves an old
-file to the new name on startup, so entries written by an earlier version still sync. Nothing is
-moved if the new file already exists, or if you pass an explicit path.
-
 ## Test
 
 ```bash

@@ -3,27 +3,17 @@
 Remaining extraction/cleanup work, ordered by value. (Earlier items — the apps/packages split,
 the Spring migration of all servers, the `AppServer.spring()` descriptor, shared
 logger/health/auth/JSON auto-configs, the invalid-JSON `@RestControllerAdvice`, the
-`@RequireAuthentication` guard, the shared Testcontainers base, the removal of
-combined-server, and the orphaned `ClippyServerLauncherTest` — are done.)
+`@RequireAuthentication` guard, the shared Testcontainers base, the removal of combined-server,
+the orphaned launcher test, and the klippy naming pass — are done.)
 
-## 0. The clippy → klippy rename (done — one follow-up)
+## 0. Operational notes from the naming pass
 
-Everything is renamed: JVM and Kotlin identifiers, local dev Postgres, the audit log stream, the
-client data files, the file-locker socket, the Android preferences, and every user-facing name.
-The Azure Terraform was deleted rather than renamed; it is no longer used.
-
-**Follow-up: drop the three legacy fallbacks once clients have rolled over.** They exist only to
-carry pre-rename data forward, and each is listed in CLAUDE.md: `OfflineLogPath.LEGACY`,
-`OfflineFileLockerClient.LEGACY_SOCKET_PATH`, and `KlippySettings.LEGACY_PREFERENCES_NAME`. Deleting
-one early strands exactly the data it was added to save, so this is gated on rollout — no
-pre-rename client, locker, or Android install still running — not on a release number.
-
-Two things worth knowing if you touch this again:
+Not backlog items, but worth knowing:
 
 - **The Android module is not in the Maven reactor.** It builds with Gradle, so `mvn test` proves
-  nothing about it. Its rename is unverified by CI here and wants a real Gradle build.
-- **External log tooling.** The audit file is now `klippy-server.txt`. Nothing in-repo reads it but
-  its test, so anything shipping or rotating logs by the old name fails silently.
+  nothing about it. Changes there are unverified by CI here and want a real Gradle build.
+- **The audit log is `klippy-server.txt`.** Nothing in-repo reads it but its test, so any external
+  tooling shipping or rotating logs by an older name fails silently.
 
 ## 1. Common `springProperties` keys → `AppServerEnv` descriptor (completed)
 
@@ -65,8 +55,6 @@ re-declare the Spring BOM + compiler/surefire pluginManagement. Point them at th
   `AlertClient` to a shared module and use it from both. Add connect/request timeouts either way.
 - **Dead `from(Map)` wrappers**: `AnalyzerEnvs`/`GmailEnvs`/`AlertEnvs`/`LogAnalyzerEnvs` each
   ship a zero-caller `from(Map)` alias; delete them (callers can use `X.ENV.from(map)`).
-- **Orphaned test**: `ClippyServerLauncherTest` is named after a deleted class and only tests
-  `EnvFiles.load` (already covered in `packages/env`); delete or move the assertion.
 - **`GmailService.gmail()` 401-retry** rebuilds the identical `HttpRequest` twice; extract a
   `request(url, body, token)` helper so the primary and retry paths cannot drift.
 - **Gmail webhook auth**: `GmailService.save()` still hand-attaches auth headers; the
