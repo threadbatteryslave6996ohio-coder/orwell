@@ -1,4 +1,4 @@
-# Clippy — testing deployment with local databases behind an internal Nginx proxy.
+# Klippy — testing deployment with local databases behind an internal Nginx proxy.
 #
 #   docker compose -p testing -f docker-compose.testing.yml up --build -d
 #
@@ -6,6 +6,7 @@
 # Brings up two Postgres databases plus one published HTTP entrypoint on port 8080.
 
 services:
+  # Postgres identifiers keep the historic "clippy" name — existing volumes/roles hold data (see CLAUDE.md).
   db-clippy:
     image: postgres:16-alpine
     environment:
@@ -39,7 +40,7 @@ services:
       retries: 10
 
   auth-server:
-    image: clippy-app:local
+    image: klippy-app:local
     build:
       context: ../..
       dockerfile: apps/klippy/Dockerfile
@@ -58,11 +59,11 @@ services:
     restart: unless-stopped
 
   clipboard-server:
-    image: clippy-app:local
+    image: klippy-app:local
     build:
       context: ../..
       dockerfile: apps/klippy/Dockerfile
-    command: ["java", "-jar", "/app/clippy-server.jar"]
+    command: ["java", "-jar", "/app/klippy-server.jar"]
     env_file:
       - .env.testing
     environment:

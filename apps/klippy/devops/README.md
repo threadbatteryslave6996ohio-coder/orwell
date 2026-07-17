@@ -1,4 +1,4 @@
-# Clippy Azure Infrastructure
+# Klippy Azure Infrastructure
 
 Terraform for Azure infrastructure sized for Azure's 12-month free-account allowances where eligible:
 

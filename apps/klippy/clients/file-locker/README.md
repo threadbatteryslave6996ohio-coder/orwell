@@ -1,6 +1,6 @@
 # Offline File-Locker Service
 
-The file-locker is the only Clippy process that reads or writes the offline
+The file-locker is the only Klippy process that reads or writes the offline
 clipboard JSON file. Linux clipboard clients send append requests and the
 offline sync client requests snapshots over a local Unix-domain socket.
 
@@ -19,14 +19,14 @@ Start the service before either client:
 ./apps/klippy/scripts/start-file-locker.sh
 ```
 
-Maven packaging keeps the thin `clippy-file-locker` JAR for other modules and
-creates the runnable `clippy-file-locker-0.1.0-SNAPSHOT-exec.jar` separately.
+Maven packaging keeps the thin `klippy-file-locker` JAR for other modules and
+creates the runnable `klippy-file-locker-0.1.0-SNAPSHOT-exec.jar` separately.
 
-The default socket is `/tmp/clippy-offline-file-locker.sock`. Override it for
+The default socket is `/tmp/klippy-offline-file-locker.sock`. Override it for
 the service and both clients with the same environment or `.env` value:
 
 ```dotenv
-OFFLINE_FILE_LOCKER_SOCKET=/run/user/1000/clippy-file-locker.sock
+OFFLINE_FILE_LOCKER_SOCKET=/run/user/1000/klippy-file-locker.sock
 ```
 
 The service removes a stale socket at startup, refuses to replace a socket with

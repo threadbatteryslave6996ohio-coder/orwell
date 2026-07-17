@@ -48,7 +48,7 @@ services:
       retries: 10
 
   auth-server:
-    image: clippy-app:local
+    image: klippy-app:local
     build:
       context: .
       dockerfile: apps/klippy/Dockerfile
@@ -69,11 +69,11 @@ services:
     restart: unless-stopped
 
   clipboard-server:
-    image: clippy-app:local
+    image: klippy-app:local
     build:
       context: .
       dockerfile: apps/klippy/Dockerfile
-    command: ["java", "-jar", "/app/clippy-server.jar"]
+    command: ["java", "-jar", "/app/klippy-server.jar"]
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db-clippy/clippy
       SPRING_DATASOURCE_USERNAME: clippy
@@ -81,7 +81,7 @@ services:
       SERVER_ADDRESS: 0.0.0.0
       SERVER_PORT: "80"
       AUTH_BASE_URL: http://auth-server/auth
-      LOGGING_FILE_NAME: logs/clippy-server.log
+      LOGGING_FILE_NAME: logs/klippy-server.log
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE: UTC
     depends_on:

@@ -18,9 +18,9 @@ RUN groupadd --system bucketproxy \
 
 COPY --from=build --chown=bucketproxy:bucketproxy \
     /workspace/apps/jarvis/bucket/proxy/target/*-exec.jar \
-    /app/bucket-proxy.jar
+    /app/jarvis-bucket-proxy.jar
 
 USER bucketproxy
 EXPOSE 5000
 
-ENTRYPOINT ["java", "-jar", "/app/bucket-proxy.jar"]
+ENTRYPOINT ["java", "-jar", "/app/jarvis-bucket-proxy.jar"]

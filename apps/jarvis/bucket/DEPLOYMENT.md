@@ -29,9 +29,9 @@ The bootstrap script:
 
 ## Runtime Layout
 
-- `s3-proxy.service`: `java -jar /opt/s3-proxy/publish/bucket-proxy.jar`
+- `s3-proxy.service`: `java -jar /opt/s3-proxy/publish/jarvis-bucket-proxy.jar`
 - `stream-alert.service`: `java -jar /opt/streaming/publish/alerting.jar`
-- `stream-detection.service`: `java -jar /opt/streaming/publish/bucket-detection.jar`
+- `stream-detection.service`: `java -jar /opt/streaming/publish/jarvis-detection.jar`
 - `stream-analyzer.service`: shell script wrapper for the streaming jar
 - `stream-recorder.service`: shell script wrapper for ffmpeg recording
 - `mediamtx.service`: Docker container

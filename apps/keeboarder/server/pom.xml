@@ -5,12 +5,12 @@
 
     <parent>
         <groupId>dev.orwell</groupId>
-        <artifactId>keeboarder-parent</artifactId>
+        <artifactId>keeboarder</artifactId>
         <version>0.1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>websocket-redis-server</artifactId>
+    <artifactId>keeboarder-server</artifactId>
     <packaging>jar</packaging>
 
     <dependencies>
@@ -44,15 +44,15 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>core</artifactId>
+            <artifactId>env-core</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-server-bootstrap</artifactId>
+            <artifactId>server-bootstrap</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>http</artifactId>
+            <artifactId>env-http</artifactId>
         </dependency>
 
         <dependency>

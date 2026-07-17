@@ -1,9 +1,9 @@
-# Clippy Server
+# Klippy Server
 
 Spring Boot API that persists clipboard entries in PostgreSQL.
 
 The server does not own client identities. It validates each clipboard request
-by calling the separate Clippy auth server.
+by calling the separate Klippy auth server.
 
 ## Code Layout
 
@@ -35,14 +35,14 @@ Build and run this app server from the repository root in another terminal:
 
 ```bash
 mvn -pl apps/klippy/server -am package
-java -jar apps/klippy/server/target/clippy-server-0.1.0-SNAPSHOT-exec.jar
+java -jar apps/klippy/server/target/klippy-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
 Or run Maven from the root POM:
 
 ```bash
 mvn -f pom.xml -pl apps/klippy/server -am package
-java -jar apps/klippy/server/target/clippy-server-0.1.0-SNAPSHOT-exec.jar
+java -jar apps/klippy/server/target/klippy-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
 The example configuration runs the app server on `http://localhost:8080` and the auth server on `http://localhost:8081`.
@@ -60,7 +60,7 @@ SPRING_DATASOURCE_PASSWORD=clippy
 SERVER_ADDRESS=0.0.0.0
 SERVER_PORT=8080
 AUTH_BASE_URL=http://localhost:8081
-LOGGING_FILE_NAME=logs/clippy-server.log
+LOGGING_FILE_NAME=logs/klippy-server.log
 SPRING_JPA_HIBERNATE_DDL_AUTO=update
 SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE=UTC
 ```
@@ -107,7 +107,7 @@ content is limited to 1,000,000 characters.
 
 ## Logging
 
-The app server writes its normal Spring Boot logs to `LOGGING_FILE_NAME` and also writes a custom audit log file named `clippy-server.txt` in the configured directory.
+The app server writes its normal Spring Boot logs to `LOGGING_FILE_NAME` and also writes a custom audit log file named `clippy-server.txt` in the configured directory (the historic "clippy" spelling is baked into the logger name in code — see CLAUDE.md).
 
 Each successful `POST /clipboard` request records a line noting the `clientId`, generated entry id, and timestamp. Raw clipboard content is not written to the custom log.
 

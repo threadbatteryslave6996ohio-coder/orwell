@@ -39,14 +39,14 @@ cd "$SOURCE_DIR"
 mvn -f bucket/pom.xml package -DskipTests
 # The alerting service is now a standalone top-level app; build it (with its
 # reactor dependencies) from the root pom.
-mvn -f ../../pom.xml -pl apps/alerting -am package -DskipTests
+mvn -f ../../pom.xml -pl apps/alerting,apps/jarvis/detection -am package -DskipTests
 
-# The bucket-proxy jar also carries the stream analysis worker as its
+# The jarvis-bucket-proxy jar also carries the stream analysis worker as its
 # --mode=stream-worker mode (dev.orwell.bucket.proxy.streaming.AnalysisWorker),
 # so the executable fat jar doubles as the worker jar.
-cp bucket/proxy/target/bucket-proxy-0.1.0-SNAPSHOT-exec.jar "$PROXY_DIR/publish/bucket-proxy.jar"
+cp bucket/proxy/target/jarvis-bucket-proxy-0.1.0-SNAPSHOT-exec.jar "$PROXY_DIR/publish/jarvis-bucket-proxy.jar"
 cp ../alerting/target/alerting-0.1.0-SNAPSHOT-exec.jar "$STREAM_PUBLISH_DIR/alerting.jar"
-cp bucket/detection/target/bucket-detection-0.1.0-SNAPSHOT-exec.jar "$STREAM_PUBLISH_DIR/bucket-detection.jar"
+cp detection/target/jarvis-detection-0.1.0-SNAPSHOT-exec.jar "$STREAM_PUBLISH_DIR/jarvis-detection.jar"
 
 cp bucket/proxy/scripts/record_stream.sh "$STREAM_SCRIPTS_DIR/record_stream.sh"
 cp bucket/proxy/scripts/analyze_stream.sh "$STREAM_SCRIPTS_DIR/analyze_stream.sh"
@@ -56,7 +56,7 @@ cat > /etc/default/streaming <<STREAMENVEOF
 STREAM_SOURCE_URL=rtsp://127.0.0.1:8554/live
 STREAM_ANALYSIS_SOURCE_URL=rtsp://127.0.0.1:8554/live
 STREAM_ANALYSIS_ENDPOINT=${stream_analysis_endpoint_json}
-STREAM_ANALYSIS_WORKER_JAR=$PROXY_DIR/publish/bucket-proxy.jar
+STREAM_ANALYSIS_WORKER_JAR=$PROXY_DIR/publish/jarvis-bucket-proxy.jar
 STREAM_LOG_DIR=$STREAM_LOG_DIR
 STREAM_RECORD_DIR=$STREAM_RECORD_DIR
 STREAM_SEGMENT_SECONDS=3600
@@ -139,7 +139,7 @@ Wants=network-online.target mediamtx.service stream-alert.service
 [Service]
 Type=simple
 EnvironmentFile=/etc/default/stream-detection
-ExecStart=/usr/bin/java -jar /opt/streaming/publish/bucket-detection.jar
+ExecStart=/usr/bin/java -jar /opt/streaming/publish/jarvis-detection.jar
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -198,7 +198,7 @@ User=www-data
 WorkingDirectory=/opt/s3-proxy/publish
 # Configuration goes through the env schema (JarvisProxyEnvs); the entry point takes no
 # program args (it would treat them as an env-loader selector and exit).
-ExecStart=/usr/bin/java -jar /opt/s3-proxy/publish/bucket-proxy.jar
+ExecStart=/usr/bin/java -jar /opt/s3-proxy/publish/jarvis-bucket-proxy.jar
 Restart=always
 RestartSec=10
 Environment=JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8

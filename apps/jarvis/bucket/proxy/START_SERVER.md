@@ -50,7 +50,7 @@ From the repository root:
 
 ```bash
 mvn -pl apps/jarvis/bucket/proxy -am package
-java -jar apps/jarvis/bucket/proxy/target/bucket-proxy-0.1.0-SNAPSHOT-exec.jar
+java -jar apps/jarvis/bucket/proxy/target/jarvis-bucket-proxy-0.1.0-SNAPSHOT-exec.jar
 ```
 
 The proxy listens on port `5000` by default.
@@ -95,7 +95,7 @@ sudo systemctl restart s3-proxy
 sudo journalctl -u s3-proxy -f
 ```
 
-Production runs from `/opt/s3-proxy/publish/bucket-proxy.jar`.
+Production runs from `/opt/s3-proxy/publish/jarvis-bucket-proxy.jar`.
 By default it listens on `0.0.0.0:5000`; any public reverse proxy or TLS setup
 is managed outside this repo.
 

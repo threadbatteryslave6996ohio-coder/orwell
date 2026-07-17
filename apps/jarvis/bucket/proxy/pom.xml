@@ -5,12 +5,12 @@
 
     <parent>
         <groupId>dev.orwell</groupId>
-        <artifactId>bucket</artifactId>
+        <artifactId>jarvis-bucket</artifactId>
         <version>0.1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>bucket-proxy</artifactId>
+    <artifactId>jarvis-bucket-proxy</artifactId>
 
     <dependencies>
         <dependency>
@@ -23,19 +23,19 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>core</artifactId>
+            <artifactId>env-core</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>http</artifactId>
+            <artifactId>env-http</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-server-bootstrap</artifactId>
+            <artifactId>server-bootstrap</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-logger</artifactId>
+            <artifactId>logger</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

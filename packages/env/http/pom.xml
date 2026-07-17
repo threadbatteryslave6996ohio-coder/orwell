@@ -10,16 +10,16 @@
         <relativePath>../../../pom.xml</relativePath>
     </parent>
 
-    <artifactId>http</artifactId>
+    <artifactId>env-http</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>core</artifactId>
+            <artifactId>env-core</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>secrets-client</artifactId>
+            <artifactId>secrets-manager-client</artifactId>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

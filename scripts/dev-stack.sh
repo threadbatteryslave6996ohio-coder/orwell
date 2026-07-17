@@ -48,10 +48,10 @@ KEEBOARDER_BACKEND="$(detect_keeboarder_backend)"
 # name : jar-path pairs for every server we manage
 declare -A JARS=(
   [auth]="$ROOT/apps/auth/http-based/server/target/auth-http-server-$VERSION-exec.jar"
-  [klippy]="$ROOT/apps/klippy/server/target/clippy-server-$VERSION-exec.jar"
-  [secrets]="$ROOT/apps/secrets-manager/server/target/secrets-server-$VERSION-exec.jar"
-  [proxy]="$ROOT/apps/jarvis/bucket/proxy/target/bucket-proxy-$VERSION-exec.jar"
-  [keeboarder]="$ROOT/apps/keeboarder/server/target/websocket-redis-server-$VERSION-exec.jar"
+  [klippy]="$ROOT/apps/klippy/server/target/klippy-server-$VERSION-exec.jar"
+  [secrets]="$ROOT/apps/secrets-manager/server/target/secrets-manager-server-$VERSION-exec.jar"
+  [proxy]="$ROOT/apps/jarvis/bucket/proxy/target/jarvis-bucket-proxy-$VERSION-exec.jar"
+  [keeboarder]="$ROOT/apps/keeboarder/server/target/keeboarder-server-$VERSION-exec.jar"
 )
 
 mkdir -p "$SCRATCH"
@@ -62,7 +62,7 @@ down() {
   for name in "${!JARS[@]}"; do
     pkill -f "$(basename "${JARS[$name]}")" 2>/dev/null || true
   done
-  pkill -f "clippy-file-locker-.*-exec.jar" 2>/dev/null || true
+  pkill -f "klippy-file-locker-.*-exec.jar" 2>/dev/null || true
   docker rm -f orw-pg orw-redis >/dev/null 2>&1 || true
   echo "Down."
 }
@@ -74,7 +74,7 @@ for name in "${!JARS[@]}"; do
 done
 [ "$missing" = 0 ] || { echo "Build first:  mvn -o -DskipTests package"; exit 1; }
 
-# --- 1. Infra: one Postgres (auth/clippy/secrets DBs) + Redis -----------------
+# --- 1. Infra: one Postgres (auth/klippy/secrets DBs) + Redis -----------------
 echo "==> Postgres + Redis"
 # Start if stopped, create if missing, leave alone if already running.
 ensure_container() {
@@ -120,7 +120,7 @@ SPRING_DATASOURCE_PASSWORD=clippy
 SERVER_PORT=$KLIPPY_PORT
 SERVER_ADDRESS=0.0.0.0
 AUTH_BASE_URL=$AUTH_BASE
-LOGGING_FILE_NAME=logs/clippy-server.log
+LOGGING_FILE_NAME=logs/klippy-server.log
 SPRING_JPA_HIBERNATE_DDL_AUTO=update
 SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE=UTC
 ENV
@@ -208,13 +208,13 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 tmux new-session -d -s "$SESSION" -n file-locker -c "$ROOT"
 tmux send-keys -t "$SESSION:file-locker" \
-  "java -jar apps/klippy/clients/file-locker/target/clippy-file-locker-$VERSION-exec.jar" C-m
+  "java -jar apps/klippy/clients/file-locker/target/klippy-file-locker-$VERSION-exec.jar" C-m
 
 tmux new-window -t "$SESSION" -n clip-client -c "$ROOT/apps/klippy"
 tmux send-keys -t "$SESSION:clip-client" \
   "echo '[clip-client] starting with the persistent AWT backend when available:'" C-m
 tmux send-keys -t "$SESSION:clip-client" \
-  "java -jar clients/linux/target/clippy-linux-client-$VERSION.jar" C-m
+  "java -jar clients/linux/target/klippy-linux-client-$VERSION.jar" C-m
 
 tmux new-window -t "$SESSION" -n keeboarder -c "$ROOT"
 tmux send-keys -t "$SESSION:keeboarder" \

@@ -1,7 +1,7 @@
 # Keeboarder Server
 
 Java WebSocket server with Redis-backed client registry and a small HTTP API.
-The server authenticates against the Clippy auth server configured through
+The server authenticates against the Klippy auth server configured through
 `AUTH_BASE_URL`.
 
 ## Requirements
@@ -9,7 +9,7 @@ The server authenticates against the Clippy auth server configured through
 - JDK 25+
 - Maven 3.9+
 - Redis
-- Running Clippy auth server
+- Running Klippy auth server
 
 ## Build And Run
 
@@ -17,7 +17,7 @@ From the repository root:
 
 ```bash
 mvn -pl apps/keeboarder/server -am package
-java -jar apps/keeboarder/server/target/websocket-redis-server-0.1.0-SNAPSHOT-exec.jar
+java -jar apps/keeboarder/server/target/keeboarder-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
 For Docker Compose with the same internal-Nginx pattern used in the other app

@@ -9,7 +9,7 @@ From the repository root:
 
 ```bash
 mvn -pl apps/jarvis/bucket/proxy -am package
-java -jar apps/jarvis/bucket/proxy/target/bucket-proxy-0.1.0-SNAPSHOT-exec.jar
+java -jar apps/jarvis/bucket/proxy/target/jarvis-bucket-proxy-0.1.0-SNAPSHOT-exec.jar
 ```
 
 The proxy listens on port `5000` by default.
@@ -69,7 +69,7 @@ env schema (`JarvisProxyEnvs`). Run it by passing `--mode=stream-worker` to the
 jar instead of booting the web server:
 
 ```bash
-java -jar bucket-proxy-0.1.0-SNAPSHOT-exec.jar --mode=stream-worker
+java -jar jarvis-bucket-proxy-0.1.0-SNAPSHOT-exec.jar --mode=stream-worker
 ```
 
 ## Java Client Utility
@@ -86,4 +86,4 @@ mvn -pl apps/jarvis/bucket/proxy -am test
 ## Production
 
 The deployment script installs the runnable jar as
-`/opt/s3-proxy/publish/bucket-proxy.jar` and runs it with `java -jar`.
+`/opt/s3-proxy/publish/jarvis-bucket-proxy.jar` and runs it with `java -jar`.

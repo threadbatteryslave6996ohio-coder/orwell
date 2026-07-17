@@ -38,10 +38,10 @@ if ! command -v java >/dev/null 2>&1; then
     exit 1
 fi
 
-# The stream worker is a mode of the bucket-proxy jar. Launch the jar with
+# The stream worker is a mode of the jarvis-bucket-proxy jar. Launch the jar with
 # --mode=stream-worker to run the analysis worker instead of the web server.
 # STREAM_ANALYSIS_WORKER_MODE overrides the mode flag for non-default builds.
-JAVA_WORKER_JAR="${STREAM_ANALYSIS_WORKER_JAR:-/opt/s3-proxy/publish/bucket-proxy.jar}"
+JAVA_WORKER_JAR="${STREAM_ANALYSIS_WORKER_JAR:-/opt/s3-proxy/publish/jarvis-bucket-proxy.jar}"
 # Split on whitespace so a multi-flag override (e.g. "--mode=stream-worker --debug") works.
 read -r -a WORKER_MODE_ARGS <<< "${STREAM_ANALYSIS_WORKER_MODE:---mode=stream-worker}"
 

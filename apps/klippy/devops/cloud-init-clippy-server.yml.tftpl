@@ -39,8 +39,8 @@ write_files:
         git pull --ff-only
       fi
 
-      mvn -pl server -am package -DskipTests
-      cp server/target/clippy-server-*.jar "$JAR_PATH"
+      mvn -pl apps/klippy/server -am package -DskipTests
+      cp apps/klippy/server/target/klippy-server-*.jar "$JAR_PATH"
       chown -R clippy:clippy /opt/clippy "$LOG_DIR"
 
   - path: /etc/clippy/repo-url

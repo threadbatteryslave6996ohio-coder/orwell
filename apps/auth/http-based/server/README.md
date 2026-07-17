@@ -6,7 +6,7 @@ The clipboard app server does not store client secrets or token records. It rece
 
 ## Responsibilities
 
-- Create one identity per Clippy client.
+- Create one identity per Klippy client.
 - Store client secrets as salted PBKDF2 hashes.
 - Issue random login tokens for valid client credentials.
 - Store token hashes, not raw token values.
@@ -140,7 +140,7 @@ Response:
 }
 ```
 
-Use the returned token as `CLIENT_TOKEN` in Clippy client configuration. The raw token is shown only in this response. The database stores a SHA-256 hash of the token.
+Use the returned token as `CLIENT_TOKEN` in Klippy client configuration. The raw token is shown only in this response. The database stores a SHA-256 hash of the token.
 
 Invalid credentials return `401 Unauthorized`.
 

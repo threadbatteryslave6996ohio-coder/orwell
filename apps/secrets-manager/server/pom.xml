@@ -10,16 +10,16 @@
         <relativePath>../../../packages/server-parent/pom.xml</relativePath>
     </parent>
 
-    <artifactId>secrets-server</artifactId>
+    <artifactId>secrets-manager-server</artifactId>
 
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>clippy-server-bootstrap</artifactId>
+            <artifactId>server-bootstrap</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>core</artifactId>
+            <artifactId>env-core</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
@@ -31,7 +31,7 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>http</artifactId>
+            <artifactId>env-http</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
