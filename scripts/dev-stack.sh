@@ -48,10 +48,10 @@ KEEBOARDER_BACKEND="$(detect_keeboarder_backend)"
 # name : jar-path pairs for every server we manage
 declare -A JARS=(
   [auth]="$ROOT/apps/auth/http-based/server/target/auth-http-server-$VERSION-exec.jar"
-  [klippy]="$ROOT/apps/klippy/server/target/klippy-server-$VERSION-exec.jar"
-  [secrets]="$ROOT/apps/secrets-manager/server/target/secrets-manager-server-$VERSION-exec.jar"
-  [proxy]="$ROOT/apps/jarvis/bucket/proxy/target/jarvis-bucket-proxy-$VERSION-exec.jar"
-  [keeboarder]="$ROOT/apps/keeboarder/server/target/keeboarder-server-$VERSION-exec.jar"
+  [klippy]="$ROOT/apps/klippy/server/target/clippy-server-$VERSION-exec.jar"
+  [secrets]="$ROOT/apps/secrets-manager/server/target/secrets-server-$VERSION-exec.jar"
+  [proxy]="$ROOT/apps/jarvis/bucket/proxy/target/bucket-proxy-$VERSION-exec.jar"
+  [keeboarder]="$ROOT/apps/keeboarder/server/target/websocket-redis-server-$VERSION-exec.jar"
 )
 
 mkdir -p "$SCRATCH"
@@ -79,7 +79,8 @@ echo "==> Postgres + Redis"
 # Start if stopped, create if missing, leave alone if already running.
 ensure_container() {
   name="$1"; shift
-  state=$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null || echo missing)
+  state=$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null | tr -d '[:space:]')
+  [ -n "$state" ] || state=missing
   case "$state" in
     true)    echo "    $name already running" ;;
     false)   echo "    $name starting existing"; docker start "$name" >/dev/null ;;
