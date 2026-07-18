@@ -14,6 +14,7 @@ import java.util.Map;
 import dev.orwell.bucket.proxy.JarvisProxyEnvs;
 import dev.orwell.env.EnvOption;
 import dev.orwell.env.http.EnvLoader;
+import dev.orwell.primitives.Sha256;
 
 public final class AnalysisWorker {
     private static final byte[] SOI = {(byte) 0xFF, (byte) 0xD8};
@@ -61,7 +62,7 @@ public final class AnalysisWorker {
             frameIndex++;
             Instant now = Instant.now();
             double timestamp = now.getEpochSecond() + (now.getNano() / 1_000_000_000.0);
-            String payload = toJson(timestamp, frameIndex, sha256Hex(frame), Base64.getEncoder().encodeToString(frame));
+            String payload = toJson(timestamp, frameIndex, Sha256.hex(frame), Base64.getEncoder().encodeToString(frame));
             HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(payload))
@@ -223,20 +224,6 @@ public final class AnalysisWorker {
             return i;
         }
         return -1;
-    }
-
-    private static String sha256Hex(byte[] data) {
-        try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(data);
-            StringBuilder builder = new StringBuilder(hash.length * 2);
-            for (byte value : hash) {
-                builder.append(String.format("%02x", value));
-            }
-            return builder.toString();
-        } catch (Exception exception) {
-            throw new IllegalStateException("Cannot hash frame.", exception);
-        }
     }
 
     private static String toJson(double timestamp, int frameIndex, String sha256, String frameBase64) {

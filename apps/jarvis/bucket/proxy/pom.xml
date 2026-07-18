@@ -15,6 +15,10 @@
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
+            <artifactId>primitives</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
             <artifactId>auth-core</artifactId>
         </dependency>
         <dependency>
