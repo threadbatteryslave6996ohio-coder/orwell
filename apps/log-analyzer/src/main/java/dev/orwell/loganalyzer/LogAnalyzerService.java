@@ -93,6 +93,24 @@ public class LogAnalyzerService {
         this.cooldownTracker = new AlertCooldownTracker(cooldownSeconds);
     }
 
+    static LogAnalyzerService fromEnv(dev.orwell.env.Env env) {
+        return new LogAnalyzerService(
+                env.get(LogAnalyzerEnvs.LOOKBACK_SECONDS),
+                env.get(LogAnalyzerEnvs.MAX_LOG_LINES),
+                env.get(LogAnalyzerEnvs.GRAFANA_URL),
+                env.get(LogAnalyzerEnvs.GRAFANA_API_TOKEN),
+                env.get(LogAnalyzerEnvs.GRAFANA_LOKI_DATASOURCE_UID),
+                env.get(LogAnalyzerEnvs.LOKI_QUERY),
+                env.get(LogAnalyzerEnvs.ALERT_URL),
+                env.get(LogAnalyzerEnvs.AI_API_URL),
+                env.get(LogAnalyzerEnvs.AI_API_KEY),
+                env.get(LogAnalyzerEnvs.AI_MODEL),
+                env.get(LogAnalyzerEnvs.AI_TIMEOUT_SECONDS),
+                env.get(LogAnalyzerEnvs.MIN_IMPORTANCE_CONFIDENCE),
+                env.get(LogAnalyzerEnvs.ALERT_COOLDOWN_SECONDS)
+        );
+    }
+
     @Scheduled(fixedRateString = "${loganalyzer.poll-interval-seconds}", timeUnit = TimeUnit.SECONDS)
     void scheduledPoll() {
         pollSafely();

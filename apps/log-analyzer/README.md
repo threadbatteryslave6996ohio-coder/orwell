@@ -8,8 +8,12 @@ Configure `GRAFANA_URL`, `GRAFANA_API_TOKEN`, and `GRAFANA_LOKI_DATASOURCE_UID` 
 
 ```bash
 mvn -pl apps/log-analyzer -am package
-java -jar apps/log-analyzer/target/log-analyzer.jar
+SERVER_ENGINE=undertow java -jar apps/log-analyzer/target/log-analyzer-0.1.0-SNAPSHOT-exec.jar
 ```
+
+Set `SERVER_ENGINE` to `undertow` for the lightweight runtime or `spring` for
+the existing Spring Boot/Tomcat runtime. Both engines expose the same
+`GET /health` and `POST /run-once` endpoints and share the analyzer service.
 
 See [README.docker.md](./README.docker.md) for the compose-based setup.
 

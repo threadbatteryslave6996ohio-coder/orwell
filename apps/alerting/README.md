@@ -10,10 +10,17 @@ and is now its own top-level app (`apps/alerting`).
 detection service -> alert service -> email
 ```
 
-## Services
+## HTTP server
 
-- `AlertServerMain`: starts the alert HTTP server
-- `AlertServer`: handles `POST /alerts` and `GET /health`
+The executable can use Spring Boot/Tomcat or the lighter embedded Undertow
+engine. Both expose `POST /alerts` and `GET /health` and share `AlertService`.
+The Undertow adapter limits alert bodies to 1 MiB and returns a JSON `413`
+response with `request body too large` when that limit is exceeded.
+
+```bash
+SERVER_ENGINE=undertow java -jar target/alerting-0.1.0-SNAPSHOT-exec.jar
+SERVER_ENGINE=spring java -jar target/alerting-0.1.0-SNAPSHOT-exec.jar
+```
 
 ## Configuration
 
@@ -24,6 +31,7 @@ SMTP settings (see `.env.example`):
 |---|---|---|
 | `SERVER_ADDRESS` | `127.0.0.1` | Alert server bind address |
 | `SERVER_PORT` | `9000` | Alert server port |
+| `SERVER_ENGINE` | `spring` | HTTP engine: `spring` or `undertow` |
 | `ALERT_EMAIL_ENABLED` | `false` | Enable email delivery |
 | `ALERT_EMAIL_TO` | — | Recipient for alert emails |
 | `ALERT_EMAIL_FROM` | — | Sender address (defaults to `ALERT_EMAIL_TO`) |

@@ -43,6 +43,14 @@ public class DetectionService {
         this.detector = new HogPersonDetector(minConfidence);
     }
 
+    static DetectionService fromEnv(dev.orwell.env.Env env) {
+        return new DetectionService(
+                env.get(DetectionEnvs.DETECTION_ALERT_URL),
+                env.get(DetectionEnvs.DETECTION_ALERT_COOLDOWN_SECONDS),
+                env.get(DetectionEnvs.DETECTION_MIN_CONFIDENCE)
+        );
+    }
+
     public int detectionsTotal() {
         return detectionsTotal.get();
     }

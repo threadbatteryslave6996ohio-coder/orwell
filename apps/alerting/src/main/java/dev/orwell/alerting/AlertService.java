@@ -51,6 +51,20 @@ public class AlertService {
         this.logger = new JsonLogger(Path.of(logFile));
     }
 
+    static AlertService fromEnv(dev.orwell.env.Env env) throws IOException {
+        return new AlertService(
+                env.get(AlertEnvs.ALERT_EMAIL_ENABLED),
+                env.get(AlertEnvs.ALERT_EMAIL_TO),
+                env.get(AlertEnvs.ALERT_EMAIL_FROM),
+                env.get(AlertEnvs.SMTP_HOST),
+                env.get(AlertEnvs.SMTP_PORT),
+                env.get(AlertEnvs.SMTP_USERNAME),
+                env.get(AlertEnvs.SMTP_PASSWORD),
+                env.get(AlertEnvs.SMTP_USE_TLS),
+                env.get(AlertEnvs.ALERT_LOG_FILE)
+        );
+    }
+
     public boolean emailEnabled() {
         return emailEnabled;
     }
