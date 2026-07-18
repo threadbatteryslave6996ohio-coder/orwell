@@ -1,7 +1,8 @@
 # Orwell monorepo — agent guide
 
 Multi-module Java 25 / Maven monorepo: backend services under `apps/`, shared libraries under
-`packages/`. Spring Boot 4.x for servers; plain Java for desktop clients.
+`packages/`. Servers use Spring Boot 4.x, with selectable Undertow engines for lightweight
+services; desktop clients use plain Java.
 
 ## Build and test
 
@@ -44,6 +45,7 @@ Java packages predate the renames and do NOT always match — use this table, do
 | `packages/logger` | `logger` | `dev.orwell.logging` |
 | `packages/primitives` | `primitives` | `dev.orwell.primitives` |
 | `packages/server-bootstrap` | `server-bootstrap` | `dev.orwell.bootstrap.{launch,auth,health,web,logging}` |
+| `packages/undertow-bootstrap` | `undertow-bootstrap` | `dev.orwell.undertow` |
 | `packages/server-parent` | `server-parent` (parent POM) | — |
 | `packages/server-test-support` | `server-test-support` | `dev.orwell.testing` |
 
@@ -69,11 +71,14 @@ Java packages predate the renames and do NOT always match — use this table, do
 
 ## Repo conventions
 
-- Server apps start via `AppServer` + `AppServerEnv`
+- Spring server engines start via `AppServer` + `AppServerEnv`
   (`packages/server-bootstrap`, `dev.orwell.bootstrap.launch`). Shared auto-configs (health
   endpoint, 401 guard, logger, auth strategy) are registered in
   `packages/server-bootstrap/src/main/resources/META-INF/spring/…AutoConfiguration.imports` —
   if you move or rename any of those classes, update that file or the beans silently vanish.
+- Alerting, log-analyzer, and Jarvis detection also support Undertow through
+  `packages/undertow-bootstrap`. Their neutral main classes select the engine with
+  `SERVER_ENGINE=spring|undertow`; keep business logic shared between both engines.
 - Env vars are declared through the typed `EnvSchema` framework (`packages/env`); apps expose
   an `*Envs` class. Common keys (`SERVER_ADDRESS`, `SERVER_PORT`, `LOGGING_FILE_NAME`,
   `AUTH_BASE_URL`) come from `AppServerEnv` — don't redeclare them per app.

@@ -15,6 +15,12 @@ The recorder clients under `clients/` remain standalone shell applications.
 
 The log analyzer is now a standalone app; see `apps/log-analyzer`.
 
+The detection service supports `SERVER_ENGINE=undertow` for the lightweight
+runtime and `SERVER_ENGINE=spring` for Spring Boot/Tomcat. Both expose the same
+`GET /health` and `POST /detect` endpoints.
+The Undertow adapter limits detection bodies to 16 MiB and returns a JSON
+`413` response with `request body too large` when that limit is exceeded.
+
 ### Syncer (`clients/syncer`)
 
 The syncer drains completed recording segments to the bucket proxy. It merges older completed segments (via ffmpeg concat) and uploads the result, leaving the current in-progress segment untouched. Run it on a timer:

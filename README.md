@@ -25,6 +25,7 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 | Logger | `packages/logger` | Pluggable logging |
 | Primitives | `packages/primitives` | Shared value types |
 | Server bootstrap | `packages/server-bootstrap` | Shared Spring Boot wiring |
+| Undertow bootstrap | `packages/undertow-bootstrap` | Shared lightweight HTTP runtime |
 | Server parent | `packages/server-parent` | Parent POM for server modules |
 
 ## Build
@@ -42,3 +43,18 @@ Maven artifactIds are derived from directory paths (e.g. `apps/klippy/server` bu
 `CLAUDE.md` for the full module map and repo conventions.
 
 See each app's README for run and configuration details.
+
+## Lightweight server engine
+
+The alerting, log-analyzer, and Jarvis detection services can run on either the
+existing Spring Boot web stack or embedded Undertow. The HTTP contracts and
+business logic are shared; only the server runtime changes.
+
+```bash
+SERVER_ENGINE=undertow java -jar <service>-0.1.0-SNAPSHOT-exec.jar
+SERVER_ENGINE=spring java -jar <service>-0.1.0-SNAPSHOT-exec.jar
+```
+
+`spring` remains the default. Undertow uses one I/O thread and five worker
+threads, matching the expected maximum of five connected clients. The
+database-backed services remain Spring-based for now.
