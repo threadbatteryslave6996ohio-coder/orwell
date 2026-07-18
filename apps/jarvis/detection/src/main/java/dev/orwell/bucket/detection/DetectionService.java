@@ -2,6 +2,7 @@ package dev.orwell.bucket.detection;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.orwell.bootstrap.web.SharedJson;
+import dev.orwell.primitives.Sha256;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -9,7 +10,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -65,7 +65,7 @@ public class DetectionService {
      */
     public Map<String, Object> detect(Map<String, Object> payload) {
         byte[] frameBytes = decodeFrame(payload);
-        String frameSha = sha256Hex(frameBytes);
+        String frameSha = Sha256.hex(frameBytes);
 
         String source = String.valueOf(payload.getOrDefault("source", payload.getOrDefault("streamId", "unknown")));
         Object frameIndex = payload.get("frameIndex");
@@ -126,7 +126,7 @@ public class DetectionService {
             throw new InvalidFrameException("frameBase64 is not valid base64");
         }
         String expectedSha = String.valueOf(payload.getOrDefault("frameSha256", ""));
-        if (!expectedSha.isBlank() && !expectedSha.equals(sha256Hex(frame))) {
+        if (!expectedSha.isBlank() && !expectedSha.equals(Sha256.hex(frame))) {
             throw new InvalidFrameException("frame hash mismatch");
         }
         return frame;
@@ -139,17 +139,4 @@ public class DetectionService {
         }
     }
 
-    private static String sha256Hex(byte[] data) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(data);
-            StringBuilder builder = new StringBuilder(hash.length * 2);
-            for (byte value : hash) {
-                builder.append(String.format("%02x", value));
-            }
-            return builder.toString();
-        } catch (Exception exception) {
-            throw new IllegalStateException("Cannot hash frame.", exception);
-        }
-    }
 }
