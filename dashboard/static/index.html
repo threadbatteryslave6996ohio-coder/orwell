@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>orwell dashboard</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --border: #2a2f3a;
+    --text: #e5e7eb; --text-dim: #9aa1ac; --accent: #5b8cff; --accent-2: #7c5bff;
+    --ok: #3ddc84; --bad: #ff5d5d; --warn: #ffb454;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  header {
+    display: flex; align-items: center; gap: 20px; padding: 12px 20px;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: .02em; }
+  .health { display: flex; gap: 14px; margin-left: auto; }
+  .health-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); flex: none; }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .dot.bad { background: var(--bad); box-shadow: 0 0 6px var(--bad); }
+  nav { display: flex; gap: 4px; padding: 10px 20px 0; background: var(--panel); border-bottom: 1px solid var(--border); }
+  nav button {
+    background: none; border: none; color: var(--text-dim); padding: 10px 16px; cursor: pointer;
+    font-size: 13px; font-weight: 500; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0;
+  }
+  nav button:hover { color: var(--text); background: var(--panel-2); }
+  nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  main { padding: 20px; max-width: 1200px; margin: 0 auto; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+  }
+  .card h2 { font-size: 13px; margin: 0 0 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; }
+  .card.wide { grid-column: 1 / -1; }
+  label { display: block; font-size: 12px; color: var(--text-dim); margin: 10px 0 4px; }
+  input, select, textarea {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 10px; border-radius: 6px; font-size: 13px; font-family: inherit;
+  }
+  textarea { min-height: 70px; resize: vertical; }
+  button.btn {
+    margin-top: 12px; background: var(--accent); color: white; border: none; padding: 8px 14px;
+    border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  button.btn:hover { filter: brightness(1.1); }
+  button.btn.secondary { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+  button.btn.danger { background: var(--bad); }
+  button.btn.small { padding: 4px 8px; font-size: 12px; margin: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--text-dim); font-weight: 600; text-transform: uppercase; font-size: 11px; }
+  tr:hover td { background: var(--panel-2); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .muted { color: var(--text-dim); }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+  .pill.ok { background: rgba(61,220,132,.15); color: var(--ok); }
+  .pill.bad { background: rgba(255,93,93,.15); color: var(--bad); }
+  .log {
+    background: #000; border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+    font-family: ui-monospace, monospace; font-size: 11.5px; max-height: 200px; overflow: auto;
+    white-space: pre-wrap; word-break: break-all; margin-top: 8px; color: #9be89b;
+  }
+  .row { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 140px; }
+  .checklist { max-height: 180px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-top: 8px; }
+  .checklist label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); margin: 4px 0; }
+  .checklist input[type=checkbox] { width: auto; }
+  .empty { color: var(--text-dim); font-style: italic; padding: 8px 0; }
+
+  /* ---- secrets overview: subnav, stats, search, accordions, masked values ---- */
+  .subnav { display: flex; gap: 8px; margin-bottom: 16px; }
+  .subnav button {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text-dim);
+    padding: 6px 14px; border-radius: 99px; cursor: pointer; font-size: 12.5px; font-weight: 600;
+  }
+  .subnav button:hover { color: var(--text); }
+  .subnav button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .subview { display: none; }
+  .subview.active { display: block; }
+  .stats-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 20px; min-width: 90px; }
+  .stat .num { font-size: 22px; font-weight: 700; color: var(--accent); line-height: 1.2; }
+  .stat .lbl { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+  .search-row { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .search-row input { flex: 1; min-width: 200px; margin: 0; }
+  .toggle-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+  .toggle-row input[type=checkbox] { width: auto; }
+  details.accordion-item {
+    border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--panel-2); overflow: hidden;
+  }
+  details.accordion-item summary {
+    cursor: pointer; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;
+    font-weight: 600; list-style: none; gap: 10px;
+  }
+  details.accordion-item summary::-webkit-details-marker { display: none; }
+  details.accordion-item summary::marker { content: ''; }
+  details.accordion-item summary .chev { color: var(--text-dim); display: inline-block; transition: transform .15s; margin-right: 8px; }
+  details.accordion-item[open] summary .chev { transform: rotate(90deg); }
+  details.accordion-item summary .title { display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; }
+  details.accordion-item summary .meta { display: flex; align-items: center; gap: 8px; flex: none; }
+  details.accordion-item .accordion-body { padding: 0 14px 14px; border-top: 1px solid var(--border); }
+  .badge { background: var(--panel); border: 1px solid var(--border); color: var(--text-dim); font-size: 11px; padding: 2px 9px; border-radius: 99px; font-weight: 500; }
+  .value-wrap { display: inline-flex; align-items: center; gap: 2px; }
+  .value-text { white-space: pre-wrap; word-break: break-all; }
+  .icon-btn {
+    background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px;
+    padding: 2px 5px; border-radius: 4px; line-height: 1;
+  }
+  .icon-btn:hover { color: var(--text); background: var(--panel); }
+  .section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>orwell dashboard</h1>
+  <div class="health" id="health">
+    <div class="health-item"><span class="dot" id="dot-auth"></span>auth</div>
+    <div class="health-item"><span class="dot" id="dot-secrets"></span>secrets</div>
+    <div class="health-item"><span class="dot" id="dot-klippy"></span>klippy</div>
+  </div>
+</header>
+
+<nav>
+  <button data-tab="auth" class="active">Auth</button>
+  <button data-tab="secrets">Secrets</button>
+  <button data-tab="klippy">Klippy</button>
+</nav>
+
+<main>
+
+  <!-- ===================== AUTH TAB ===================== -->
+  <section class="tab active" id="tab-auth">
+    <div class="grid">
+      <div class="card">
+        <h2>Register identity</h2>
+        <label>Client ID</label>
+        <input id="reg-clientId" placeholder="e.g. mac-clip">
+        <label>Secret (8-256 chars)</label>
+        <input id="reg-secret" type="text" placeholder="secret">
+        <button class="btn" onclick="registerIdentity()">Register</button>
+      </div>
+
+      <div class="card">
+        <h2>Log in</h2>
+        <label>Client ID</label>
+        <input id="login-clientId" placeholder="e.g. mac-clip">
+        <label>Secret</label>
+        <input id="login-secret" type="text" placeholder="secret">
+        <label>Save session as</label>
+        <input id="login-label" placeholder="label (defaults to client id)">
+        <button class="btn" onclick="doLogin()">Log in</button>
+      </div>
+
+      <div class="card">
+        <h2>Check token</h2>
+        <label>Client ID</label>
+        <input id="check-clientId" placeholder="client id">
+        <label>Token</label>
+        <input id="check-token" placeholder="token">
+        <button class="btn secondary" onclick="checkToken()">Check</button>
+      </div>
+    </div>
+
+    <div class="card wide">
+      <h2>Saved sessions (used by Secrets &amp; Klippy tabs)</h2>
+      <table>
+        <thead><tr><th>Label</th><th>Client ID</th><th>Token</th><th></th></tr></thead>
+        <tbody id="sessions-body"></tbody>
+      </table>
+      <div class="empty" id="sessions-empty">No sessions yet — log in above.</div>
+    </div>
+
+    <div class="card wide">
+      <h2>Log</h2>
+      <div class="log" id="auth-log"></div>
+    </div>
+  </section>
+
+  <!-- ===================== SECRETS TAB ===================== -->
+  <section class="tab" id="tab-secrets">
+    <div class="card wide">
+      <h2>Admin session</h2>
+      <div class="row">
+        <div>
+          <label>Active session (must be a registered secrets-manager admin)</label>
+          <select id="secrets-session" onchange="onSecretsSessionChange()"></select>
+        </div>
+        <div>
+          <button class="btn secondary" onclick="refreshSecrets()">Refresh all</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="subnav">
+      <button data-subview="overview" class="active" onclick="switchSecretsSubview('overview')">Overview</button>
+      <button data-subview="manage" onclick="switchSecretsSubview('manage')">Manage</button>
+    </div>
+
+    <!-- ---------- OVERVIEW: browse, search, reveal, copy ---------- -->
+    <div class="subview active" id="secrets-subview-overview">
+      <div class="stats-row">
+        <div class="stat"><div class="num" id="stat-groups">–</div><div class="lbl">Groups</div></div>
+        <div class="stat"><div class="num" id="stat-envs">–</div><div class="lbl">Envs</div></div>
+        <div class="stat"><div class="num" id="stat-bundles">–</div><div class="lbl">Bundles</div></div>
+        <div class="stat"><div class="num" id="stat-admins">–</div><div class="lbl">Admins</div></div>
+      </div>
+
+      <div class="search-row">
+        <input id="secrets-search" placeholder="Search bundles, groups, keys, values..." oninput="onSecretsSearch()">
+        <label class="toggle-row"><input type="checkbox" id="reveal-all-toggle" onchange="setRevealAll(this.checked)"> Reveal all values</label>
+      </div>
+
+      <div class="card wide">
+        <div class="section-title"><h2>Bundles</h2></div>
+        <div id="bundles-accordion"></div>
+      </div>
+
+      <div class="card wide">
+        <div class="section-title"><h2>Groups &amp; envs</h2></div>
+        <div id="groups-accordion"></div>
+      </div>
+    </div>
+
+    <!-- ---------- MANAGE: creation forms + admins + deletes ---------- -->
+    <div class="subview" id="secrets-subview-manage">
+      <div class="grid">
+        <div class="card">
+          <h2>Admins</h2>
+          <table><thead><tr><th>ID</th><th>Name</th></tr></thead><tbody id="admins-body"></tbody></table>
+          <label>New admin name</label>
+          <input id="new-admin-name" placeholder="name">
+          <button class="btn small" style="margin-top:8px" onclick="createAdmin()">Add admin</button>
+        </div>
+
+        <div class="card">
+          <h2>New group</h2>
+          <label>Name</label>
+          <input id="new-group-name" placeholder="name">
+          <label>Description</label>
+          <input id="new-group-desc" placeholder="description">
+          <button class="btn small" style="margin-top:8px" onclick="createGroup()">Add group</button>
+        </div>
+
+        <div class="card">
+          <h2>New env</h2>
+          <label>Group</label>
+          <select id="new-env-group"></select>
+          <label>Key</label>
+          <input id="new-env-name" placeholder="ENV_KEY">
+          <label>Value</label>
+          <input id="new-env-value" placeholder="value">
+          <button class="btn small" style="margin-top:8px" onclick="createEnv()">Add env</button>
+        </div>
+
+        <div class="card wide">
+          <h2>New bundle</h2>
+          <label>Name</label>
+          <input id="new-bundle-name" placeholder="name">
+          <label>Description</label>
+          <input id="new-bundle-desc" placeholder="description">
+          <label>Envs to include</label>
+          <div class="checklist" id="bundle-env-picker"></div>
+          <button class="btn small" style="margin-top:8px" onclick="createBundle()">Create bundle</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card wide">
+      <h2>Log</h2>
+      <div class="log" id="secrets-log"></div>
+    </div>
+  </section>
+
+  <!-- ===================== KLIPPY TAB ===================== -->
+  <section class="tab" id="tab-klippy">
+    <div class="card wide">
+      <h2>Client session</h2>
+      <div class="row">
+        <div>
+          <label>Active session (clipboard calls are scoped to this client id)</label>
+          <select id="klippy-session"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Post clipboard entry</h2>
+        <label>Content</label>
+        <textarea id="clip-content" placeholder="clipboard text..."></textarea>
+        <button class="btn" onclick="postClip()">Post</button>
+      </div>
+
+      <div class="card wide">
+        <h2>History</h2>
+        <div class="row">
+          <div><label>From</label><input id="clip-from" type="datetime-local"></div>
+          <div><label>To</label><input id="clip-to" type="datetime-local"></div>
+          <div><label>Limit</label><input id="clip-limit" type="number" value="50" min="1" max="1000"></div>
+          <div><button class="btn secondary" onclick="fetchClipHistory()">Fetch</button></div>
+        </div>
+        <table><thead><tr><th>Timestamp</th><th>Content</th></tr></thead><tbody id="clip-body"></tbody></table>
+      </div>
+    </div>
+
+    <div class="card wide">
+      <h2>Log</h2>
+      <div class="log" id="klippy-log"></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// ---------- generic helpers ----------
+function log(area, msg) {
+  const el = document.getElementById(area + '-log');
+  const ts = new Date().toISOString().split('T')[1].slice(0,8);
+  el.textContent = `[${ts}] ${msg}\n` + el.textContent;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function api(method, path, { token, clientId, body } = {}) {
+  const headers = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  if (clientId) headers['X-Client-Id'] = clientId;
+  const res = await fetch(path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+  const text = await res.text();
+  let data;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status}`);
+    err.status = res.status; err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+// ---------- tabs ----------
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'secrets') refreshSecrets();
+  });
+});
+
+// ---------- health ----------
+async function pingHealth() {
+  for (const svc of ['auth', 'secrets', 'klippy']) {
+    const dot = document.getElementById('dot-' + svc);
+    try {
+      const res = await fetch(`/api/${svc}/health`);
+      dot.className = 'dot ' + (res.ok ? 'ok' : 'bad');
+    } catch { dot.className = 'dot bad'; }
+  }
+}
+pingHealth();
+setInterval(pingHealth, 10000);
+
+// ---------- sessions (localStorage) ----------
+function getSessions() { return JSON.parse(localStorage.getItem('orwell_sessions') || '[]'); }
+function saveSessions(s) { localStorage.setItem('orwell_sessions', JSON.stringify(s)); }
+
+function renderSessions() {
+  const sessions = getSessions();
+  const body = document.getElementById('sessions-body');
+  document.getElementById('sessions-empty').style.display = sessions.length ? 'none' : 'block';
+  body.innerHTML = sessions.map((s, i) => `
+    <tr>
+      <td>${escapeHtml(s.label)}</td>
+      <td class="mono">${escapeHtml(s.clientId)}</td>
+      <td>${maskedCell('session:' + i, s.token)}</td>
+      <td><button class="btn small danger" onclick="removeSession(${i})">remove</button></td>
+    </tr>`).join('');
+
+  for (const selId of ['secrets-session', 'klippy-session']) {
+    const sel = document.getElementById(selId);
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">-- select session --</option>' +
+      sessions.map((s, i) => `<option value="${i}">${escapeHtml(s.label)} (${escapeHtml(s.clientId)})</option>`).join('');
+    if (prev) sel.value = prev;
+  }
+}
+function removeSession(i) {
+  const s = getSessions(); s.splice(i, 1); saveSessions(s); renderSessions();
+}
+function activeSession(selId) {
+  const sel = document.getElementById(selId);
+  const s = getSessions()[sel.value];
+  return s || null;
+}
+
+// ---------- masked value helper (used by sessions table + secrets overview) ----------
+let valueStore = {};
+let revealAll = false;
+
+function maskedCell(id, value) {
+  valueStore[id] = value == null ? '' : String(value);
+  const shown = revealAll ? escapeHtml(valueStore[id]) : '••••••••';
+  return `<span class="value-wrap">
+    <span class="value-text mono" data-id="${id}">${shown}</span>
+    <button class="icon-btn" title="show/hide" onclick="toggleReveal('${id}')">👁</button>
+    <button class="icon-btn" title="copy" onclick="copyValue('${id}', this)">⧉</button>
+  </span>`;
+}
+
+function toggleReveal(id) {
+  const el = document.querySelector(`.value-text[data-id="${CSS.escape(id)}"]`);
+  if (!el) return;
+  const isMasked = el.textContent.startsWith('•');
+  el.textContent = isMasked ? valueStore[id] : '••••••••';
+}
+
+function setRevealAll(v) {
+  revealAll = v;
+  document.querySelectorAll('.value-text').forEach(el => {
+    el.textContent = v ? (valueStore[el.dataset.id] || '') : '••••••••';
+  });
+}
+
+function copyValue(id, btn) {
+  const value = valueStore[id] || '';
+  navigator.clipboard.writeText(value).then(() => {
+    if (btn) { const orig = btn.textContent; btn.textContent = '✓'; setTimeout(() => { btn.textContent = orig; }, 1000); }
+  }).catch(() => log('secrets', 'Clipboard copy failed (browser permissions?).'));
+}
+
+renderSessions();
+
+// ---------- AUTH TAB ----------
+async function registerIdentity() {
+  const clientId = document.getElementById('reg-clientId').value.trim();
+  const secret = document.getElementById('reg-secret').value;
+  try {
+    const data = await api('POST', '/api/auth/identities', { body: { clientId, secret } });
+    log('auth', 'Registered: ' + JSON.stringify(data));
+  } catch (e) { log('auth', 'ERROR registering: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+async function doLogin() {
+  const clientId = document.getElementById('login-clientId').value.trim();
+  const secret = document.getElementById('login-secret').value;
+  const label = document.getElementById('login-label').value.trim() || clientId;
+  try {
+    const data = await api('POST', '/api/auth/login', { body: { clientId, secret } });
+    const sessions = getSessions();
+    const existingIdx = sessions.findIndex(s => s.label === label);
+    const entry = { label, clientId: data.clientId, token: data.token };
+    if (existingIdx >= 0) sessions[existingIdx] = entry; else sessions.push(entry);
+    saveSessions(sessions);
+    renderSessions();
+    log('auth', 'Logged in as ' + data.clientId + ', session saved as "' + label + '"');
+  } catch (e) { log('auth', 'ERROR logging in: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+async function checkToken() {
+  const clientId = document.getElementById('check-clientId').value.trim();
+  const token = document.getElementById('check-token').value.trim();
+  try {
+    const data = await api('POST', '/api/auth/tokens/check', { body: { clientId, token } });
+    log('auth', 'Check result: ' + JSON.stringify(data));
+  } catch (e) { log('auth', 'ERROR checking token: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+// ---------- SECRETS TAB ----------
+let allAdmins = [];
+let allGroups = [];
+let allBundles = [];
+let allEnvsByGroup = {};      // groupId -> [env, ...]   (eager, small dataset)
+let bundleEnvsCache = {};     // bundleId -> [env, ...]  (lazy, fetched on first expand)
+let openBundleIds = new Set();
+let openGroupIds = new Set();
+
+function switchSecretsSubview(name) {
+  document.querySelectorAll('.subnav button[data-subview]').forEach(b => b.classList.toggle('active', b.dataset.subview === name));
+  document.getElementById('secrets-subview-overview').classList.toggle('active', name === 'overview');
+  document.getElementById('secrets-subview-manage').classList.toggle('active', name === 'manage');
+}
+
+function secretsAuth() {
+  const s = activeSession('secrets-session');
+  if (!s) { log('secrets', 'No admin session selected.'); return null; }
+  return s;
+}
+
+async function refreshSecrets() {
+  const s = secretsAuth();
+  if (!s) return;
+  try {
+    const [admins, groups, bundles] = await Promise.all([
+      api('GET', '/api/secrets/admin/admins', s),
+      api('GET', '/api/secrets/admin/groups', s),
+      api('GET', '/api/secrets/admin/bundles', s),
+    ]);
+    allAdmins = admins;
+    allGroups = groups;
+    allBundles = bundles;
+    bundleEnvsCache = {}; // stale after any refresh; re-fetched lazily on expand
+
+    allEnvsByGroup = {};
+    await Promise.all(groups.map(async g => {
+      allEnvsByGroup[g.id] = await api('GET', `/api/secrets/admin/groups/${g.id}/envs`, s);
+    }));
+
+    renderStats();
+    renderAdmins();
+    renderEnvGroupSelect();
+    renderBundleEnvPicker();
+    renderOverview();
+    log('secrets', 'Refreshed.');
+  } catch (e) { log('secrets', 'ERROR refreshing: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+function onSecretsSessionChange() { refreshSecrets(); }
+function onSecretsSearch() { renderOverview(); }
+
+function renderStats() {
+  const envCount = Object.values(allEnvsByGroup).reduce((n, envs) => n + envs.length, 0);
+  document.getElementById('stat-groups').textContent = allGroups.length;
+  document.getElementById('stat-envs').textContent = envCount;
+  document.getElementById('stat-bundles').textContent = allBundles.length;
+  document.getElementById('stat-admins').textContent = allAdmins.length;
+}
+
+function renderAdmins() {
+  document.getElementById('admins-body').innerHTML = allAdmins.map(a =>
+    `<tr><td>${a.id}</td><td>${escapeHtml(a.name)}</td></tr>`).join('') || '<tr><td colspan=2 class="empty">none</td></tr>';
+}
+
+function renderEnvGroupSelect() {
+  const sel = document.getElementById('new-env-group');
+  const prev = sel.value;
+  sel.innerHTML = allGroups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('') || '<option value="">-- no groups yet --</option>';
+  if (prev) sel.value = prev;
+}
+
+function renderBundleEnvPicker() {
+  const picker = document.getElementById('bundle-env-picker');
+  let html = '';
+  for (const g of allGroups) {
+    for (const e of (allEnvsByGroup[g.id] || [])) {
+      html += `<label><input type="checkbox" value="${e.id}"> ${escapeHtml(g.name)} / ${escapeHtml(e.name)} <span class="muted">(id ${e.id})</span></label>`;
+    }
+  }
+  picker.innerHTML = html || '<div class="empty">no envs yet</div>';
+}
+
+function envRow(e, idPrefix, showGroup) {
+  return `<tr>
+    <td class="mono">${escapeHtml(e.name)}</td>
+    <td>${maskedCell(idPrefix + ':' + e.id, e.value)}</td>
+    ${showGroup !== undefined ? `<td class="muted">${escapeHtml(showGroup)}</td>` : ''}
+    <td class="muted">${e.updatedAt ? e.updatedAt.slice(0,19).replace('T',' ') : ''}</td>
+  </tr>`;
+}
+
+// ---------- Overview: Bundles accordion (lazy-loaded per bundle) ----------
+function renderOverview() {
+  const q = (document.getElementById('secrets-search').value || '').trim().toLowerCase();
+  renderBundlesAccordion(q);
+  renderGroupsAccordion(q);
+}
+
+function bundleMatches(b, q) {
+  if (!q) return true;
+  if (b.name.toLowerCase().includes(q)) return true;
+  if ((b.description || '').toLowerCase().includes(q)) return true;
+  const envs = bundleEnvsCache[b.id];
+  if (envs) return envs.some(e => e.name.toLowerCase().includes(q) || (e.value || '').toLowerCase().includes(q));
+  return false;
+}
+
+function renderBundlesAccordion(q) {
+  const el = document.getElementById('bundles-accordion');
+  const filtered = allBundles.filter(b => bundleMatches(b, q));
+  if (!allBundles.length) { el.innerHTML = '<div class="empty">No bundles yet — create one under Manage.</div>'; return; }
+  if (!filtered.length) { el.innerHTML = '<div class="empty">No bundles match "' + escapeHtml(q) + '".</div>'; return; }
+  el.innerHTML = filtered.map(b => {
+    const isOpen = openBundleIds.has(b.id);
+    const envs = bundleEnvsCache[b.id];
+    const count = envs ? envs.length : '…';
+    const body = envs
+      ? `<table><thead><tr><th>Key</th><th>Value</th><th>Updated</th></tr></thead><tbody>${envs.map(e => envRow(e, 'bundle:' + b.id)).join('') || '<tr><td colspan=3 class="empty">no envs in this bundle</td></tr>'}</tbody></table>`
+      : `<div class="empty">loading…</div>`;
+    return `<details class="accordion-item" data-bundle-id="${b.id}" ${isOpen ? 'open' : ''} ontoggle="onBundleToggle(this, ${b.id})">
+      <summary>
+        <span class="title"><span class="chev">▸</span>${escapeHtml(b.name)}</span>
+        <span class="meta"><span class="muted">${escapeHtml(b.description || '')}</span><span class="badge">${count} env${count === 1 ? '' : 's'}</span></span>
+      </summary>
+      <div class="accordion-body">${body}
+        <button class="btn small danger" style="margin-top:10px" onclick="deleteBundle(${b.id})">Delete bundle</button>
+      </div>
+    </details>`;
+  }).join('');
+  // fetch data for any open bundle that isn't cached yet (e.g. right after a refresh)
+  for (const b of filtered) {
+    if (openBundleIds.has(b.id) && !bundleEnvsCache[b.id]) loadBundleEnvs(b.id);
+  }
+}
+
+async function onBundleToggle(detailsEl, id) {
+  if (detailsEl.open) {
+    openBundleIds.add(id);
+    if (!bundleEnvsCache[id]) await loadBundleEnvs(id);
+  } else {
+    openBundleIds.delete(id);
+  }
+}
+
+async function loadBundleEnvs(id) {
+  const s = secretsAuth();
+  if (!s) return;
+  try {
+    const data = await api('GET', `/api/secrets/admin/bundles/${id}`, s);
+    bundleEnvsCache[id] = data.environments || [];
+    renderBundlesAccordion((document.getElementById('secrets-search').value || '').trim().toLowerCase());
+  } catch (e) { log('secrets', 'ERROR loading bundle ' + id + ': ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+// ---------- Overview: Groups & envs accordion (eager, already in memory) ----------
+function groupMatches(g, q) {
+  if (!q) return true;
+  if (g.name.toLowerCase().includes(q)) return true;
+  const envs = allEnvsByGroup[g.id] || [];
+  return envs.some(e => e.name.toLowerCase().includes(q) || (e.value || '').toLowerCase().includes(q));
+}
+
+function renderGroupsAccordion(q) {
+  const el = document.getElementById('groups-accordion');
+  const filtered = allGroups.filter(g => groupMatches(g, q));
+  if (!allGroups.length) { el.innerHTML = '<div class="empty">No groups yet — create one under Manage.</div>'; return; }
+  if (!filtered.length) { el.innerHTML = '<div class="empty">No groups match "' + escapeHtml(q) + '".</div>'; return; }
+  el.innerHTML = filtered.map(g => {
+    const isOpen = openGroupIds.has(g.id);
+    const envs = allEnvsByGroup[g.id] || [];
+    return `<details class="accordion-item" data-group-id="${g.id}" ${isOpen ? 'open' : ''} ontoggle="onGroupToggle(this, ${g.id})">
+      <summary>
+        <span class="title"><span class="chev">▸</span>${escapeHtml(g.name)}</span>
+        <span class="meta"><span class="muted">${escapeHtml(g.description || '')}</span><span class="badge">${envs.length} env${envs.length === 1 ? '' : 's'}</span></span>
+      </summary>
+      <div class="accordion-body">
+        <table><thead><tr><th>Key</th><th>Value</th><th>Updated</th></tr></thead><tbody>
+          ${envs.map(e => `<tr>
+            <td class="mono">${escapeHtml(e.name)}</td>
+            <td>${maskedCell('group:' + g.id + ':' + e.id, e.value)}</td>
+            <td class="muted">${e.updatedAt ? e.updatedAt.slice(0,19).replace('T',' ') : ''}</td>
+            <td><button class="btn small danger" onclick="deleteEnv(${g.id}, ${e.id})">del</button></td>
+          </tr>`).join('') || '<tr><td colspan=4 class="empty">no envs in this group</td></tr>'}
+        </tbody></table>
+        <button class="btn small danger" style="margin-top:10px" onclick="deleteGroup(${g.id})">Delete group</button>
+      </div>
+    </details>`;
+  }).join('');
+}
+
+async function onGroupToggle(detailsEl, id) {
+  if (detailsEl.open) openGroupIds.add(id); else openGroupIds.delete(id);
+}
+
+// ---------- Manage: mutations ----------
+async function createAdmin() {
+  const s = secretsAuth(); if (!s) return;
+  const name = document.getElementById('new-admin-name').value.trim();
+  try { await api('POST', '/api/secrets/admin/admins', { ...s, body: { name } }); log('secrets', 'Admin created: ' + name); refreshSecrets(); }
+  catch (e) { log('secrets', 'ERROR: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+async function createGroup() {
+  const s = secretsAuth(); if (!s) return;
+  const name = document.getElementById('new-group-name').value.trim();
+  const description = document.getElementById('new-group-desc').value.trim();
+  try { await api('POST', '/api/secrets/admin/groups', { ...s, body: { name, description } }); log('secrets', 'Group created: ' + name); refreshSecrets(); }
+  catch (e) { log('secrets', 'ERROR: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+async function deleteGroup(id) {
+  const s = secretsAuth(); if (!s) return;
+  try { await api('DELETE', `/api/secrets/admin/groups/${id}`, s); log('secrets', 'Group deleted: ' + id); refreshSecrets(); }
+  catch (e) { log('secrets', 'ERROR: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+async function createEnv() {
+  const s = secretsAuth(); if (!s) return;
+  const groupId = document.getElementById('new-env-group').value;
+  if (!groupId) { log('secrets', 'Create a group first.'); return; }
+  const name = document.getElementById('new-env-name').value.trim();
+  const value = document.getElementById('new-env-value').value;
+  try {
+    await api('POST', `/api/secrets/admin/groups/${groupId}/envs`, { ...s, body: { name, value } });
+    log('secrets', 'Env created: ' + name);
+    refreshSecrets();
+  } catch (e) { log('secrets', 'ERROR: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+async function deleteEnv(groupId, envId) {
+  const s = secretsAuth(); if (!s) return;
+  try { await api('DELETE', `/api/secrets/admin/groups/${groupId}/envs/${envId}`, s); log('secrets', 'Env deleted: ' + envId); refreshSecrets(); }
+  catch (e) { log('secrets', 'ERROR: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+async function createBundle() {
+  const s = secretsAuth(); if (!s) return;
+  const name = document.getElementById('new-bundle-name').value.trim();
+  const description = document.getElementById('new-bundle-desc').value.trim();
+  const envIds = Array.from(document.querySelectorAll('#bundle-env-picker input:checked')).map(el => Number(el.value));
+  try {
+    await api('POST', '/api/secrets/admin/bundles', { ...s, body: { name, description, envIds } });
+    log('secrets', 'Bundle created: ' + name + ' with envIds ' + JSON.stringify(envIds));
+    refreshSecrets();
+  } catch (e) { log('secrets', 'ERROR: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+async function deleteBundle(id) {
+  const s = secretsAuth(); if (!s) return;
+  try { await api('DELETE', `/api/secrets/admin/bundles/${id}`, s); log('secrets', 'Bundle deleted: ' + id); refreshSecrets(); }
+  catch (e) { log('secrets', 'ERROR: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+// ---------- KLIPPY TAB ----------
+function klippyAuth() {
+  const s = activeSession('klippy-session');
+  if (!s) { log('klippy', 'No client session selected.'); return null; }
+  return s;
+}
+
+async function postClip() {
+  const s = klippyAuth(); if (!s) return;
+  const content = document.getElementById('clip-content').value;
+  try {
+    const data = await api('POST', '/api/klippy/clipboard', { ...s, body: { clientId: s.clientId, content } });
+    log('klippy', 'Posted entry id ' + data.id + ' at ' + data.timestamp);
+  } catch (e) { log('klippy', 'ERROR posting: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+
+async function fetchClipHistory() {
+  const s = klippyAuth(); if (!s) return;
+  let from = document.getElementById('clip-from').value;
+  let to = document.getElementById('clip-to').value;
+  const limit = document.getElementById('clip-limit').value || 50;
+  if (!from) { const d = new Date(Date.now() - 24*3600*1000); from = d.toISOString().slice(0,16); }
+  if (!to) { to = new Date().toISOString().slice(0,16); }
+  const fromIso = new Date(from).toISOString();
+  const toIso = new Date(to).toISOString();
+  const qs = new URLSearchParams({ clientId: s.clientId, from: fromIso, to: toIso, limit }).toString();
+  try {
+    const data = await api('GET', `/api/klippy/clipboard?${qs}`, s);
+    document.getElementById('clip-body').innerHTML = data.map(e => `
+      <tr><td class="mono">${e.timestamp}</td><td>${escapeHtml((e.content||'').slice(0,200))}</td></tr>
+    `).join('') || '<tr><td colspan=2 class="empty">no entries in range</td></tr>';
+    log('klippy', `Fetched ${data.length} entries.`);
+  } catch (e) { log('klippy', 'ERROR fetching history: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
+}
+</script>
+</body>
+</html>
