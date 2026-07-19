@@ -32,8 +32,9 @@ CLIPBOARD_POLL_INTERVAL_MS=1000
 `REMOTE_SERVER_URL` is required and may be the server base URL or the full
 `/clipboard` endpoint. `CLIENT_ID` is optional; if omitted, the client uses the
 machine hostname with a random fallback. `CLIPBOARD_POLL_INTERVAL_MS`
-defaults to `1000`; values below the `100` minimum are clamped to `100` with a
-warning on stderr rather than rejected.
+defaults to `1000` and must be at least `100`. A lower value is fatal: the
+client reports it on stderr and in `logs/klippy-client.txt`, then exits with
+status `1`.
 
 With `CLIENT_SECRET`, the client logs in at startup and refreshes its token
 after a `401`; `AUTH_SERVER_URL` is then required. For static authentication,
