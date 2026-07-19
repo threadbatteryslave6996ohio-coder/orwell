@@ -10,7 +10,7 @@ import dev.orwell.clients.core.ExceptionMessages;
 import dev.orwell.clients.core.LinuxClipboardPolicy;
 import dev.orwell.clients.core.OfflineFileLockerFactory;
 import dev.orwell.clients.core.OfflineLogPath;
-import dev.orwell.clients.core.PollIntervalValidator;
+import dev.orwell.clients.core.PollInterval;
 import dev.orwell.clients.core.env.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.clients.filelocker.OfflineFileLockerClient;
@@ -53,9 +53,7 @@ public final class LinuxClipboardClientApp {
     public static void main(String[] args) throws IOException {
         Env env = ClientEnvs.load();
         ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("linux-"));
-        long pollIntervalMs = env.has(ClientEnvs.CLIPBOARD_POLL_INTERVAL_MS)
-                ? PollIntervalValidator.validate(env.get(ClientEnvs.CLIPBOARD_POLL_INTERVAL_MS), 100L)
-                : 1000L;
+        long pollIntervalMs = PollInterval.resolve(env);
         LinuxClipboardReader clipboardReader = LinuxClipboardReaderFactory.create(env);
         OfflineFileLockerClient fileLocker = OfflineFileLockerFactory.create(env);
         fileLocker.ping();

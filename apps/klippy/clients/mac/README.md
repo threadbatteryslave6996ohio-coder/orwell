@@ -1,7 +1,15 @@
 # Klippy macOS Client
 
 Foreground Java client that posts changed macOS text clipboard content to the
-Klippy server.
+Klippy server. It holds the terminal it is started from; it does not daemonize.
+
+Reading the clipboard requires AWT, which by default would register the JVM as a
+regular macOS app — giving it a Dock icon and letting it steal keyboard focus.
+The client sets `apple.awt.UIElement=true` in `main`, before the AWT toolkit
+initializes, so it runs as an accessory app instead: no Dock icon, no focus
+stealing, clipboard still readable. This applies however you launch it — no
+command-line flag is needed. To debug with a Dock icon, launch with an explicit
+`-Dapple.awt.UIElement=false`, which the client leaves alone.
 
 ## Requirements
 
@@ -24,7 +32,8 @@ CLIPBOARD_POLL_INTERVAL_MS=1000
 `REMOTE_SERVER_URL` is required and may be the server base URL or the full
 `/clipboard` endpoint. `CLIENT_ID` is optional; if omitted, the client uses the
 machine hostname with a random fallback. `CLIPBOARD_POLL_INTERVAL_MS`
-defaults to `1000`.
+defaults to `1000`; values below the `100` minimum are clamped to `100` with a
+warning on stderr rather than rejected.
 
 With `CLIENT_SECRET`, the client logs in at startup and refreshes its token
 after a `401`; `AUTH_SERVER_URL` is then required. For static authentication,
