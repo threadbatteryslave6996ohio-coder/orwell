@@ -10,7 +10,7 @@ import dev.orwell.clients.core.DesktopClipboardMonitor;
 import dev.orwell.clients.core.MacClipboardPolicy;
 import dev.orwell.clients.core.OfflineFileLockerFactory;
 import dev.orwell.clients.core.OfflineLogPath;
-import dev.orwell.clients.core.PollIntervalValidator;
+import dev.orwell.clients.core.PollInterval;
 import dev.orwell.clients.core.env.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.clients.filelocker.OfflineFileLockerClient;
@@ -56,11 +56,18 @@ public final class ClipboardClientApp {
     }
 
     public static void main(String[] args) throws IOException {
+        // Read when the macOS toolkit initializes, so this must run before the
+        // Toolkit.getDefaultToolkit() call below. Registers the process as an accessory app:
+        // AWT still works (so the clipboard is readable), but the JVM gets no Dock icon and
+        // cannot take keyboard focus from the user's frontmost window. Only set when absent,
+        // so a launcher can pass -Dapple.awt.UIElement=false to debug with a Dock icon.
+        if (System.getProperty("apple.awt.UIElement") == null) {
+            System.setProperty("apple.awt.UIElement", "true");
+        }
+
         Env env = ClientEnvs.load();
         ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("client-"));
-        long pollIntervalMs = env.has(ClientEnvs.CLIPBOARD_POLL_INTERVAL_MS)
-                ? PollIntervalValidator.validate(env.get(ClientEnvs.CLIPBOARD_POLL_INTERVAL_MS), 1L)
-                : 1L;
+        long pollIntervalMs = PollInterval.resolve(env);
 
         Clipboard clipboard;
         try {

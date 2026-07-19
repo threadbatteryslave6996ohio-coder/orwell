@@ -29,7 +29,7 @@ public final class ClientEnvs {
         CLIENT_TOKEN = builder.optional("CLIENT_TOKEN", EnvType.string());
         CLIENT_SECRET = builder.optional("CLIENT_SECRET", EnvType.string());
         AUTH_SERVER_URL = builder.optional("AUTH_SERVER_URL", EnvType.string());
-        CLIPBOARD_POLL_INTERVAL_MS = builder.optional("CLIPBOARD_POLL_INTERVAL_MS", EnvType.longInteger());
+        CLIPBOARD_POLL_INTERVAL_MS = builder.optional("CLIPBOARD_POLL_INTERVAL_MS", EnvType.longInteger(), 1000L);
         CLIPBOARD_BACKEND = builder.optional("CLIPBOARD_BACKEND", EnvType.string());
         OFFLINE_FILE_LOCKER_SOCKET = builder.optional("OFFLINE_FILE_LOCKER_SOCKET", EnvType.string());
         OFFLINE_SYNC_INTERVAL_MINUTES = builder.optional("OFFLINE_SYNC_INTERVAL_MINUTES", EnvType.longInteger());

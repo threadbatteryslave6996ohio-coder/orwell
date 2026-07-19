@@ -38,9 +38,12 @@ CLIPBOARD_POLL_INTERVAL_MS=1000
 
 `REMOTE_SERVER_URL` is required and may be either the server base URL or the
 full `/clipboard` endpoint. `CLIENT_ID` is optional; if omitted, the client
-uses the machine hostname with a random fallback. `CLIENT_SECRET` enables
-startup login and token refresh; omit it and set `CLIENT_TOKEN` if you want to
-use a static auth token instead.
+uses the machine hostname with a random fallback. `CLIPBOARD_POLL_INTERVAL_MS`
+defaults to `1000` and must be at least `100`. A lower value is fatal: the
+client reports it on stderr and in `logs/klippy-client.txt`, then exits with
+status `1`. `CLIENT_SECRET` enables startup login
+and token refresh; omit it and set `CLIENT_TOKEN` if you want to use a static
+auth token instead.
 
 Shell environment variables override values from `.env` when both are set.
 
