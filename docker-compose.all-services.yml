@@ -18,6 +18,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   auth-server:
     image: klippy-app:local
@@ -175,6 +176,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   keeboarder-server:
     image: keeboarder-server:local

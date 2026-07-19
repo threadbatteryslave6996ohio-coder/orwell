@@ -23,7 +23,11 @@ Docker is required for local PostgreSQL and Testcontainers-based tests.
 
 ## Start Locally
 
-Start the app database on port `5432` and the auth database on port `5433` using your preferred local PostgreSQL setup.
+Start the shared database stack; it serves the `klippy`, `auth` and `secrets` databases from one PostgreSQL on port `5432`:
+
+```bash
+docker compose -f ../../../docker-compose.all-services.yml up -d db
+```
 
 Run the auth server from the repository root in one terminal:
 

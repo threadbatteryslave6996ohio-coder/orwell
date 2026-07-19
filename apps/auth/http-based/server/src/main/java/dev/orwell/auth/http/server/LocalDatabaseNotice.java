@@ -39,6 +39,14 @@ public class LocalDatabaseNotice implements ApplicationRunner {
                 || normalized.contains("127.0.0.1")
                 || normalized.contains("0.0.0.0")
                 || normalized.contains("::1")
+                // Compose service name of the one shared Postgres, plus the per-app container
+                // hostnames it replaced. The old names are kept deliberately: this guard warns
+                // that a local database is in use, so recognising too many hosts costs a
+                // harmless extra warning while recognising too few silently misses a
+                // production misconfiguration.
+                || normalized.contains("jdbc:postgresql://db/")
+                || normalized.contains("jdbc:postgresql://db:")
+                || normalized.contains("host.docker.internal")
                 || normalized.contains("jdbc:postgresql://auth-postgres")
                 || normalized.contains("jdbc:postgresql://postgres");
     }

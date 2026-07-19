@@ -44,6 +44,10 @@ class LocalDatabaseNoticeTest {
         assertTrue(LocalDatabaseNotice.isLocalDatabaseUrl("JDBC:POSTGRESQL://LOCALHOST/auth"));
         assertTrue(LocalDatabaseNotice.isLocalDatabaseUrl("  jdbc:postgresql://127.0.0.1/auth  "));
         assertTrue(LocalDatabaseNotice.isLocalDatabaseUrl("jdbc:postgresql://auth-postgres/auth"));
+        // The shared compose instance and the host bridge the per-app stacks reach it through.
+        assertTrue(LocalDatabaseNotice.isLocalDatabaseUrl("jdbc:postgresql://db/auth"));
+        assertTrue(LocalDatabaseNotice.isLocalDatabaseUrl("jdbc:postgresql://db:5432/auth"));
+        assertTrue(LocalDatabaseNotice.isLocalDatabaseUrl("jdbc:postgresql://host.docker.internal:5432/auth"));
         assertFalse(LocalDatabaseNotice.isLocalDatabaseUrl("jdbc:postgresql://prod.internal/auth"));
     }
 }

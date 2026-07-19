@@ -30,6 +30,13 @@ Not backlog items, but worth knowing:
   `Logger.log()` would put a round trip on every request path, and `FailSafeLogger` protects
   against a sink being *down*, not against it being *slow*. That is why `LokiLogger` batches from
   a bounded queue on its own thread and never blocks the caller.
+- **One Postgres, one Redis.** `docker-compose.all-services.yml` is the only thing that creates
+  them. Removed en route: `scripts/dev-stack.sh` (host-JVM loop with its own `orw-pg`/`orw-redis`),
+  `scripts/docker-compose-stamped.sh` (dead code whose per-minute project names silently orphaned
+  the data volume each run), and the DB-only compose files under `apps/klippy/server` and
+  `apps/auth/http-based/server`. The per-app stacks and `local-stack.sh` now use the shared
+  instance, and everything is on port 5432 — which also fixed the `secrets` database being
+  referenced on 5435 by three files while nothing provisioned it.
 - **App logs are pushed to Loki from inside the JVM.** `LokiLogger` (packages/logger) batches onto
   a bounded queue and ships from a daemon thread; `LOKI_URL`/`LOKI_TENANT_ID` are common keys on
   `AppServerEnv`. This replaced a Grafana Alloy collector that scraped per-service `.jsonl` files —
@@ -120,8 +127,6 @@ re-declare the Spring BOM + compiler/surefire pluginManagement. Point them at th
   descriptor level so `/health` moves together with app routes.
 - **`SharedHealthController` allocations**: providers build intermediate maps copied into the
   response on every poll; a `contribute(Map target)` signature would avoid the churn.
-- **dev-stack startup**: the five JVMs start sequentially (sum of boot times); launch all five
-  first, then poll all health URLs (max of boot times).
 - **Adopt `@RequireAuthentication` in the older apps**: klippy/keeboarder/proxy still hand-roll
   their 401 responses (different bodies: Spring default error JSON, empty body,
   `{"status":"unauthorized"}`). Adopting the shared guard means aligning those response

@@ -87,7 +87,7 @@ list_env_ids() {
 echo "[auth-server]"
 
 AUTH_GROUP=$(create_group "auth-server" "Authentication service (apps/auth)")
-AUTH_DB_URL=$(create_env "$AUTH_GROUP"  "AUTH_DATASOURCE_URL"      "jdbc:postgresql://localhost:5433/auth")
+AUTH_DB_URL=$(create_env "$AUTH_GROUP"  "AUTH_DATASOURCE_URL"      "jdbc:postgresql://localhost:5432/auth")
 AUTH_DB_USER=$(create_env "$AUTH_GROUP" "AUTH_DATASOURCE_USERNAME" "auth")
 AUTH_DB_PASS=$(create_env "$AUTH_GROUP" "AUTH_DATASOURCE_PASSWORD" "auth")
 AUTH_PORT=$(create_env "$AUTH_GROUP"    "SERVER_PORT"              "8081")
@@ -116,7 +116,7 @@ KLIP_TZ=$(create_env "$KLIP_GROUP"      "SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TI
 echo "[secrets-manager-server]"
 
 SEC_GROUP=$(create_group "secrets-manager-server" "Secrets manager (apps/secrets-manager)")
-SEC_DB_URL=$(create_env "$SEC_GROUP"  "SECRETS_DATASOURCE_URL"      "jdbc:postgresql://localhost:5435/secrets")
+SEC_DB_URL=$(create_env "$SEC_GROUP"  "SECRETS_DATASOURCE_URL"      "jdbc:postgresql://localhost:5432/secrets")
 SEC_DB_USER=$(create_env "$SEC_GROUP" "SECRETS_DATASOURCE_USERNAME" "secrets")
 SEC_DB_PASS=$(create_env "$SEC_GROUP" "SECRETS_DATASOURCE_PASSWORD" "secrets")
 SEC_PORT=$(create_env "$SEC_GROUP"    "SERVER_PORT"                  "8085")
