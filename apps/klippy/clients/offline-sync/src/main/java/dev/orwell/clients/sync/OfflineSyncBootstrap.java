@@ -7,9 +7,11 @@ import dev.orwell.clients.core.env.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.clients.filelocker.OfflineFileLockerClient;
 import dev.orwell.env.Env;
+import dev.orwell.logging.Logger;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -24,17 +26,19 @@ public final class OfflineSyncBootstrap {
 
     private final OfflineSyncConfig config;
     private final OfflineFileLockerClient fileLocker;
+    private final Logger logger;
 
-    public OfflineSyncBootstrap(OfflineSyncConfig config, OfflineFileLockerClient fileLocker) {
+    public OfflineSyncBootstrap(OfflineSyncConfig config, OfflineFileLockerClient fileLocker, Logger logger) {
         this.config = Objects.requireNonNull(config, "config");
         this.fileLocker = Objects.requireNonNull(fileLocker, "fileLocker");
+        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
-    public static OfflineSyncBootstrap fromArgs(String[] args) throws java.io.IOException {
+    public static OfflineSyncBootstrap fromArgs(String[] args, Logger logger) throws java.io.IOException {
         Path offlineLog = args.length == 0 ? DEFAULT_OFFLINE_LOG : Path.of(args[0]);
         Env env = ClientEnvs.load();
         OfflineFileLockerClient fileLocker = OfflineFileLockerFactory.create(env);
-        return new OfflineSyncBootstrap(OfflineSyncConfig.load(env, offlineLog), fileLocker);
+        return new OfflineSyncBootstrap(OfflineSyncConfig.load(env, offlineLog), fileLocker, logger);
     }
 
     public void run() throws Exception {
@@ -45,18 +49,19 @@ public final class OfflineSyncBootstrap {
                 snapshot -> fileLocker.clearIfUnchanged(config.offlineLog(), snapshot.content());
 
         ClipboardSnapshot initialSnapshot = config.clientIdConfigured()
-                ? SyncMonitor.awaitInitialSnapshot(recordSource, Thread::sleep)
+                ? SyncMonitor.awaitInitialSnapshot(recordSource, Thread::sleep, logger)
                 : SyncMonitor.awaitInitialSyncableSnapshot(
-                        recordSource, rejectionSink, snapshotClearer, config.syncInterval(), Thread::sleep);
+                        recordSource, rejectionSink, snapshotClearer, config.syncInterval(), Thread::sleep, logger);
 
         String clientId = resolveClientId(initialSnapshot);
         ClientAuthSession authSession = initializeAuth(clientId);
 
         RemoteClipboardGateway gateway = new RemoteClipboardGateway(config.endpoint(), authSession, clientId);
-        OfflineSyncService syncService = new OfflineSyncService(gateway, clientId);
-        SyncMonitor monitor = new SyncMonitor(syncService, clientId);
-        System.out.printf("Monitoring %s for offline clipboard changes every %d minutes.%n",
-                config.offlineLog().toAbsolutePath(), config.syncInterval().toMinutes());
+        OfflineSyncService syncService = new OfflineSyncService(gateway, clientId, logger);
+        SyncMonitor monitor = new SyncMonitor(syncService, clientId, logger);
+        logger.info("Monitoring offline clipboard file for changes.", Map.of(
+                "offlineLog", String.valueOf(config.offlineLog().toAbsolutePath()),
+                "intervalMinutes", config.syncInterval().toMinutes()));
         monitor.monitor(recordSource, rejectionSink, snapshotClearer, initialSnapshot, config.syncInterval(), Thread::sleep);
     }
 
@@ -65,7 +70,7 @@ public final class OfflineSyncBootstrap {
             return config.configuredClientId();
         }
         List<ClipboardRecord> syncableRecords =
-                OfflineSyncService.syncableRecords(initialSnapshot.records(), false);
+                OfflineSyncService.syncableRecords(initialSnapshot.records());
         return singleClientId(syncableRecords);
     }
 
@@ -73,7 +78,7 @@ public final class OfflineSyncBootstrap {
         ClientAuthSession authSession =
                 new ClientAuthSession(config.authServerUrl(), clientId, config.clientSecret(), config.clientToken());
         try {
-            ClientAuthInitializer.initialize(authSession, config.authServerUrl(), clientId);
+            ClientAuthInitializer.initialize(authSession, config.authServerUrl(), clientId, logger);
         } catch (IllegalStateException exception) {
             if (authSession.canRefresh() || authSession.hasToken()) {
                 throw exception;

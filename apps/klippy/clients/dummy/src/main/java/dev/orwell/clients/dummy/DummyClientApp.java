@@ -9,6 +9,8 @@ import dev.orwell.clients.core.ExceptionMessages;
 import dev.orwell.clients.core.env.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.env.Env;
+import dev.orwell.logging.ConsoleLogger;
+import dev.orwell.logging.Logger;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -17,29 +19,35 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.StringJoiner;
 
 public final class DummyClientApp {
     private final ClipboardApiClient apiClient;
     private final URI endpoint;
     private final String clientId;
+    private final Logger logger;
 
-    private DummyClientApp(URI endpoint, String clientId, ClientAuthSession authSession) {
-        this(new ClipboardApiClient(endpoint, authSession, Duration.ofSeconds(10)), endpoint, clientId);
+    private DummyClientApp(URI endpoint, String clientId, ClientAuthSession authSession, Logger logger) {
+        this(new ClipboardApiClient(endpoint, authSession, Duration.ofSeconds(10)), endpoint, clientId, logger);
     }
 
-    DummyClientApp(ClipboardApiClient apiClient, URI endpoint, String clientId) {
+    DummyClientApp(ClipboardApiClient apiClient, URI endpoint, String clientId, Logger logger) {
         this.apiClient = apiClient;
         this.endpoint = endpoint;
         this.clientId = clientId;
+        this.logger = logger;
     }
 
     public static void main(String[] args) throws IOException, InterruptedException {
+        Logger logger = new ConsoleLogger("klippy-dummy-client");
         Env env = ClientEnvs.load();
         ClientConfig config = ClientConfig.load(env, "dummy-" + ClientIdentity.hostnameOrRandom(""));
-        ClientAuthInitializer.initialize(config.authSession(), config);
+        ClientAuthInitializer.initialize(config.authSession(), config, logger);
 
-        DummyClientApp app = new DummyClientApp(config.endpoint(), config.clientId(), config.authSession());
+        DummyClientApp app =
+                new DummyClientApp(config.endpoint(), config.clientId(), config.authSession(), logger);
 
         if (args.length > 0) {
             if (!app.sendCommand(joinArgs(args))) {
@@ -62,28 +70,35 @@ public final class DummyClientApp {
         try {
             int statusCode = apiClient.create(new ClipboardEntry(clientId, command, Instant.now())).statusCode();
             if (statusCode < 200 || statusCode >= 300) {
-                System.err.printf("Remote server rejected command. endpoint=%s httpStatus=%d%n", endpoint, statusCode);
+                logger.error("Remote server rejected command.", Map.of(
+                        "endpoint", String.valueOf(endpoint),
+                        "httpStatus", statusCode));
                 return false;
             }
 
-            System.out.printf("Sent command. clientId=%s chars=%d%n", clientId, command.length());
+            logger.info("Sent command.", Map.of("clientId", clientId, "chars", command.length()));
             return true;
         } catch (IOException exception) {
-            System.err.printf("Cannot reach remote server. endpoint=%s error=%s%n",
-                    endpoint, ExceptionMessages.message(exception));
+            logger.error("Cannot reach remote server.", failure(ExceptionMessages.message(exception)));
             return false;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            System.err.printf("Interrupted while sending command. endpoint=%s%n", endpoint);
+            logger.error("Interrupted while sending command.", Map.of("endpoint", String.valueOf(endpoint)));
             return false;
         } catch (RuntimeException exception) {
             // A missing/expired token or a failed auth refresh surfaces here (e.g.
             // HttpAuthenticationException or IllegalStateException from ClipboardApiClient). Report it
             // like any other send failure instead of terminating the interactive client.
-            System.err.printf("Cannot authenticate command. endpoint=%s error=%s%n",
-                    endpoint, ExceptionMessages.messageWithCause(exception));
+            logger.error("Cannot authenticate command.", failure(ExceptionMessages.messageWithCause(exception)));
             return false;
         }
+    }
+
+    private Map<String, Object> failure(String message) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("endpoint", String.valueOf(endpoint));
+        metadata.put("error", message);
+        return metadata;
     }
 
     private static String joinArgs(String[] args) {

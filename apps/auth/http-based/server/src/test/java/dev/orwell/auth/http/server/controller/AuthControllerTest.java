@@ -12,7 +12,7 @@ import dev.orwell.auth.http.server.repository.ClientIdentityRepository;
 import dev.orwell.auth.http.server.repository.ClientTokenRepository;
 import dev.orwell.auth.http.server.security.CredentialHasher;
 import dev.orwell.auth.http.server.security.TokenGenerator;
-import dev.orwell.logging.CustomLogger;
+import dev.orwell.logging.Logger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -41,8 +41,9 @@ class AuthControllerTest {
     @Mock
     private TokenGenerator tokenGenerator;
 
-    @Mock
-    private CustomLogger logger;
+    /** Logger is a functional interface, so the double is a no-op lambda; no test asserts on it. */
+    private final Logger logger = entry -> {
+    };
 
     private final CredentialHasher credentialHasher = new CredentialHasher();
 

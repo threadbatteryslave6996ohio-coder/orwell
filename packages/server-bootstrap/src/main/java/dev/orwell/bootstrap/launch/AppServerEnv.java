@@ -19,6 +19,8 @@ public final class AppServerEnv {
     public static final String SERVER_PORT_PROPERTY = "server.port";
     public static final String LOGGING_FILE_PROPERTY = "logging.file.name";
     public static final String AUTH_BASE_URL_PROPERTY = "orwell.auth.base-url";
+    public static final String LOKI_URL_PROPERTY = "orwell.loki.url";
+    public static final String LOKI_TENANT_ID_PROPERTY = "orwell.loki.tenant-id";
 
     private final EnvClassBuilder builder = EnvSchema.builder();
     private final Map<String, EnvOption<?>> springProperties = new LinkedHashMap<>();
@@ -27,6 +29,8 @@ public final class AppServerEnv {
     public final EnvOption<Integer> SERVER_PORT;
     public final EnvOption<String> LOGGING_FILE_NAME;
     public final EnvOption<String> AUTH_BASE_URL;
+    public final EnvOption<String> LOKI_URL;
+    public final EnvOption<String> LOKI_TENANT_ID;
 
     public AppServerEnv(
         boolean loggingFileRequired,
@@ -41,10 +45,17 @@ public final class AppServerEnv {
                 ? builder.required("AUTH_BASE_URL", EnvType.string())
                 : builder.optional("AUTH_BASE_URL", EnvType.string());
 
+        // Every server ships its own logs now, so the Loki endpoint is a common key rather
+        // than something each app redeclares.
+        LOKI_URL = builder.optional("LOKI_URL", EnvType.string());
+        LOKI_TENANT_ID = builder.optional("LOKI_TENANT_ID", EnvType.string());
+
         property(SERVER_ADDRESS_PROPERTY, SERVER_ADDRESS);
         property(SERVER_PORT_PROPERTY, SERVER_PORT);
         property(LOGGING_FILE_PROPERTY, LOGGING_FILE_NAME);
         property(AUTH_BASE_URL_PROPERTY, AUTH_BASE_URL);
+        property(LOKI_URL_PROPERTY, LOKI_URL);
+        property(LOKI_TENANT_ID_PROPERTY, LOKI_TENANT_ID);
     }
 
     public <T> EnvOption<T> required(String name, EnvType<T> type) {

@@ -1,6 +1,7 @@
 package dev.orwell.clients.core;
 
 import dev.orwell.clients.core.env.ClientAuthSession;
+import dev.orwell.logging.Logger;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -8,11 +9,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ClientAuthInitializerTest {
+    private static final Logger NO_OP_LOGGER = entry -> {
+    };
+
     @Test
     void acceptsStaticToken() {
         ClientAuthSession authSession = new ClientAuthSession(null, "client-a", null, "token-a");
 
-        assertDoesNotThrow(() -> ClientAuthInitializer.initialize(authSession, null, "client-a"));
+        assertDoesNotThrow(() -> ClientAuthInitializer.initialize(authSession, null, "client-a", NO_OP_LOGGER));
     }
 
     @Test
@@ -21,7 +25,7 @@ class ClientAuthInitializerTest {
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
-                () -> ClientAuthInitializer.initialize(authSession, null, "client-a"));
+                () -> ClientAuthInitializer.initialize(authSession, null, "client-a", NO_OP_LOGGER));
 
         assertEquals("Set CLIENT_SECRET for auth login or CLIENT_TOKEN for a static token.", exception.getMessage());
     }
@@ -32,7 +36,7 @@ class ClientAuthInitializerTest {
 
         IllegalStateException exception = assertThrows(
                 IllegalStateException.class,
-                () -> ClientAuthInitializer.initialize(authSession, null, "client-a"));
+                () -> ClientAuthInitializer.initialize(authSession, null, "client-a", NO_OP_LOGGER));
 
         assertEquals("AUTH_SERVER_URL is required when CLIENT_SECRET is set.", exception.getMessage());
     }

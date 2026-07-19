@@ -15,6 +15,8 @@ import dev.orwell.clients.core.env.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.clients.filelocker.OfflineFileLockerClient;
 import dev.orwell.env.Env;
+import dev.orwell.logging.ConsoleLogger;
+import dev.orwell.logging.Logger;
 
 import java.awt.HeadlessException;
 import java.awt.Toolkit;
@@ -36,12 +38,13 @@ public final class ClipboardClientApp {
             String authServerUrl,
             String clientId,
             ClientAuthSession authSession,
-            OfflineFileLockerClient fileLocker
+            OfflineFileLockerClient fileLocker,
+            Logger logger
     ) {
         ClipboardApiClient apiClient = new ClipboardApiClient(endpoint, authSession, Duration.ofSeconds(10));
         this.monitor = new DesktopClipboardMonitor(
                 clipboardReader(clipboard), apiClient, authServerUrl, clientId, fileLocker,
-                OFFLINE_LOG_PATH, new MacClipboardPolicy());
+                OFFLINE_LOG_PATH, new MacClipboardPolicy(), logger);
     }
 
     /** Reads the current string content of {@code clipboard}, or {@code null} when it holds no text. */
@@ -65,6 +68,7 @@ public final class ClipboardClientApp {
             System.setProperty("apple.awt.UIElement", "true");
         }
 
+        Logger logger = new ConsoleLogger("klippy-mac-client");
         Env env = ClientEnvs.load();
         ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("client-"));
         long pollIntervalMs = PollInterval.resolve(env);
@@ -78,10 +82,11 @@ public final class ClipboardClientApp {
 
         OfflineFileLockerClient fileLocker = OfflineFileLockerFactory.create(env);
         fileLocker.ping();
-        ClientAuthInitializer.initialize(config.authSession(), config);
+        ClientAuthInitializer.initialize(config.authSession(), config, logger);
 
         ClipboardClientApp app = new ClipboardClientApp(
-                clipboard, config.endpoint(), config.authServerUrl(), config.clientId(), config.authSession(), fileLocker);
-        new DesktopClientRunner(app.monitor, pollIntervalMs).start("Klippy client started.", config);
+                clipboard, config.endpoint(), config.authServerUrl(), config.clientId(), config.authSession(),
+                fileLocker, logger);
+        new DesktopClientRunner(app.monitor, pollIntervalMs, logger).start("Klippy client started.", config);
     }
 }

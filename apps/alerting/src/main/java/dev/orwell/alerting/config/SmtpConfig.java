@@ -1,4 +1,4 @@
-package dev.orwell.alerting;
+package dev.orwell.alerting.config;
 
 import dev.orwell.env.Env;
 import jakarta.mail.Authenticator;
@@ -11,7 +11,7 @@ import java.util.Properties;
  * Groups the SMTP connection settings for the alert server so they can be read,
  * passed around, and turned into a mail {@link Session} in one place.
  */
-record SmtpConfig(String host, int port, String username, String password, boolean useTls) {
+public record SmtpConfig(String host, int port, String username, String password, boolean useTls) {
 
     static SmtpConfig fromEnv(Env env) {
         return new SmtpConfig(
@@ -23,7 +23,7 @@ record SmtpConfig(String host, int port, String username, String password, boole
         );
     }
 
-    boolean isConfigured() {
+    public boolean isConfigured() {
         return !host.isBlank();
     }
 
@@ -31,7 +31,7 @@ record SmtpConfig(String host, int port, String username, String password, boole
         return !username.isBlank();
     }
 
-    Session createSession() {
+    public Session createSession() {
         Properties props = new Properties();
         props.put("mail.smtp.host", host);
         props.put("mail.smtp.port", String.valueOf(port));

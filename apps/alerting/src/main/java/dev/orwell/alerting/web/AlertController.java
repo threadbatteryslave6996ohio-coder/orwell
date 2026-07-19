@@ -1,4 +1,4 @@
-package dev.orwell.alerting;
+package dev.orwell.alerting.web;
 
 import dev.orwell.http.EndpointResponse;
 import org.springframework.http.ResponseEntity;

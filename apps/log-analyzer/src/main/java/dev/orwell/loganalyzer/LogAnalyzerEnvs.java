@@ -27,7 +27,8 @@ public final class LogAnalyzerEnvs {
         GRAFANA_URL = ENV.optional("GRAFANA_URL", EnvType.string(), "http://127.0.0.1:3000");
         GRAFANA_API_TOKEN = ENV.optional("GRAFANA_API_TOKEN", EnvType.string(), "");
         GRAFANA_LOKI_DATASOURCE_UID = ENV.optional("GRAFANA_LOKI_DATASOURCE_UID", EnvType.string(), "");
-        LOKI_QUERY = ENV.optional("LOKI_QUERY", EnvType.string(), "{} |~ \"(?i)(error|exception|fatal|panic)\"");
+        LOKI_QUERY = ENV.optional("LOKI_QUERY", EnvType.string(),
+                "{stream_type=\"app\"} | json | level=\"ERROR\"");
         MAX_LOG_LINES = ENV.optional("LOG_ANALYZER_MAX_LOG_LINES", EnvType.integer(), 120);
         ALERT_COOLDOWN_SECONDS = ENV.optional("LOG_ANALYZER_ALERT_COOLDOWN_SECONDS", EnvType.integer(), 900);
         ALERT_URL = ENV.optional("ALERT_URL", EnvType.string(), "http://127.0.0.1:9000/alerts");

@@ -2,37 +2,43 @@ package dev.orwell.backup;
 
 import dev.orwell.env.Env;
 import dev.orwell.env.http.EnvLoader;
+import dev.orwell.logging.ConsoleLogger;
+import dev.orwell.logging.Logger;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 public final class BackupLauncher {
     private BackupLauncher() {
     }
 
     public static void main(String[] args) throws Exception {
+        Logger logger = new ConsoleLogger("backup");
         String source = args.length > 0 ? args[0] : "file";
         var rawEnv = EnvLoader.load(source);
         Env env = BackupEnvs.from(rawEnv);
         List<ProjectConfig> projects = BackupEnvs.resolveProjects(env, rawEnv);
 
         if (projects.isEmpty()) {
-            System.out.println("No projects configured.");
+            logger.warn("No projects configured; nothing to back up.");
             return;
         }
 
         Path outputDir = Path.of(env.get(BackupEnvs.BACKUP_OUTPUT_DIR));
         int retentionDays = env.get(BackupEnvs.BACKUP_RETENTION_DAYS);
 
-        BackupRunner runner = new BackupRunner(outputDir, retentionDays);
+        BackupRunner runner = new BackupRunner(outputDir, retentionDays, logger);
 
-        System.out.println("Backing up " + projects.size() + " project(s) to " + outputDir.toAbsolutePath() + " ...");
+        logger.info("Starting backup.", Map.of(
+                "projectCount", projects.size(),
+                "outputDir", outputDir.toAbsolutePath().toString()));
         runner.run(projects);
 
-        System.out.println("Cleaning up backups older than " + retentionDays + " days ...");
+        logger.info("Cleaning up expired backups.", Map.of("retentionDays", retentionDays));
         runner.cleanUp();
         runner.cleanUpEmptyDirs();
 
-        System.out.println("Backup complete.");
+        logger.info("Backup complete.");
     }
 }

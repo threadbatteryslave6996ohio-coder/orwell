@@ -58,3 +58,16 @@ SERVER_ENGINE=spring java -jar <service>-0.1.0-SNAPSHOT-exec.jar
 `spring` remains the default. Undertow uses one I/O thread and five worker
 threads, matching the expected maximum of five connected clients. The
 database-backed services remain Spring-based for now.
+
+## Log collection
+
+Every server logs through `dev.orwell.logging.Logger`. The default sink writes human-readable
+text to stdout for humans, and pushes structured entries straight to Loki from inside the JVM —
+asynchronously, from a bounded queue, so a slow or unreachable Loki never delays a request path.
+There is no log collector and no log file to scrape; set `LOKI_URL` (see `.env.example`), and
+entries arrive labelled `{stream_type="app", app=..., level=...}`.
+
+Leave `LOKI_URL` empty and logs stay on the console, with a warning at startup so the choice is
+visible. `apps/log-analyzer` is the consumer: it queries that stream through Grafana and feeds
+the alerting service. Label scheme and cardinality rules are in `apps/log-analyzer/README.md`;
+the sink design is in `packages/logger/README.md`.

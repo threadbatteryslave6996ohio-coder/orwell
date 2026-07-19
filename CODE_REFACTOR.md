@@ -4,7 +4,8 @@ Remaining extraction/cleanup work, ordered by value. (Earlier items — the apps
 the Spring migration of all servers, the `AppServer.spring()` descriptor, shared
 logger/health/auth/JSON auto-configs, the invalid-JSON `@RestControllerAdvice`, the
 `@RequireAuthentication` guard, the shared Testcontainers base, the removal of combined-server,
-the orphaned launcher test, and the klippy naming pass — are done.)
+the orphaned launcher test, the klippy naming pass, and the `Logger`-service migration — are
+done.)
 
 ## 0. Operational notes from the naming pass
 
@@ -14,6 +15,52 @@ Not backlog items, but worth knowing:
   nothing about it. Changes there are unverified by CI here and want a real Gradle build.
 - **The audit log is `klippy-server.txt`.** Nothing in-repo reads it but its test, so any external
   tooling shipping or rotating logs by an older name fails silently.
+- **Logging goes through `dev.orwell.logging.Logger` everywhere** — see `packages/logger/README.md`
+  for which sink to use and how it is wired. Raw `System.out`/`System.err` survives only in
+  bootstrap and startup-failure paths that run before a logger can exist (`AppServer`,
+  `AuthenticationStrategyConfiguration`, `undertow` `ServerRuntime`, `env-http` `EnvLoader`).
+  Adding a new one anywhere else is a regression.
+- **Two log-format contracts changed.** `CustomLogger`'s `.txt` lines now carry a leading ISO
+  timestamp and render metadata as `key=value` (previously metadata was silently dropped).
+  `apps/alerting`'s `ALERT_LOG_FILE` JSON now flattens fields to the top level instead of nesting
+  them under `fields` — documented in that app's README. Jarvis's proxy audit trail was
+  deliberately left on its original `event` schema, since it is a deployed security log.
+- **`DatabaseLogger` was deleted.** It was dead code — no constructor call, no migration for its
+  `app_logs` table. A network sink is fine, but only asynchronously: a synchronous send inside
+  `Logger.log()` would put a round trip on every request path, and `FailSafeLogger` protects
+  against a sink being *down*, not against it being *slow*. That is why `LokiLogger` batches from
+  a bounded queue on its own thread and never blocks the caller.
+- **App logs are pushed to Loki from inside the JVM.** `LokiLogger` (packages/logger) batches onto
+  a bounded queue and ships from a daemon thread; `LOKI_URL`/`LOKI_TENANT_ID` are common keys on
+  `AppServerEnv`. This replaced a Grafana Alloy collector that scraped per-service `.jsonl` files —
+  that whole approach (the `alloy` service, its config, its nginx route, and the per-service log
+  volumes) was removed, and with it the unbounded-log-file growth problem, since no file is
+  written any more.
+- **The send buffer is in memory, so crash-time logs are lost.** Entries queued but not yet shipped
+  die with the process — including the ones written immediately before a crash, which are the ones
+  worth having. This is the accepted cost of direct push over a file plus a collector. If it ever
+  bites, the fix is a spill-to-disk buffer on overflow, not a synchronous send.
+- **Nothing alerts when log shipping stops.** If `LOKI_URL` is unset or Loki is unreachable,
+  `LokiLogger` drops and counts while every service stays healthy, and `log-analyzer` sees zero
+  errors — identical to a clean stack. Drops are reported to stderr on an interval, which is
+  better than silence but is not an alert. Wanted: a deadman check that the stream is still
+  receiving.
+- **`LOKI_URL` and `GRAFANA_LOKI_DATASOURCE_UID` are two independent pointers at the same Loki.**
+  The servers write to one, `log-analyzer` reads from the other, and nothing verifies they agree.
+  If they diverge, the analyzer silently reports all-clear forever.
+- **Every service now holds the Loki endpoint.** Direct push means seven services carry
+  `LOKI_URL` (and any credentials in it) instead of one collector. Rotating a Loki credential is
+  a seven-service redeploy.
+- **The Loki `app` label is not the compose service name for two services.** `clipboard-server`
+  ships as `app="klippy-server"` and `jarvis-proxy` as `app="bucket-proxy"`, because the label is
+  `orwell.app.name`. Documented in `apps/log-analyzer/README.md`.
+- **jarvis-proxy's `audit.log` is still its own thing.** Separate `event` schema, written directly
+  by `FileAuditLogger`, not pushed to Loki. If it should ever ship, it needs its own stream type,
+  not a widening of the app pipeline.
+- **DEPLOY ACTION — servers no longer write an app log file at all.** The Spring default sink is
+  console + Loki push. Any external log rotation, volume mount, or shipping config keyed to
+  `<app>.txt` or `<app>.jsonl` now watches a file nobody writes. `CustomLogger` still writes
+  `.txt` where it is used directly (`EnvSnapshotLogger`, the auth startup hook).
 
 ## 1. Common `springProperties` keys → `AppServerEnv` descriptor (completed)
 

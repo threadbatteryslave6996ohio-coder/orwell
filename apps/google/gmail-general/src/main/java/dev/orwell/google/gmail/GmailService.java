@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.orwell.auth.http.api.LoginHttpResponse;
 import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
 import dev.orwell.bootstrap.web.SharedJson;
+import dev.orwell.logging.Logger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -21,7 +22,10 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -49,6 +53,7 @@ public class GmailService {
     private final String gmailClientSecret;
     private final String pubsubTopic;
     private final List<String> clients;
+    private final Logger logger;
     private volatile String currentAccessToken;
 
     public GmailService(
@@ -61,8 +66,10 @@ public class GmailService {
             @Value("${gmail.client-id}") String gmailClientId,
             @Value("${gmail.client-secret}") String gmailClientSecret,
             @Value("${gmail.webhook-clients}") String webhookClients,
-            @Value("${gmail.pubsub-topic}") String pubsubTopic
+            @Value("${gmail.pubsub-topic}") String pubsubTopic,
+            Logger logger
     ) throws IOException {
+        this.logger = Objects.requireNonNull(logger, "logger");
         this.auth = new HttpAuthenticationStrategy(authBaseUrl);
         this.authClientId = authClientId;
         this.authClientSecret = authClientSecret;
@@ -207,12 +214,18 @@ public class GmailService {
                     response = postWebhook(client, payload, webhookLogin);
                 }
                 if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    System.err.println("Webhook " + client + " rejected Gmail message "
-                            + message.id() + ": HTTP " + response.statusCode());
+                    logger.error("Webhook rejected Gmail message.", Map.of(
+                            "client", client,
+                            "messageId", message.id(),
+                            "statusCode", response.statusCode()));
                 }
             } catch (Exception exception) {
-                System.err.println("Could not notify " + client + " of Gmail message "
-                        + message.id() + ": " + exception.getMessage());
+                // getMessage() is null for plenty of exception types, so this map must accept nulls.
+                Map<String, Object> metadata = new LinkedHashMap<>();
+                metadata.put("client", client);
+                metadata.put("messageId", message.id());
+                metadata.put("error", exception.getMessage());
+                logger.error("Could not notify webhook client of Gmail message.", metadata);
             }
         }
     }

@@ -1,4 +1,4 @@
-package dev.orwell.alerting;
+package dev.orwell.alerting.config;
 
 import dev.orwell.bootstrap.launch.AppServerEnv;
 import dev.orwell.env.EnvOption;

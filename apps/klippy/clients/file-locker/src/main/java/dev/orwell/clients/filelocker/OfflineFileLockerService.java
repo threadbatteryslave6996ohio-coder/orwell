@@ -1,6 +1,8 @@
 package dev.orwell.clients.filelocker;
 
 import dev.orwell.env.EnvFiles;
+import dev.orwell.logging.ConsoleLogger;
+import dev.orwell.logging.Logger;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -17,7 +19,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -27,20 +31,24 @@ public final class OfflineFileLockerService implements AutoCloseable {
     private final Path socketPath;
     private final Map<Path, ReentrantReadWriteLock> locks = new ConcurrentHashMap<>();
     private final ExecutorService requests = Executors.newVirtualThreadPerTaskExecutor();
+    private final Logger logger;
     private ServerSocketChannel server;
     private boolean ownsSocket;
 
-    public OfflineFileLockerService(Path socketPath) {
+    public OfflineFileLockerService(Path socketPath, Logger logger) {
         this.socketPath = socketPath.toAbsolutePath().normalize();
+        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     public static void main(String[] args) throws Exception {
+        Logger logger = new ConsoleLogger("klippy-file-locker");
         Path socketPath = args.length == 0
                 ? configuredSocketPath()
                 : Path.of(args[0]);
-        try (OfflineFileLockerService service = new OfflineFileLockerService(socketPath)) {
+        try (OfflineFileLockerService service = new OfflineFileLockerService(socketPath, logger)) {
             Runtime.getRuntime().addShutdownHook(new Thread(service::close));
-            System.out.printf("Klippy file-locker service listening at %s%n", socketPath.toAbsolutePath());
+            logger.info("Klippy file-locker service listening.",
+                    Map.of("socket", String.valueOf(socketPath.toAbsolutePath())));
             service.run();
         }
     }
@@ -95,7 +103,7 @@ public final class OfflineFileLockerService implements AutoCloseable {
             }
             output.flush();
         } catch (IOException exception) {
-            System.err.printf("File-locker IPC request failed: %s%n", failureMessage(exception));
+            logger.error("File-locker IPC request failed.", Map.of("error", failureMessage(exception)));
         }
     }
 
@@ -222,7 +230,10 @@ public final class OfflineFileLockerService implements AutoCloseable {
             try {
                 Files.deleteIfExists(socketPath);
             } catch (IOException exception) {
-                System.err.printf("Could not remove file-locker socket %s: %s%n", socketPath, exception.getMessage());
+                Map<String, Object> metadata = new LinkedHashMap<>();
+                metadata.put("socket", String.valueOf(socketPath));
+                metadata.put("error", exception.getMessage());
+                logger.warn("Could not remove file-locker socket.", metadata);
             }
         }
     }

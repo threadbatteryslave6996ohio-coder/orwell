@@ -11,22 +11,12 @@ import java.util.Map;
 import java.util.Objects;
 
 public final class CustomLogger implements Logger {
-    private static final String LOG_DIRECTORY_PROPERTY = "custom.logger.dir";
-    private static final Path LOG_DIRECTORY = Path.of("logs");
-
     private final String name;
 
-    /**
-     * Points the custom logger at the directory that holds {@code logFileName}. The server and client
-     * bootstrap classes all derive {@code custom.logger.dir} from their configured logging file the same
-     * way; this consolidates that logic. A blank file name, or one with no parent directory, falls back
-     * to the working directory.
-     */
+    /** @deprecated call {@link LogFiles#configureDirectoryFromLogFile(String)} directly. */
+    @Deprecated
     public static void configureDirectoryFromLogFile(String logFileName) {
-        Path loggingPath = Path.of(logFileName == null ? "" : logFileName.trim());
-        Path parentDirectory = loggingPath.getParent();
-        String directory = parentDirectory == null ? Path.of(".").toString() : parentDirectory.toString();
-        System.setProperty(LOG_DIRECTORY_PROPERTY, directory);
+        LogFiles.configureDirectoryFromLogFile(logFileName);
     }
 
     public CustomLogger(String name) {
@@ -44,13 +34,14 @@ public final class CustomLogger implements Logger {
         writeToFile(formatted);
     }
 
-    public synchronized void log(String message) {
+    public void log(String message) {
         String normalizedMessage = message == null ? "" : message.trim();
         String entry = formatEntry(LogLevel.INFO, normalizedMessage, Map.of());
         writeToFile(entry);
     }
 
-    private void writeToFile(String entry) {
+    /** Synchronized here rather than per-overload so every entry point is serialized. */
+    private synchronized void writeToFile(String entry) {
         Path logPath = logPath();
         try {
             Path parent = logPath.getParent();
@@ -69,19 +60,11 @@ public final class CustomLogger implements Logger {
         }
     }
 
-    private String nameToFileName() {
-        return name + ".txt";
-    }
-
     private Path logPath() {
-        String configuredDirectory = System.getProperty(LOG_DIRECTORY_PROPERTY);
-        Path directory = configuredDirectory == null || configuredDirectory.trim().isEmpty()
-                ? LOG_DIRECTORY
-                : Path.of(configuredDirectory.trim());
-        return directory.resolve(nameToFileName()).normalize();
+        return LogFiles.resolve(name, ".txt");
     }
 
     private String formatEntry(LogLevel level, String message, Map<String, Object> metadata) {
-        return "[" + name + "] [" + level + "] " + message + "\n";
+        return LogFormatter.format(name, level, message, metadata) + "\n";
     }
 }

@@ -1,4 +1,4 @@
-package dev.orwell.alerting;
+package dev.orwell.alerting.service;
 
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
@@ -9,7 +9,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.orwell.alerting.config.AlertEnvs;
+import dev.orwell.alerting.config.SmtpConfig;
 import dev.orwell.bootstrap.web.SharedJson;
+import dev.orwell.logging.JsonLogger;
+import dev.orwell.logging.Logger;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -27,7 +31,7 @@ public class AlertService {
     private final String emailTo;
     private final String emailFrom;
     private final SmtpConfig smtp;
-    private final JsonLogger logger;
+    private final Logger logger;
     private final ObjectMapper objectMapper = SharedJson.mapper();
 
     public AlertService(
@@ -48,10 +52,12 @@ public class AlertService {
         }
         this.emailFrom = emailFrom;
         this.smtp = new SmtpConfig(smtpHost, smtpPort, smtpUsername, smtpPassword, smtpUseTls);
+        // Built here rather than injected: the alert trail is its own sink at ${alert.log-file},
+        // separate from the app-wide Logger bean. Held as Logger so the sink stays swappable.
         this.logger = new JsonLogger(Path.of(logFile));
     }
 
-    static AlertService fromEnv(dev.orwell.env.Env env) throws IOException {
+    public static AlertService fromEnv(dev.orwell.env.Env env) throws IOException {
         return new AlertService(
                 env.get(AlertEnvs.ALERT_EMAIL_ENABLED),
                 env.get(AlertEnvs.ALERT_EMAIL_TO),
@@ -78,7 +84,10 @@ public class AlertService {
             emailSent = sendEmail(alert);
         } catch (Exception exception) {
             emailError = exception.getMessage();
-            logger.error("alert.email.error", Map.of("error", emailError), exception);
+            // getMessage() can be null, so this map cannot be a Map.of.
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("error", exception.toString());
+            logger.error("alert.email.error", metadata);
         }
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);

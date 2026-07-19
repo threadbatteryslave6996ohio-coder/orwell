@@ -1,5 +1,8 @@
 package dev.orwell.alerting;
 
+import dev.orwell.alerting.config.AlertEnvs;
+import dev.orwell.alerting.service.AlertService;
+import dev.orwell.alerting.web.AlertEndpoint;
 import dev.orwell.bootstrap.health.HealthDetailsProvider;
 import dev.orwell.bootstrap.launch.AppServer;
 import dev.orwell.env.Env;
