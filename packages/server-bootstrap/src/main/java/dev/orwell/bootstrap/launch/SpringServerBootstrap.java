@@ -1,6 +1,6 @@
 package dev.orwell.bootstrap.launch;
 
-import dev.orwell.logging.CustomLogger;
+import dev.orwell.logging.LogFiles;
 import org.springframework.boot.SpringApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.MapPropertySource;
@@ -19,7 +19,6 @@ public final class SpringServerBootstrap {
     public static ConfigurableApplicationContext start(
             Class<?> applicationClass,
             Map<String, Object> properties,
-            Runnable startupHook,
             String propertySourceName
     ) {
         Objects.requireNonNull(applicationClass, "applicationClass");
@@ -28,10 +27,7 @@ public final class SpringServerBootstrap {
 
         Object loggingFileName = properties.get("logging.file.name");
         if (loggingFileName != null) {
-            CustomLogger.configureDirectoryFromLogFile(loggingFileName.toString());
-        }
-        if (startupHook != null) {
-            startupHook.run();
+            LogFiles.configureDirectoryFromLogFile(loggingFileName.toString());
         }
 
         SpringApplication application = new SpringApplication(applicationClass);
@@ -39,13 +35,5 @@ public final class SpringServerBootstrap {
         application.addInitializers(context -> context.getEnvironment().getPropertySources()
                 .addFirst(new MapPropertySource(propertySourceName, properties)));
         return application.run();
-    }
-
-    public static ConfigurableApplicationContext start(
-            Class<?> applicationClass,
-            Map<String, Object> properties,
-            String propertySourceName
-    ) {
-        return start(applicationClass, properties, null, propertySourceName);
     }
 }

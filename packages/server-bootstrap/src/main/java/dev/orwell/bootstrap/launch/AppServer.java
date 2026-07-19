@@ -7,29 +7,17 @@ import org.springframework.context.ConfigurableApplicationContext;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Consumer;
 
 /** Shared launcher for standalone Spring server applications. */
 public final class AppServer {
     private final Class<?> applicationClass;
     private final String name;
     private final AppServerEnv environment;
-    private final Consumer<Env> beforeRun;
 
     public AppServer(Class<?> applicationClass, String name, AppServerEnv environment) {
-        this(applicationClass, name, environment, null);
-    }
-
-    public AppServer(
-        Class<?> applicationClass,
-        String name, 
-        AppServerEnv environment,
-        Consumer<Env> beforeRun
-    ) {
         this.applicationClass = Objects.requireNonNull(applicationClass, "applicationClass");
         this.name = Objects.requireNonNull(name, "name");
         this.environment = Objects.requireNonNull(environment, "environment");
-        this.beforeRun = beforeRun;
     }
 
     public ConfigurableApplicationContext start(String[] args) throws IOException {
@@ -52,13 +40,7 @@ public final class AppServer {
         Objects.requireNonNull(env, "env");
         Map<String, Object> properties = new java.util.LinkedHashMap<>(environment.springProperties(env));
         properties.put("orwell.app.name", name);
-        Runnable startupHook = beforeRun == null ? null : () -> beforeRun.accept(env);
-        return SpringServerBootstrap.start(
-                applicationClass,
-                properties,
-                startupHook,
-                name
-        );
+        return SpringServerBootstrap.start(applicationClass, properties, name);
     }
 
     public void runOrExit(String[] args) {
