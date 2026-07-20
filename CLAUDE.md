@@ -10,7 +10,7 @@ services; desktop clients use plain Java.
 mvn -q -DskipTests compile        # fast full-repo compile check
 mvn test                          # all tests
 mvn -pl :<artifactId> -am test    # one module + its deps (artifactIds match dir names)
-scripts/dev-stack.sh              # local tmux stack (auth, klippy, secrets, proxy, keeboarder)
+docker compose -f docker-compose.all-services.yml up -d    # the whole local stack
 ```
 
 Executable server jars are built as `<artifactId>-<version>-exec.jar` (Spring Boot `exec`
@@ -65,9 +65,12 @@ Java packages predate the renames and do NOT always match — use this table, do
 - `apps/klippy/devops` (Terraform + cloud-init for Azure) was deleted deliberately — it is no
   longer used. Don't recreate it; ignore references to it in old commits. `apps/jarvis` keeps its
   own unrelated Terraform under `bucket/deployment`.
-- Postgres identifiers are named after their app — `db-klippy`/`klippy`, `db-auth`/`auth`,
-  `secrets` — in compose services, `POSTGRES_DB`/`POSTGRES_USER`, volumes, and the roles
-  `dev-stack.sh` creates.
+- **There is exactly one Postgres and one Redis**, defined in `docker-compose.all-services.yml`
+  (services `db` and `redis`). Nothing else in the repo may create one: the per-app compose files
+  and `apps/jarvis/.../local-stack.sh` all use this instance, and `db-init/all-services.sql` is
+  the single source of the `klippy`/`auth`/`secrets` roles and databases. Ephemeral Testcontainers
+  in tests are the one exception — they bind no fixed port. If you find another Postgres or Redis
+  being created, it is a straggler to remove, not a setup to preserve.
 
 ## Repo conventions
 

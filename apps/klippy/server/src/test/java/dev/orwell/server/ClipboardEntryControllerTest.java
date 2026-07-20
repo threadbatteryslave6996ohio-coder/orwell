@@ -7,84 +7,68 @@ import dev.orwell.server.dto.ClipboardEntryRequest;
 import dev.orwell.server.dto.ClipboardEntryResponse;
 import dev.orwell.server.model.ClipboardEntry;
 import dev.orwell.server.repository.ClipboardEntryRepository;
+import dev.orwell.logging.LogEntry;
+import dev.orwell.logging.Logger;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.ObjectProvider;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ClipboardEntryControllerTest {
-    @TempDir
-    Path tempDir;
 
     @Test
-    void logsClipboardEntryCreationForClient() throws IOException {
-        String originalLoggerDir = System.getProperty("custom.logger.dir");
-        System.setProperty("custom.logger.dir", tempDir.toString());
+    void logsClipboardEntryCreationForClient() {
+        ClipboardEntryRepository repository = clipboardEntryRepository();
+        List<LogEntry> logged = new ArrayList<>();
 
-        try {
-            ClipboardEntryRepository repository = clipboardEntryRepository();
+        ClipboardEntryController controller = new ClipboardEntryController(
+                repository,
+                provider(AuthenticationContext.authenticated("android-pixel-8", 1L)),
+                logged::add
+        );
+        ClipboardEntryResponse response = controller.create(
+                new ClipboardEntryRequest("android-pixel-8", "clipboard text", Instant.parse("2026-06-23T12:00:00Z"))
+        );
 
-            ClipboardEntryController controller = new ClipboardEntryController(
-                    repository,
-                    provider(AuthenticationContext.authenticated("android-pixel-8", 1L))
-            );
-            ClipboardEntryResponse response = controller.create(
-                    new ClipboardEntryRequest("android-pixel-8", "clipboard text", Instant.parse("2026-06-23T12:00:00Z"))
-            );
+        assertThat(response.clientId()).isEqualTo("android-pixel-8");
+        assertThat(response.id()).isEqualTo(42L);
 
-            assertThat(response.clientId()).isEqualTo("android-pixel-8");
-            assertThat(response.id()).isEqualTo(42L);
-
-            String content = Files.readString(tempDir.resolve("klippy-server.txt"));
-            assertThat(content).contains("Added clipboard entry for clientId=android-pixel-8");
-            assertThat(content).contains("entryId=42");
-            assertThat(content).doesNotContain("clipboard text");
-        } finally {
-            if (originalLoggerDir == null) {
-                System.clearProperty("custom.logger.dir");
-            } else {
-                System.setProperty("custom.logger.dir", originalLoggerDir);
-            }
-        }
+        assertThat(logged).singleElement().satisfies(entry -> {
+            assertThat(entry.message()).isEqualTo("Added clipboard entry.");
+            assertThat(entry.metadata())
+                    .containsEntry("clientId", "android-pixel-8")
+                    .containsEntry("entryId", 42L);
+            // Clipboard content is deliberately never logged.
+            assertThat(entry.metadata().values()).doesNotContain("clipboard text");
+        });
     }
 
     @Test
-    void clipboardWriteStillSucceedsWhenAuditLoggingFails() throws IOException {
-        Path loggerTarget = Files.createTempFile(tempDir, "logger-target", ".txt");
-        String originalLoggerDir = System.getProperty("custom.logger.dir");
-        System.setProperty("custom.logger.dir", loggerTarget.toString());
+    void clipboardWriteStillSucceedsWhenAuditLoggingFails() {
+        ClipboardEntryRepository repository = clipboardEntryRepository();
+        Logger failingLogger = entry -> {
+            throw new IllegalStateException("logger sink unavailable");
+        };
 
-        try {
-            ClipboardEntryRepository repository = clipboardEntryRepository();
+        ClipboardEntryController controller = new ClipboardEntryController(
+                repository,
+                provider(AuthenticationContext.authenticated("android-pixel-8", 1L)),
+                failingLogger
+        );
+        ClipboardEntryResponse response = controller.create(
+                new ClipboardEntryRequest("android-pixel-8", "clipboard text", Instant.parse("2026-06-23T12:00:00Z"))
+        );
 
-            ClipboardEntryController controller = new ClipboardEntryController(
-                    repository,
-                    provider(AuthenticationContext.authenticated("android-pixel-8", 1L))
-            );
-            ClipboardEntryResponse response = controller.create(
-                    new ClipboardEntryRequest("android-pixel-8", "clipboard text", Instant.parse("2026-06-23T12:00:00Z"))
-            );
-
-            assertThat(response.clientId()).isEqualTo("android-pixel-8");
-            assertThat(response.id()).isEqualTo(42L);
-        } finally {
-            if (originalLoggerDir == null) {
-                System.clearProperty("custom.logger.dir");
-            } else {
-                System.setProperty("custom.logger.dir", originalLoggerDir);
-            }
-        }
+        assertThat(response.clientId()).isEqualTo("android-pixel-8");
+        assertThat(response.id()).isEqualTo(42L);
     }
 
     @Test
@@ -99,7 +83,9 @@ class ClipboardEntryControllerTest {
         ClipboardEntryRepository repository = clipboardEntryRepository(List.of(existing), saves);
         ClipboardEntryResponse response = new ClipboardEntryController(
                 repository,
-                provider(AuthenticationContext.authenticated("android-pixel-8", 1L))
+                provider(AuthenticationContext.authenticated("android-pixel-8", 1L)),
+                entry -> {
+                }
         ).create(
                 new ClipboardEntryRequest(
                         "android-pixel-8",
@@ -124,7 +110,9 @@ class ClipboardEntryControllerTest {
         ClipboardEntryRepository repository = clipboardEntryRepository(List.of(latest), saves);
         ClipboardEntryResponse response = new ClipboardEntryController(
                 repository,
-                provider(AuthenticationContext.authenticated("android-pixel-8", 1L))
+                provider(AuthenticationContext.authenticated("android-pixel-8", 1L)),
+                entry -> {
+                }
         ).create(
                 new ClipboardEntryRequest(
                         "android-pixel-8",
@@ -149,7 +137,11 @@ class ClipboardEntryControllerTest {
         ClipboardEntryRepository repository = clipboardEntryRepository(List.of(latest), saves);
 
         ClipboardEntryResponse response = new ClipboardEntryController(
-                repository, provider(AuthenticationContext.authenticated("android-pixel-8", 1L))).create(
+                repository,
+                provider(AuthenticationContext.authenticated("android-pixel-8", 1L)),
+                entry -> {
+                }
+        ).create(
                 new ClipboardEntryRequest(
                         "android-pixel-8",
                         "clipboard text",
@@ -172,7 +164,9 @@ class ClipboardEntryControllerTest {
         ));
         ClipboardEntryController controller = new ClipboardEntryController(
                 repository,
-                provider(AuthenticationContext.authenticated("client-a", 1L))
+                provider(AuthenticationContext.authenticated("client-a", 1L)),
+                entry -> {
+                }
         );
         List<ClipboardEntryDetailsResponse> response = controller.findWithinTimeframe(
                 "client-a", from, to, null, null, null

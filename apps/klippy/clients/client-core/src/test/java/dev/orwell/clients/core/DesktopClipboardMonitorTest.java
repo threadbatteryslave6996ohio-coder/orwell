@@ -3,6 +3,7 @@ package dev.orwell.clients.core;
 import dev.orwell.clients.core.env.ClientAuthSession;
 import dev.orwell.clients.filelocker.OfflineFileLockerClient;
 import dev.orwell.clients.filelocker.OfflineFileLockerService;
+import dev.orwell.logging.Logger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -17,6 +18,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class DesktopClipboardMonitorTest {
+    private static final Logger NO_OP_LOGGER = entry -> {
+    };
+
     @TempDir
     Path tempDir;
 
@@ -67,11 +71,11 @@ class DesktopClipboardMonitorTest {
                 URI.create("http://127.0.0.1:1/clipboard"), auth, Duration.ofMillis(100));
         return new DesktopClipboardMonitor(
                 reader, apiClient, null, "client-a", fileLocker,
-                offlineLog, new LinuxClipboardPolicy());
+                offlineLog, new LinuxClipboardPolicy(), NO_OP_LOGGER);
     }
 
     private static RunningFileLocker startFileLocker(Path socket) throws Exception {
-        OfflineFileLockerService service = new OfflineFileLockerService(socket);
+        OfflineFileLockerService service = new OfflineFileLockerService(socket, NO_OP_LOGGER);
         Thread thread = Thread.ofPlatform().start(() -> {
             try {
                 service.run();

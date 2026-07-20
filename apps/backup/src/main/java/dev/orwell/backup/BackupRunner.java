@@ -2,6 +2,7 @@ package dev.orwell.backup;
 
 import dev.orwell.backup.storage.DirectoryStorage;
 import dev.orwell.backup.storage.StorageBackup;
+import dev.orwell.logging.Logger;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -9,16 +10,20 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 public final class BackupRunner {
     private static final DateTimeFormatter TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     private final Path outputDir;
     private final int retentionDays;
+    private final Logger logger;
 
-    public BackupRunner(Path outputDir, int retentionDays) {
+    public BackupRunner(Path outputDir, int retentionDays, Logger logger) {
         this.outputDir = outputDir;
         this.retentionDays = retentionDays;
+        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     public void run(List<ProjectConfig> projects) throws Exception {
@@ -73,7 +78,7 @@ public final class BackupRunner {
         );
         pb.redirectErrorStream(true);
 
-        System.out.printf("[%s] Starting backup ...%n", project.name());
+        logger.info("Starting project backup.", Map.of("project", project.name()));
 
         Process process = pb.start();
         int exitCode = process.waitFor();
@@ -91,7 +96,7 @@ public final class BackupRunner {
         StorageBackup storage = resolveStorage(project);
         Path stored = storage.store(project.name(), temp);
 
-        System.out.printf("[%s] Backup saved to %s%n", project.name(), stored);
+        logger.info("Backup saved.", Map.of("project", project.name(), "path", stored.toString()));
     }
 
     private StorageBackup resolveStorage(ProjectConfig project) {

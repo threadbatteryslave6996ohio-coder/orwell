@@ -4,7 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,6 +30,34 @@ class LogEntryTest {
     void metadataIsUnmodifiable() {
         LogEntry entry = new LogEntry(LogLevel.INFO, "test", Map.of("key", "value"));
         assertThrows(UnsupportedOperationException.class, () -> entry.metadata().put("newKey", "newValue"));
+    }
+
+    @Test
+    void nullMetadataValuesAreAccepted() {
+        // Regression: Map.copyOf rejects null values, which turned every
+        // logger.error("...", {"error": exception.getMessage()}) call into an NPE thrown from
+        // inside the caller's catch block. A logging call must never take the caller down.
+        Map<String, Object> metadata = new java.util.LinkedHashMap<>();
+        metadata.put("clientId", "client-a");
+        metadata.put("error", null);
+
+        LogEntry entry = new LogEntry(LogLevel.ERROR, "Send failed.", metadata);
+
+        assertEquals(2, entry.metadata().size());
+        assertTrue(entry.metadata().containsKey("error"));
+        assertNull(entry.metadata().get("error"));
+    }
+
+    @Test
+    void nullMetadataValuesSurviveThroughEveryTextSink() {
+        Map<String, Object> metadata = new java.util.LinkedHashMap<>();
+        metadata.put("error", null);
+        LogEntry entry = new LogEntry(LogLevel.ERROR, "Send failed.", metadata);
+
+        assertDoesNotThrow(() -> new ConsoleLogger(
+                "test",
+                new java.io.PrintStream(java.io.OutputStream.nullOutputStream()),
+                new java.io.PrintStream(java.io.OutputStream.nullOutputStream())).log(entry));
     }
 
     private static void assertThrows(Class<? extends Throwable> expected, Runnable runnable) {

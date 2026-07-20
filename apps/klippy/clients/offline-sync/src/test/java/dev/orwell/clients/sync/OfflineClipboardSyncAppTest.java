@@ -3,6 +3,7 @@ package dev.orwell.clients.sync;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.orwell.clients.core.env.ClientAuthSession;
+import dev.orwell.logging.Logger;
 import dev.orwell.utils.ClipboardLimits;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -22,6 +23,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OfflineClipboardSyncAppTest {
+    private static final Logger NO_OP_LOGGER = entry -> {
+    };
+
     @TempDir
     Path tempDir;
 
@@ -67,7 +71,7 @@ class OfflineClipboardSyncAppTest {
                         "client-a", "valid", Instant.parse("2026-06-23T12:00:00Z"))
         );
 
-        List<ClipboardRecord> syncable = OfflineSyncService.syncableRecords(records, false);
+        List<ClipboardRecord> syncable = OfflineSyncService.syncableRecords(records);
 
         assertEquals(1, syncable.size());
         assertEquals("client-a", syncable.getFirst().clientId());
@@ -165,7 +169,8 @@ class OfflineClipboardSyncAppTest {
                     }
                     return expectedSnapshot;
                 },
-                sleepDurations::add
+                sleepDurations::add,
+                NO_OP_LOGGER
         );
 
         assertEquals(expectedSnapshot, snapshot);
@@ -198,7 +203,8 @@ class OfflineClipboardSyncAppTest {
                     return new ClipboardSnapshot("[usable]", usableRecords);
                 }, ignored -> { }, ignored -> true,
                 SyncMonitor.DEFAULT_SYNC_INTERVAL,
-                sleepDurations::add
+                sleepDurations::add,
+                NO_OP_LOGGER
         );
 
         assertEquals(new ClipboardSnapshot("[usable]", usableRecords), snapshot);
@@ -336,7 +342,7 @@ class OfflineClipboardSyncAppTest {
         IllegalStateException failure = assertThrows(IllegalStateException.class,
                 () -> SyncMonitor.awaitInitialSnapshot(
                         () -> { attempts[0]++; throw new IOException("still unavailable"); },
-                        delays::add));
+                        delays::add, NO_OP_LOGGER));
 
         assertEquals(6, attempts[0]);
         assertEquals(List.of(
@@ -428,11 +434,11 @@ class OfflineClipboardSyncAppTest {
 
     private static OfflineSyncService syncService(URI endpoint) {
         ClientAuthSession auth = new ClientAuthSession(null, "client-a", null, "token-a");
-        return new OfflineSyncService(new RemoteClipboardGateway(endpoint, auth, "client-a"), "client-a");
+        return new OfflineSyncService(new RemoteClipboardGateway(endpoint, auth, "client-a"), "client-a", NO_OP_LOGGER);
     }
 
     private static SyncMonitor monitor(URI endpoint) {
-        return new SyncMonitor(syncService(endpoint), "client-a");
+        return new SyncMonitor(syncService(endpoint), "client-a", NO_OP_LOGGER);
     }
 
     private static void handleClipboard(HttpExchange exchange, List<String> requests) throws IOException {

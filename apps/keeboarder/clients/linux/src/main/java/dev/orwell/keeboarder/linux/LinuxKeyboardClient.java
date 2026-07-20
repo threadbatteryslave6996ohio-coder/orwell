@@ -6,6 +6,8 @@ import com.google.gson.JsonObject;
 import dev.orwell.auth.http.api.LoginHttpResponse;
 import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
 import dev.orwell.keeboarder.client.KeeboarderClientConfig;
+import dev.orwell.keeboarder.client.KeeboarderClientLog;
+import dev.orwell.logging.Logger;
 import jakarta.websocket.ClientEndpoint;
 import jakarta.websocket.CloseReason;
 import jakarta.websocket.ContainerProvider;
@@ -36,11 +38,13 @@ public final class LinuxKeyboardClient {
     private final AtomicReference<String> currentClientId;
     private final HttpAuthenticationStrategy authClient;
     private final KeyboardMonitor keyboardMonitor;
+    private final KeeboarderClientLog log;
 
     private volatile String authToken;
 
-    public LinuxKeyboardClient(KeeboarderClientConfig config) {
+    public LinuxKeyboardClient(KeeboarderClientConfig config, Logger logger) {
         this.config = config;
+        this.log = new KeeboarderClientLog(logger);
         this.currentClientId = new AtomicReference<>(config.clientId());
         this.authClient = new HttpAuthenticationStrategy(config.authBaseUrl());
         this.keyboardMonitor = KeyboardMonitors.create(this::sendKeyEvent, this::handleKeyboardFailure);
@@ -62,7 +66,7 @@ public final class LinuxKeyboardClient {
         LoginHttpResponse login = authClient.login(config.clientId(), config.clientSecret());
         authToken = login.token();
         currentClientId.set(login.clientId());
-        System.out.println("Authenticated as " + login.clientId());
+        log.authenticated(login.clientId());
     }
 
     private void connect() throws Exception {
@@ -87,34 +91,34 @@ public final class LinuxKeyboardClient {
     public void onMessage(String message) {
         JsonObject msg = GSON.fromJson(message, JsonObject.class);
         if (msg == null || !msg.has("type")) {
-            System.out.println("Server: " + message);
+            log.untypedServerMessage(message);
             return;
         }
 
         String type = msg.get("type").getAsString();
         switch (type) {
             case "registered" -> handleRegistered(msg);
-            case "host_joined" -> System.out.println("Host joined: " + msg);
-            case "personal" -> System.out.println("Personal: " + msg);
+            case "host_joined" -> log.hostJoined(msg.toString());
+            case "personal" -> log.personalMessage(msg.toString());
             case "broadcast" -> {
                 if (!msg.has("fromClientId") || !msg.get("fromClientId").getAsString().equals(currentClientId.get())) {
-                    System.out.println("Broadcast: " + msg);
+                    log.broadcastReceived(msg.toString());
                 }
             }
-            case "error" -> System.out.println("Server error: " + msg.get("message").getAsString());
-            default -> System.out.println("Server message: " + msg);
+            case "error" -> log.serverError(msg.get("message").getAsString());
+            default -> log.unknownServerMessage(msg.toString());
         }
     }
 
     @OnClose
     public void onClose(Session session, CloseReason reason) {
-        System.out.println("WebSocket closed: " + reason);
+        log.webSocketClosed(String.valueOf(reason));
         shutdownLatch.countDown();
     }
 
     @OnError
     public void onError(Session session, Throwable throwable) {
-        System.err.println("WebSocket error: " + throwable.getMessage());
+        log.webSocketError(throwable.getMessage());
         shutdownLatch.countDown();
     }
 
@@ -124,7 +128,7 @@ public final class LinuxKeyboardClient {
         }
         registered.set(true);
         String name = msg.has("name") ? msg.get("name").getAsString() : "unknown";
-        System.out.println("Registered as " + name + " (" + currentClientId.get() + ")");
+        log.registered(name, currentClientId.get());
     }
 
     private void sendRegister(Session session) throws IOException {
@@ -164,13 +168,13 @@ public final class LinuxKeyboardClient {
 
         session.getAsyncRemote().sendText(GSON.toJson(payload), result -> {
             if (!result.isOK()) {
-                System.err.println("Failed to send key event: " + result.getException());
+                log.keyEventSendFailed(String.valueOf(result.getException()));
             }
         });
     }
 
     private void handleKeyboardFailure(RuntimeException exception) {
-        System.err.println("Keyboard hook error: " + exception.getMessage());
+        log.keyboardHookFailed(exception.getMessage());
         shutdownLatch.countDown();
     }
 

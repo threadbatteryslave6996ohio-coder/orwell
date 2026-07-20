@@ -20,13 +20,17 @@ Testcontainers-based tests.
 
 ## Start Locally
 
-Start the auth database on port `5433` using your preferred local PostgreSQL setup, then run the server:
+Start the shared database stack, then run the server:
+
+```bash
+docker compose -f ../../../../docker-compose.all-services.yml up -d db
+```
 
 ```bash
 mvn -pl apps/auth/http-based/server spring-boot:run
 ```
 
-The example configuration runs the auth server on `http://localhost:8081`. Its local PostgreSQL container exposes database `auth` on host port `5433`.
+The example configuration runs the auth server on `http://localhost:8081`. The shared PostgreSQL instance exposes database `auth` on host port `5432`.
 
 To build a runnable jar instead:
 
@@ -46,7 +50,7 @@ All values are required unless marked optional. These values provide a local con
 | --- | --- | --- |
 | `SERVER_PORT` | `8081` | HTTP port for the auth server. |
 | `AUTH_ROUTE_PREFIX` | `/auth` | Optional. Path prefix the auth routes are served under, published as `orwell.auth.route-prefix`. Defaults to empty, serving routes at the root; set it when the server sits behind a shared reverse proxy. `/health` is never prefixed. |
-| `AUTH_DATASOURCE_URL` | `jdbc:postgresql://localhost:5433/auth` | PostgreSQL JDBC URL. |
+| `AUTH_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/auth` | PostgreSQL JDBC URL. |
 | `AUTH_DATASOURCE_USERNAME` | `auth` | Database username. |
 | `AUTH_DATASOURCE_PASSWORD` | `auth` | Database password. |
 | `LOGGING_FILE_NAME` | `logs/auth-server.log` | File path for server logs. |

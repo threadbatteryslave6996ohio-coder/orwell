@@ -14,6 +14,8 @@ import java.util.Map;
 import dev.orwell.bucket.proxy.JarvisProxyEnvs;
 import dev.orwell.env.EnvOption;
 import dev.orwell.env.http.EnvLoader;
+import dev.orwell.logging.ConsoleLogger;
+import dev.orwell.logging.Logger;
 import dev.orwell.primitives.Sha256;
 
 public final class AnalysisWorker {
@@ -28,12 +30,16 @@ public final class AnalysisWorker {
     }
 
     public static void main(String[] args) throws Exception {
+        // Standalone main with no Spring context, so the sink is built here and passed down
+        // rather than reached for statically. ConsoleLogger routes WARN/ERROR to stderr, and its
+        // name supplies the prefix these lines used to hand-write.
+        Logger logger = new ConsoleLogger("stream-worker");
         String endpoint = loadEndpoint();
         if (endpoint.isBlank()) {
-            drainJpegFrames(System.in);
+            drainJpegFrames(System.in, logger);
             return;
         }
-        run(endpoint, System.in);
+        run(endpoint, System.in, logger);
     }
 
     /**
@@ -51,11 +57,11 @@ public final class AnalysisWorker {
         return value;
     }
 
-    private static void run(String endpoint, InputStream input) throws Exception {
+    private static void run(String endpoint, InputStream input, Logger logger) throws Exception {
         HttpClient client = HttpClient.newBuilder().build();
         int frameIndex = 0;
         long consecutiveFailures = 0;
-        for (byte[] frame : extractFrames(input)) {
+        for (byte[] frame : extractFrames(input, logger)) {
             if (frame.length == 0) {
                 continue;
             }
@@ -70,8 +76,7 @@ public final class AnalysisWorker {
             try {
                 client.send(request, HttpResponse.BodyHandlers.ofString());
                 if (consecutiveFailures > 0) {
-                    System.err.println("[stream-worker] endpoint reachable again after "
-                            + consecutiveFailures + " failed send(s)");
+                    logger.info("Endpoint reachable again.", Map.of("failedSends", consecutiveFailures));
                     consecutiveFailures = 0;
                 }
             } catch (InterruptedException exception) {
@@ -81,20 +86,23 @@ public final class AnalysisWorker {
                 consecutiveFailures++;
                 // Rate-limit so a persistently down endpoint doesn't flood the log, but is never silent.
                 if (consecutiveFailures == 1 || consecutiveFailures % SEND_FAILURE_LOG_INTERVAL == 0) {
-                    System.err.println("[stream-worker] failed to POST frame to " + endpoint
-                            + " (" + consecutiveFailures + " consecutive): " + exception);
+                    logger.error("Failed to POST frame.", Map.of(
+                            "endpoint", endpoint,
+                            "consecutiveFailures", consecutiveFailures,
+                            "error", exception.toString()
+                    ));
                 }
             }
         }
     }
 
-    private static void drainJpegFrames(InputStream input) throws IOException {
-        for (byte[] ignored : extractFrames(input)) {
+    private static void drainJpegFrames(InputStream input, Logger logger) throws IOException {
+        for (byte[] ignored : extractFrames(input, logger)) {
             // no-op
         }
     }
 
-    static Iterable<byte[]> extractFrames(InputStream input) {
+    static Iterable<byte[]> extractFrames(InputStream input, Logger logger) {
         return () -> new java.util.Iterator<>() {
             private final byte[] readBuffer = new byte[4096];
             // Unconsumed bytes live in buf[0, size); the whole stream is scanned once overall
@@ -161,8 +169,8 @@ public final class AnalysisWorker {
                 }
 
                 if (size - frameStart > MAX_FRAME_BYTES) {
-                    System.err.println("[stream-worker] dropping in-progress frame exceeding "
-                            + MAX_FRAME_BYTES + " bytes without an end marker");
+                    logger.warn("Dropping in-progress frame with no end marker.",
+                            Map.of("maxFrameBytes", MAX_FRAME_BYTES));
                     compact(size);
                     frameStart = -1;
                     scanPos = 0;

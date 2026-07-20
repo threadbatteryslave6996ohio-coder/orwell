@@ -2,11 +2,14 @@ package dev.orwell.clients.core;
 
 import dev.orwell.auth.http.client.HttpAuthenticationException;
 import dev.orwell.clients.filelocker.OfflineFileLockerClient;
+import dev.orwell.logging.Logger;
 import dev.orwell.utils.ClipboardLimits;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 
 public final class DesktopClipboardMonitor {
@@ -17,6 +20,7 @@ public final class DesktopClipboardMonitor {
     private final OfflineFileLockerClient fileLocker;
     private final Path offlineLogPath;
     private final DesktopClipboardPolicy policy;
+    private final Logger logger;
     private String lastSentContent;
     private boolean previousReadFailed;
     private boolean previousSendFailed;
@@ -30,7 +34,8 @@ public final class DesktopClipboardMonitor {
             String clientId,
             OfflineFileLockerClient fileLocker,
             Path offlineLogPath,
-            DesktopClipboardPolicy policy
+            DesktopClipboardPolicy policy,
+            Logger logger
     ) {
         this.clipboardReader = Objects.requireNonNull(clipboardReader, "clipboardReader");
         this.apiClient = Objects.requireNonNull(apiClient, "apiClient");
@@ -39,6 +44,7 @@ public final class DesktopClipboardMonitor {
         this.fileLocker = Objects.requireNonNull(fileLocker, "fileLocker");
         this.offlineLogPath = Objects.requireNonNull(offlineLogPath, "offlineLogPath");
         this.policy = Objects.requireNonNull(policy, "policy");
+        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     public void poll() {
@@ -50,8 +56,10 @@ public final class DesktopClipboardMonitor {
         try {
             content = clipboardReader.readText();
             if (previousReadFailed && policy.logReadRecovery()) {
-                System.out.printf("INFO clientId=%s endpoint=%s authServer=%s Clipboard read recovered.%n",
-                        clientId, apiClient.endpoint(), displayAuthServer());
+                logger.info("Clipboard read recovered.", Map.of(
+                        "clientId", clientId,
+                        "endpoint", String.valueOf(apiClient.endpoint()),
+                        "authServer", displayAuthServer()));
             }
             previousReadFailed = false;
         } catch (Exception exception) {
@@ -74,8 +82,9 @@ public final class DesktopClipboardMonitor {
         }
         if (!ClipboardLimits.isWithinContentLimit(content)) {
             lastSentContent = content;
-            System.err.printf("Skipping oversized clipboard change. chars=%d maxChars=%d%n",
-                    content.length(), ClipboardLimits.MAX_CONTENT_CHARACTERS);
+            logger.warn("Skipping oversized clipboard change.", Map.of(
+                    "chars", content.length(),
+                    "maxChars", ClipboardLimits.MAX_CONTENT_CHARACTERS));
             return;
         }
 
@@ -86,7 +95,7 @@ public final class DesktopClipboardMonitor {
                 lastSentContent = content;
                 previousSendFailed = false;
                 previousAuthFailed = false;
-                System.out.printf("Sent clipboard change. chars=%d%n", content.length());
+                logger.info("Sent clipboard change.", Map.of("chars", content.length()));
             } else if (statusCode == 401) {
                 logAuthFailure("Remote server rejected the bearer token with HTTP 401.");
                 logOffline(entry, "Unauthorized");
@@ -110,34 +119,46 @@ public final class DesktopClipboardMonitor {
 
     private void logReadFailure(String message) {
         if (!previousReadFailed) {
-            String backend = policy.includeBackendInReadErrors()
-                    ? " backend=" + clipboardReader.name()
-                    : "";
-            System.err.printf("Clipboard read failed. clientId=%s%s error=%s%n", clientId, backend, message);
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("clientId", clientId);
+            if (policy.includeBackendInReadErrors()) {
+                metadata.put("backend", clipboardReader.name());
+            }
+            metadata.put("error", message);
+            logger.error("Clipboard read failed.", metadata);
             previousReadFailed = true;
         }
     }
 
     private void logSendFailure(String message) {
         if (!previousSendFailed) {
-            System.err.printf("Clipboard send failed. clientId=%s endpoint=%s error=%s%n",
-                    clientId, apiClient.endpoint(), message);
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("clientId", clientId);
+            metadata.put("endpoint", String.valueOf(apiClient.endpoint()));
+            metadata.put("error", message);
+            logger.error("Clipboard send failed.", metadata);
             previousSendFailed = true;
         }
     }
 
     private void logAuthFailure(String message) {
         if (!previousAuthFailed) {
-            System.err.printf("Auth refresh failed. clientId=%s authServer=%s error=%s%n",
-                    clientId, displayAuthServer(), message);
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("clientId", clientId);
+            metadata.put("authServer", displayAuthServer());
+            metadata.put("error", message);
+            logger.error("Auth refresh failed.", metadata);
             previousAuthFailed = true;
         }
     }
 
     private void logOffline(ClipboardEntry entry, String message) {
         String failure = message == null || message.isBlank() ? "unknown error" : message;
-        System.err.printf("Cannot reach remote server. clientId=%s endpoint=%s error=%s%n",
-                clientId, apiClient.endpoint(), failure);
+        // Recoverable: the entry is queued to the offline log and replayed by the sync client.
+        logger.warn("Cannot reach remote server.", Map.of(
+                "clientId", clientId,
+                "endpoint", String.valueOf(apiClient.endpoint()),
+                "error", failure));
         pendingOfflineEntry = entry;
         appendPendingOffline();
     }
@@ -151,12 +172,16 @@ public final class DesktopClipboardMonitor {
             fileLocker.append(offlineLogPath, ClipboardJson.write(entry));
             lastSentContent = entry.content();
             pendingOfflineEntry = null;
-            System.err.printf("Logged clipboard message to %s. clientId=%s chars=%d%n",
-                    offlineLogPath.toAbsolutePath(), clientId, entry.content().length());
+            logger.warn("Logged clipboard message offline.", Map.of(
+                    "offlineLog", String.valueOf(offlineLogPath.toAbsolutePath()),
+                    "clientId", clientId,
+                    "chars", entry.content().length()));
             return true;
         } catch (IOException exception) {
-            System.err.printf("Clipboard send failed and local JSON log failed. clientId=%s error=%s%n",
-                    clientId, exception.getMessage());
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("clientId", clientId);
+            metadata.put("error", exception.getMessage());
+            logger.error("Clipboard send failed and local JSON log failed.", metadata);
             return false;
         }
     }

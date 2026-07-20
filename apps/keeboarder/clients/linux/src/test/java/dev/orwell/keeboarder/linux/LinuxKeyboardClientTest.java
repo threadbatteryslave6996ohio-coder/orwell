@@ -19,7 +19,8 @@ class LinuxKeyboardClientTest {
                 "alias-client",
                 "secret"
         );
-        LinuxKeyboardClient client = new LinuxKeyboardClient(config);
+        LinuxKeyboardClient client = new LinuxKeyboardClient(config, entry -> {
+        });
 
         currentClientId(client).set("canonical-client");
         authTokenField(client).set(client, "token-123");

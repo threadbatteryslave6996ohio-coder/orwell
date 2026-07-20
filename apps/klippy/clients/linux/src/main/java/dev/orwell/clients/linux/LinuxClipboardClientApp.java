@@ -17,6 +17,8 @@ import dev.orwell.clients.filelocker.OfflineFileLockerClient;
 import dev.orwell.clients.linux.clipboard.LinuxClipboardReader;
 import dev.orwell.clients.linux.clipboard.LinuxClipboardReaderFactory;
 import dev.orwell.env.Env;
+import dev.orwell.logging.ConsoleLogger;
+import dev.orwell.logging.Logger;
 
 import java.io.IOException;
 import java.net.URI;
@@ -37,7 +39,8 @@ public final class LinuxClipboardClientApp {
             String clientId,
             ClientAuthSession authSession,
             OfflineFileLockerClient fileLocker,
-            AuthAuditLogger auditLogger
+            AuthAuditLogger auditLogger,
+            Logger logger
     ) {
         ClipboardApiClient apiClient = new ClipboardApiClient(
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(),
@@ -47,10 +50,11 @@ public final class LinuxClipboardClientApp {
                 auditLogger.refreshListener());
         this.monitor = new DesktopClipboardMonitor(
                 clipboardReader, apiClient, authServerUrl, clientId, fileLocker,
-                OFFLINE_LOG_PATH, new LinuxClipboardPolicy());
+                OFFLINE_LOG_PATH, new LinuxClipboardPolicy(), logger);
     }
 
     public static void main(String[] args) throws IOException {
+        Logger logger = new ConsoleLogger("klippy-linux-client");
         Env env = ClientEnvs.load();
         ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("linux-"));
         long pollIntervalMs = PollInterval.resolve(env);
@@ -59,25 +63,25 @@ public final class LinuxClipboardClientApp {
         fileLocker.ping();
 
         AuthAuditLogger auditLogger =
-                new AuthAuditLogger(fileLocker, OFFLINE_LOG_PATH, config.clientId(), config.authServerUrl());
-        initializeAuth(config, auditLogger);
+                new AuthAuditLogger(fileLocker, OFFLINE_LOG_PATH, config.clientId(), config.authServerUrl(), logger);
+        initializeAuth(config, auditLogger, logger);
 
         LinuxClipboardClientApp app = new LinuxClipboardClientApp(
                 clipboardReader, config.endpoint(), config.authServerUrl(), config.clientId(),
-                config.authSession(), fileLocker, auditLogger);
-        new DesktopClientRunner(app.monitor, pollIntervalMs)
+                config.authSession(), fileLocker, auditLogger, logger);
+        new DesktopClientRunner(app.monitor, pollIntervalMs, logger)
                 .start("Klippy Linux client started.", config, Map.of("clipboardBackend", clipboardReader.name()));
     }
 
-    private static void initializeAuth(ClientConfig config, AuthAuditLogger auditLogger) {
+    private static void initializeAuth(ClientConfig config, AuthAuditLogger auditLogger, Logger logger) {
         if (!config.authSession().canRefresh() || config.authServerUrl() == null) {
-            ClientAuthInitializer.initialize(config.authSession(), config);
+            ClientAuthInitializer.initialize(config.authSession(), config, logger);
             return;
         }
 
         auditLogger.record("refresh", "started", "startup token refresh");
         try {
-            ClientAuthInitializer.initialize(config.authSession(), config);
+            ClientAuthInitializer.initialize(config.authSession(), config, logger);
             auditLogger.record("refresh", "succeeded", "startup token refresh");
         } catch (RuntimeException exception) {
             auditLogger.record("refresh", "failed", ExceptionMessages.messageWithCause(exception));

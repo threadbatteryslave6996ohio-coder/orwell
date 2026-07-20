@@ -18,7 +18,8 @@ class MacKeyboardClientTest {
                 "configured-client",
                 "secret"
         );
-        MacKeyboardClient client = new MacKeyboardClient(config);
+        MacKeyboardClient client = new MacKeyboardClient(config, entry -> {
+        });
 
         currentClientId(client).set("authenticated-client");
         authTokenField(client).set(client, "token-123");

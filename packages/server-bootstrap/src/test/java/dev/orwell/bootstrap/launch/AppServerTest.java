@@ -7,7 +7,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 
 import java.io.IOException;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -62,16 +61,9 @@ class AppServerTest {
     }
 
     @Test
-    void startupHookRunsAfterLoggingDirectoryConfiguration() {
+    void configuresLoggingDirectoryFromLogFileName() {
         AppServerEnv environment = new AppServerEnv(true, false);
-        AtomicBoolean hookRanAfterLoggingConfiguration = new AtomicBoolean();
-        AppServer application = new AppServer(
-                AppServerTest.class,
-                "app-server-test",
-                environment,
-                env -> hookRanAfterLoggingConfiguration.set(
-                        "/tmp".equals(System.getProperty("custom.logger.dir")))
-        );
+        AppServer application = new AppServer(AppServerTest.class, "app-server-test", environment);
 
         ConfigurableApplicationContext started = application.start(Map.of(
                 "SERVER_ADDRESS", "127.0.0.1",
@@ -79,7 +71,7 @@ class AppServerTest {
                 "LOGGING_FILE_NAME", "/tmp/app-server-test.log"
         ));
 
-        assertEquals(true, hookRanAfterLoggingConfiguration.get());
+        assertEquals("/tmp", System.getProperty("custom.logger.dir"));
         started.close();
     }
 

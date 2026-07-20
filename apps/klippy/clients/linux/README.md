@@ -22,7 +22,7 @@ sudo apt install openjdk-25-jdk maven wl-clipboard xclip
 
 ## Run the Client
 
-Start the auth database on port `5433` and the app database on port `5432`
+Start the shared database (both `auth` and `klippy` live in one PostgreSQL on port `5432`)
 using your preferred local PostgreSQL setup, then run the auth server, app
 server, and client.
 

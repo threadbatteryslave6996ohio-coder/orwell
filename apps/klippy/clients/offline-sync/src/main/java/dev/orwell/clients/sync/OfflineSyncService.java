@@ -1,11 +1,14 @@
 package dev.orwell.clients.sync;
 
+import dev.orwell.logging.Logger;
 import dev.orwell.utils.ClipboardLimits;
 
 import java.io.IOException;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * Synchronizes a batch of offline clipboard records against the server through a
@@ -16,10 +19,12 @@ import java.util.List;
 final class OfflineSyncService {
     private final RemoteClipboardGateway gateway;
     private final String clientId;
+    private final Logger logger;
 
-    OfflineSyncService(RemoteClipboardGateway gateway, String clientId) {
+    OfflineSyncService(RemoteClipboardGateway gateway, String clientId, Logger logger) {
         this.gateway = gateway;
         this.clientId = clientId;
+        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     SyncResult sync(List<ClipboardRecord> records) throws IOException, InterruptedException {
@@ -30,7 +35,7 @@ final class OfflineSyncService {
 
     SyncResult sync(List<ClipboardRecord> records, RejectionSink rejectionSink)
             throws IOException, InterruptedException {
-        records = syncableRecords(records, true);
+        records = syncableRecords(records, logger);
         if (records.isEmpty()) {
             return new SyncResult(0, 0, 0);
         }
@@ -74,16 +79,23 @@ final class OfflineSyncService {
         return new SyncResult(alreadyPresent, sent, rejected);
     }
 
-    static List<ClipboardRecord> syncableRecords(List<ClipboardRecord> records, boolean logIgnored) {
+    /** Filters oversized entries out silently, for probes that only need to know what is syncable. */
+    static List<ClipboardRecord> syncableRecords(List<ClipboardRecord> records) {
+        return records.stream()
+                .filter(record -> ClipboardLimits.isWithinContentLimit(record.content()))
+                .toList();
+    }
+
+    /** Filters oversized entries out, reporting each skipped entry through {@code logger}. */
+    static List<ClipboardRecord> syncableRecords(List<ClipboardRecord> records, Logger logger) {
         return records.stream()
                 .filter(record -> {
                     if (ClipboardLimits.isWithinContentLimit(record.content())) {
                         return true;
                     }
-                    if (logIgnored) {
-                        System.err.printf("Ignoring oversized offline clipboard entry. chars=%d maxChars=%d%n",
-                                record.content().length(), ClipboardLimits.MAX_CONTENT_CHARACTERS);
-                    }
+                    logger.warn("Ignoring oversized offline clipboard entry.", Map.of(
+                            "chars", record.content().length(),
+                            "maxChars", ClipboardLimits.MAX_CONTENT_CHARACTERS));
                     return false;
                 })
                 .toList();

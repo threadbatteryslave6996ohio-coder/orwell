@@ -31,7 +31,8 @@ class OfflineFileLockerServiceTest {
     void serializesConcurrentProcessRequestsWithoutLosingEntries() throws Exception {
         Path socket = tempDir.resolve("locker.sock");
         Path log = tempDir.resolve("offline.json");
-        OfflineFileLockerService service = new OfflineFileLockerService(socket);
+        OfflineFileLockerService service = new OfflineFileLockerService(socket, entry -> {
+        });
         Thread serviceThread = Thread.ofPlatform().start(() -> {
             try {
                 service.run();

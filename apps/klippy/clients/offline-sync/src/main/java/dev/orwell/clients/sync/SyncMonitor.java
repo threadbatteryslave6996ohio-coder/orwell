@@ -1,14 +1,19 @@
 package dev.orwell.clients.sync;
 
+import dev.orwell.logging.Logger;
+
 import java.io.IOException;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * Drives the offline clipboard synchronization loop: waits for the offline file to appear, hands each
  * snapshot to an {@link OfflineSyncService}, clears the file once a snapshot is fully synchronized, and
- * applies exponential backoff (via {@link SyncRetryPolicy}) to transient failures. The actual file and
- * sleep operations are injected so the loop stays testable.
+ * applies exponential backoff (via {@link SyncRetryPolicy}) to transient failures. The actual file,
+ * sleep, and logging operations are injected so the loop stays testable.
  */
 final class SyncMonitor {
     static final Duration DEFAULT_SYNC_INTERVAL = Duration.ofMinutes(30);
@@ -20,10 +25,12 @@ final class SyncMonitor {
 
     private final OfflineSyncService syncService;
     private final String clientId;
+    private final Logger logger;
 
-    SyncMonitor(OfflineSyncService syncService, String clientId) {
+    SyncMonitor(OfflineSyncService syncService, String clientId, Logger logger) {
         this.syncService = syncService;
         this.clientId = clientId;
+        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     void monitor(RecordSource recordSource, RejectionSink rejectionSink, SnapshotClearer snapshotClearer,
@@ -42,35 +49,39 @@ final class SyncMonitor {
                     rejectAll(snapshot.rejections(), rejectionSink);
                     List<ClipboardRecord> records = snapshot.records();
                     if (records.isEmpty()) {
-                        System.out.println("No offline clipboard entries to sync. Waiting for changes.");
+                        logger.info("No offline clipboard entries to sync. Waiting for changes.");
                     } else {
                         SyncResult result = syncService.sync(records, rejectionSink);
-                        System.out.printf("Offline clipboard sync complete. clientId=%s checked=%d alreadyPresent=%d sent=%d rejected=%d%n",
-                                clientId, records.size(), result.alreadyPresent(), result.sent(), result.rejected());
+                        logger.info("Offline clipboard sync complete.", Map.of(
+                                "clientId", clientId,
+                                "checked", records.size(),
+                                "alreadyPresent", result.alreadyPresent(),
+                                "sent", result.sent(),
+                                "rejected", result.rejected()));
                     }
                     if (snapshotClearer.clear(snapshot)) {
-                        System.out.println("Cleared synchronized offline clipboard file.");
+                        logger.info("Cleared synchronized offline clipboard file.");
                     } else {
-                        System.out.println("Offline clipboard file changed during sync; preserving it for the next pass.");
+                        logger.info("Offline clipboard file changed during sync; preserving it for the next pass.");
                     }
                     lastProcessedContent = snapshot.content();
                     failures = 0;
                 } catch (IOException | RuntimeException exception) {
                     failures = nextFailureCount(failures, "synchronize offline clipboard", exception);
                     Duration delay = retryDelay(failures);
-                    System.err.printf("Offline clipboard sync failed; retry %d/%d in %d seconds: %s%n",
-                            failures, MAX_RETRIES, delay.toSeconds(), exception.getMessage());
+                    logger.warn("Offline clipboard sync failed; retrying.",
+                            retryMetadata(failures, delay, exception));
                     sleeper.sleep(delay);
                     continue;
                 }
             }
 
             sleeper.sleep(interval);
-            snapshot = readWithRetries(recordSource, sleeper, "read offline clipboard file");
+            snapshot = readWithRetries(recordSource, sleeper, "read offline clipboard file", logger);
         }
     }
 
-    static ClipboardSnapshot awaitInitialSnapshot(RecordSource recordSource, Sleeper sleeper)
+    static ClipboardSnapshot awaitInitialSnapshot(RecordSource recordSource, Sleeper sleeper, Logger logger)
             throws InterruptedException {
         int failures = 0;
         while (true) {
@@ -79,8 +90,8 @@ final class SyncMonitor {
             } catch (IOException | RuntimeException exception) {
                 failures = nextFailureCount(failures, "read initial offline clipboard file", exception);
                 Duration delay = retryDelay(failures);
-                System.err.printf("Could not read initial offline clipboard file; retry %d/%d in %d seconds: %s%n",
-                        failures, MAX_RETRIES, delay.toSeconds(), exception.getMessage());
+                logger.warn("Could not read initial offline clipboard file; retrying.",
+                        retryMetadata(failures, delay, exception));
                 sleeper.sleep(delay);
             }
         }
@@ -91,12 +102,13 @@ final class SyncMonitor {
             RejectionSink rejectionSink,
             SnapshotClearer snapshotClearer,
             Duration interval,
-            Sleeper sleeper)
+            Sleeper sleeper,
+            Logger logger)
             throws InterruptedException {
         int failures = 0;
         while (true) {
-            ClipboardSnapshot snapshot = awaitInitialSnapshot(recordSource, sleeper);
-            if (!OfflineSyncService.syncableRecords(snapshot.records(), false).isEmpty()) {
+            ClipboardSnapshot snapshot = awaitInitialSnapshot(recordSource, sleeper, logger);
+            if (!OfflineSyncService.syncableRecords(snapshot.records()).isEmpty()) {
                 return snapshot;
             }
             try {
@@ -108,18 +120,19 @@ final class SyncMonitor {
             } catch (IOException | RuntimeException exception) {
                 failures = nextFailureCount(failures, "prepare initial offline clipboard snapshot", exception);
                 Duration delay = retryDelay(failures);
-                System.err.printf("Could not prepare initial offline clipboard snapshot; retry %d/%d in %d seconds: %s%n",
-                        failures, MAX_RETRIES, delay.toSeconds(), exception.getMessage());
+                logger.warn("Could not prepare initial offline clipboard snapshot; retrying.",
+                        retryMetadata(failures, delay, exception));
                 sleeper.sleep(delay);
                 continue;
             }
-            System.out.printf("Offline clipboard file has no usable clipboard entries yet; waiting %d minutes to derive CLIENT_ID.%n",
-                    interval.toMinutes());
+            logger.info("Offline clipboard file has no usable clipboard entries yet; waiting to derive CLIENT_ID.",
+                    Map.of("waitMinutes", interval.toMinutes()));
             sleeper.sleep(interval);
         }
     }
 
-    private static ClipboardSnapshot readWithRetries(RecordSource recordSource, Sleeper sleeper, String operation)
+    private static ClipboardSnapshot readWithRetries(
+            RecordSource recordSource, Sleeper sleeper, String operation, Logger logger)
             throws InterruptedException {
         int failures = 0;
         while (true) {
@@ -128,8 +141,9 @@ final class SyncMonitor {
             } catch (IOException | RuntimeException exception) {
                 failures = nextFailureCount(failures, operation, exception);
                 Duration delay = retryDelay(failures);
-                System.err.printf("Could not %s; retry %d/%d in %d seconds: %s%n",
-                        operation, failures, MAX_RETRIES, delay.toSeconds(), exception.getMessage());
+                Map<String, Object> metadata = retryMetadata(failures, delay, exception);
+                metadata.put("operation", operation);
+                logger.warn("Offline clipboard operation failed; retrying.", metadata);
                 sleeper.sleep(delay);
             }
         }
@@ -137,6 +151,15 @@ final class SyncMonitor {
 
     static Duration retryDelay(int retryNumber) {
         return RETRY_POLICY.delay(retryNumber);
+    }
+
+    private static Map<String, Object> retryMetadata(int failures, Duration delay, Exception cause) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("retry", failures);
+        metadata.put("maxRetries", MAX_RETRIES);
+        metadata.put("retryInSeconds", delay.toSeconds());
+        metadata.put("error", cause.getMessage());
+        return metadata;
     }
 
     private static int nextFailureCount(int failures, String operation, Exception cause) {

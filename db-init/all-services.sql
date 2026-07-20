@@ -2,8 +2,10 @@
 --
 -- One instance holds one database + one login role per app. The database,
 -- role, and password names stay app-named (klippy/auth/secrets) to match the
--- convention used everywhere else and by scripts/dev-stack.sh's orw-pg. This
--- runs once, when the postgres data volume is first initialised.
+-- convention used everywhere else. This is the single source of truth for the
+-- repo's databases: every per-app compose file uses this same instance rather
+-- than creating its own. It runs once, when the postgres data volume is first
+-- initialised.
 CREATE ROLE klippy  LOGIN PASSWORD 'klippy';
 CREATE DATABASE klippy  OWNER klippy;
 

@@ -20,18 +20,20 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROXY_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# NOTE: REPO_ROOT is misnamed - it is the apps/ directory, which is what the existing
+# "$REPO_ROOT/auth/..." paths below rely on. MONO_ROOT is the actual repository root.
 REPO_ROOT="$(cd "$PROXY_DIR/../../.." && pwd)"
+MONO_ROOT="$(cd "$REPO_ROOT/.." && pwd)"
 
 # ---- Configuration (override via environment) ----
 MINIO_CONTAINER="${MINIO_CONTAINER:-klippy-minio}"
-PG_CONTAINER="${PG_CONTAINER:-klippy-auth-postgres}"
 MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
 MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
 BUCKET="${BUCKET:-keeboarder-recordings}"
 S3_ENDPOINT="${S3_ENDPOINT:-http://localhost:9000}"
 AUTH_PORT="${AUTH_PORT:-8081}"
 PROXY_PORT="${PROXY_PORT:-5000}"
-PG_PORT="${PG_PORT:-5433}"
+PG_PORT="${PG_PORT:-5432}"
 
 log() { printf '[local-stack] %s\n' "$*"; }
 die() { printf '[local-stack] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -54,17 +56,10 @@ cmd_up() {
         log "MinIO already running"
     fi
 
-    if [ -z "$(docker ps -q -f name="^${PG_CONTAINER}$")" ]; then
-        docker rm -f "$PG_CONTAINER" >/dev/null 2>&1 || true
-        log "Starting PostgreSQL ($PG_CONTAINER) on :$PG_PORT"
-        docker run -d --name "$PG_CONTAINER" -p "${PG_PORT}:5432" \
-            -e POSTGRES_DB=auth -e POSTGRES_USER=auth -e POSTGRES_PASSWORD=auth \
-            -v klippy-auth-pg-data:/var/lib/postgresql/data \
-            postgres:16-alpine >/dev/null \
-            || die "failed to start PostgreSQL"
-    else
-        log "PostgreSQL already running"
-    fi
+    # Postgres comes from the one shared stack, not a private container.
+    log "Starting shared PostgreSQL (docker-compose.all-services.yml)"
+    docker compose -f "$MONO_ROOT/docker-compose.all-services.yml" up -d db \
+        || die "failed to start the shared PostgreSQL"
 
     log "Creating bucket '$BUCKET' (idempotent)"
     docker run --rm --network=host --entrypoint sh minio/mc -c \

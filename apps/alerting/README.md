@@ -42,6 +42,13 @@ SMTP settings (see `.env.example`):
 | `SMTP_USE_TLS` | `true` | Use STARTTLS |
 | `ALERT_LOG_FILE` | `/var/log/streaming/alerts.log` | Alert log file path |
 
+## Alert log format
+
+`ALERT_LOG_FILE` receives one JSON object per line from the shared
+`dev.orwell.logging.JsonLogger`: `timestamp`, `level`, `message`, then the entry's metadata
+flattened alongside them. Metadata used to be nested under a `fields` key — consumers that read
+`fields.*` need to read the top-level keys instead.
+
 ## Build
 
 ```bash

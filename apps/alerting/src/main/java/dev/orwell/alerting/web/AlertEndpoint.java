@@ -1,22 +1,23 @@
-package dev.orwell.alerting;
+package dev.orwell.alerting.web;
 
+import dev.orwell.alerting.service.AlertService;
 import dev.orwell.http.EndpointResponse;
 
 import java.util.Map;
 
 /** Server-independent alerting endpoint behavior shared by Spring and Undertow. */
-final class AlertEndpoint {
+public final class AlertEndpoint {
     private final AlertService service;
 
-    AlertEndpoint(AlertService service) {
+    public AlertEndpoint(AlertService service) {
         this.service = service;
     }
 
-    EndpointResponse<Map<String, Object>> alert(Map<String, Object> body) {
+    public EndpointResponse<Map<String, Object>> alert(Map<String, Object> body) {
         return EndpointResponse.ok(service.handleAlert(body));
     }
 
-    Map<String, Object> healthDetails() {
+    public Map<String, Object> healthDetails() {
         return Map.of("emailEnabled", service.emailEnabled());
     }
 }

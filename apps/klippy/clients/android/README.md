@@ -17,7 +17,7 @@ Open `apps/klippy/clients/android` in Android Studio and run the `app`
 configuration.
 
 Start PostgreSQL, the auth server, and the app server before sending clipboard
-entries. The auth database listens on `5433` and the app database on `5432`
+entries. Both the `auth` and `klippy` databases live in the shared PostgreSQL instance on `5432`
 when you use the local defaults.
 
 Create a client identity and login with the auth server:

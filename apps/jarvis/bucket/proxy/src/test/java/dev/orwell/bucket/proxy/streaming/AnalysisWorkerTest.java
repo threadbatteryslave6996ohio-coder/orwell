@@ -2,6 +2,8 @@ package dev.orwell.bucket.proxy.streaming;
 
 import org.junit.jupiter.api.Test;
 
+import dev.orwell.logging.Logger;
+
 import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 import java.util.List;
@@ -11,6 +13,9 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class AnalysisWorkerTest {
+    private static final Logger NO_OP_LOGGER = entry -> {
+    };
+
     @Test
     void extractsEveryFrameWhenOneReadContainsMultipleJpegs() {
         byte[] first = jpeg((byte) 1, (byte) 2);
@@ -20,7 +25,7 @@ class AnalysisWorkerTest {
         System.arraycopy(second, 0, stream, first.length, second.length);
 
         List<byte[]> frames = StreamSupport.stream(
-                AnalysisWorker.extractFrames(new ByteArrayInputStream(stream)).spliterator(), false
+                AnalysisWorker.extractFrames(new ByteArrayInputStream(stream), NO_OP_LOGGER).spliterator(), false
         ).toList();
 
         assertEquals(2, frames.size());
@@ -36,7 +41,7 @@ class AnalysisWorkerTest {
         System.arraycopy(incomplete, 0, stream, complete.length, incomplete.length);
 
         List<byte[]> frames = StreamSupport.stream(
-                AnalysisWorker.extractFrames(new ByteArrayInputStream(stream)).spliterator(), false
+                AnalysisWorker.extractFrames(new ByteArrayInputStream(stream), NO_OP_LOGGER).spliterator(), false
         ).toList();
 
         assertEquals(1, frames.size());
@@ -53,7 +58,7 @@ class AnalysisWorkerTest {
         byte[] frame = jpeg(payload);
 
         List<byte[]> frames = StreamSupport.stream(
-                AnalysisWorker.extractFrames(new ByteArrayInputStream(frame)).spliterator(), false
+                AnalysisWorker.extractFrames(new ByteArrayInputStream(frame), NO_OP_LOGGER).spliterator(), false
         ).toList();
 
         assertEquals(1, frames.size());
@@ -69,7 +74,7 @@ class AnalysisWorkerTest {
         assertEquals(4097, frame.length);
 
         List<byte[]> frames = StreamSupport.stream(
-                AnalysisWorker.extractFrames(new ByteArrayInputStream(frame)).spliterator(), false
+                AnalysisWorker.extractFrames(new ByteArrayInputStream(frame), NO_OP_LOGGER).spliterator(), false
         ).toList();
 
         assertEquals(1, frames.size());
@@ -88,7 +93,7 @@ class AnalysisWorkerTest {
         System.arraycopy(good, 0, stream, runaway.length, good.length);
 
         List<byte[]> frames = StreamSupport.stream(
-                AnalysisWorker.extractFrames(new ByteArrayInputStream(stream)).spliterator(), false
+                AnalysisWorker.extractFrames(new ByteArrayInputStream(stream), NO_OP_LOGGER).spliterator(), false
         ).toList();
 
         assertEquals(1, frames.size());

@@ -1,7 +1,7 @@
 package dev.orwell.server.controller;
 
 import dev.orwell.auth.AuthenticationContext;
-import dev.orwell.logging.CustomLogger;
+import dev.orwell.logging.Logger;
 import dev.orwell.server.dto.ClipboardEntryDetailsResponse;
 import dev.orwell.server.dto.ClipboardEntryRequest;
 import dev.orwell.server.dto.ClipboardEntryResponse;
@@ -21,22 +21,25 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @RestController
 public class ClipboardEntryController {
-    private static final CustomLogger LOGGER = new CustomLogger("klippy-server");
-
     private final ClipboardEntryRepository repository;
     private final ObjectProvider<AuthenticationContext> authenticationContextProvider;
+    private final Logger logger;
 
     public ClipboardEntryController(
             ClipboardEntryRepository repository,
-            ObjectProvider<AuthenticationContext> authenticationContextProvider
+            ObjectProvider<AuthenticationContext> authenticationContextProvider,
+            Logger logger
     ) {
         this.repository = repository;
         this.authenticationContextProvider = authenticationContextProvider;
+        this.logger = Objects.requireNonNull(logger, "logger");
     }
 
     @PostMapping("/clipboard")
@@ -68,9 +71,11 @@ public class ClipboardEntryController {
                 timestamp
         ));
         try {
-            LOGGER.log("Added clipboard entry for clientId=" + saved.getClientId()
-                    + ", entryId=" + saved.getId()
-                    + " at " + saved.getTimestamp());
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("clientId", saved.getClientId());
+            metadata.put("entryId", saved.getId());
+            metadata.put("timestamp", saved.getTimestamp());
+            logger.info("Added clipboard entry.", metadata);
         } catch (RuntimeException exception) {
             // Audit logging is best-effort; a logging failure must not reject the write.
         }

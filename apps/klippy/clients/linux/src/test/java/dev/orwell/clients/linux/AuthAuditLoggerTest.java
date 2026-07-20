@@ -12,7 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AuthAuditLoggerTest {
     @Test
     void serializesAuditFieldsAndEscapesMessageThroughSharedMapper() throws Exception {
-        AuthAuditLogger logger = new AuthAuditLogger(null, Path.of("offline.json"), "linux-host", "http://auth:9090");
+        AuthAuditLogger logger = new AuthAuditLogger(null, Path.of("offline.json"), "linux-host", "http://auth:9090", entry -> {
+        });
 
         JsonNode node = ClipboardJson.mapper().readTree(
                 logger.toJson("refresh", "failed", "boom \"quoted\"\nline"));
@@ -28,7 +29,8 @@ class AuthAuditLoggerTest {
 
     @Test
     void usesUnsetPlaceholderAndEmptyMessageForNulls() throws Exception {
-        AuthAuditLogger logger = new AuthAuditLogger(null, Path.of("offline.json"), "linux-host", null);
+        AuthAuditLogger logger = new AuthAuditLogger(null, Path.of("offline.json"), "linux-host", null, entry -> {
+        });
 
         JsonNode node = ClipboardJson.mapper().readTree(logger.toJson("refresh", "started", null));
 
