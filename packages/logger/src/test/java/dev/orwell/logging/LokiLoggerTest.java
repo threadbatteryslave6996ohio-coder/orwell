@@ -50,16 +50,26 @@ class LokiLoggerTest {
 
     @Test
     void groupsABatchIntoOneStreamPerLabelSet() throws Exception {
+        // The worker unblocks the moment the first entry is queued, so logging three entries
+        // back to back does not guarantee they share a batch — it ships whatever has arrived.
+        // Pin the worker inside a warm-up request while the three entries queue behind it, so
+        // the batch under test is the whole set rather than however many won the race.
         List<String> bodies = new CopyOnWriteArrayList<>();
-        CountDownLatch received = new CountDownLatch(1);
-        HttpServer server = stubLoki(200, bodies, received);
+        CountDownLatch warmUpArrived = new CountDownLatch(1);
+        CountDownLatch releaseWarmUp = new CountDownLatch(1);
+        CountDownLatch batchArrived = new CountDownLatch(1);
+        HttpServer server = gatedLoki(bodies, warmUpArrived, releaseWarmUp, batchArrived);
         try (LokiLogger logger = logger(server, 10_000, 500, Duration.ofMillis(100))) {
+            logger.info("warm-up");
+            assertTrue(warmUpArrived.await(5, TimeUnit.SECONDS), "worker never sent the warm-up entry");
+
             logger.info("one");
             logger.info("two");
             logger.error("three");
+            releaseWarmUp.countDown();
 
-            assertTrue(received.await(5, TimeUnit.SECONDS));
-            JsonNode streams = MAPPER.readTree(bodies.getFirst()).get("streams");
+            assertTrue(batchArrived.await(5, TimeUnit.SECONDS), "no batch after the warm-up was released");
+            JsonNode streams = MAPPER.readTree(bodies.get(1)).get("streams");
 
             // level is a label, so INFO and ERROR are distinct streams; same-level entries share one.
             int total = 0;
@@ -119,6 +129,40 @@ class LokiLoggerTest {
         URI endpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/loki/api/v1/push");
         return new LokiLogger("auth-server", endpoint, null, capacity, batch, flush,
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build());
+    }
+
+    /**
+     * A Loki that holds the worker inside its first request until released, so a test can queue
+     * entries knowing the worker cannot pick them up yet. The worker is the only client and it is
+     * single-threaded, so "first request" is unambiguous and blocking the handler is safe.
+     */
+    private static HttpServer gatedLoki(
+            List<String> bodies,
+            CountDownLatch warmUpArrived,
+            CountDownLatch releaseWarmUp,
+            CountDownLatch batchArrived
+    ) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/loki/api/v1/push", exchange -> {
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            boolean warmUp = bodies.isEmpty();
+            bodies.add(body);
+            if (warmUp) {
+                warmUpArrived.countDown();
+                try {
+                    releaseWarmUp.await(5, TimeUnit.SECONDS);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+            if (!warmUp) {
+                batchArrived.countDown();
+            }
+        });
+        server.start();
+        return server;
     }
 
     private static HttpServer stubLoki(int status, List<String> bodies, CountDownLatch received) throws IOException {
