@@ -9,7 +9,6 @@ import jakarta.mail.Multipart;
 import jakarta.mail.Part;
 import jakarta.mail.Session;
 import jakarta.mail.UIDFolder;
-import jakarta.mail.event.MessageCountAdapter;
 import org.eclipse.angus.mail.imap.IMAPFolder;
 import org.eclipse.angus.mail.imap.IMAPStore;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +38,7 @@ public class ImapMailListener implements SmartLifecycle {
 
     private final String host;
     private final int port;
+    private final boolean ssl;
     private final String username;
     private final String password;
     private final String folderName;
@@ -57,6 +57,7 @@ public class ImapMailListener implements SmartLifecycle {
     public ImapMailListener(
             @Value("${gmail.imap.host}") String host,
             @Value("${gmail.imap.port}") int port,
+            @Value("${gmail.imap.ssl}") boolean ssl,
             @Value("${gmail.imap.username}") String username,
             @Value("${gmail.imap.password}") String password,
             @Value("${gmail.imap.folder}") String folderName,
@@ -65,6 +66,7 @@ public class ImapMailListener implements SmartLifecycle {
             Logger logger) {
         this.host = host;
         this.port = port;
+        this.ssl = ssl;
         this.username = username;
         this.password = password;
         this.folderName = folderName;
@@ -132,29 +134,34 @@ public class ImapMailListener implements SmartLifecycle {
     }
 
     private void connect() throws MessagingException {
+        String protocol = ssl ? "imaps" : "imap";
         Properties props = new Properties();
-        props.put("mail.store.protocol", "imaps");
-        props.put("mail.imaps.host", host);
-        props.put("mail.imaps.port", String.valueOf(port));
-        props.put("mail.imaps.ssl.enable", "true");
+        props.put("mail.store.protocol", protocol);
+        props.put("mail." + protocol + ".host", host);
+        props.put("mail." + protocol + ".port", String.valueOf(port));
+        if (ssl) {
+            props.put("mail.imaps.ssl.enable", "true");
+            // Verify the server certificate matches the host; guards against a MITM.
+            props.put("mail.imaps.ssl.checkserveridentity", "true");
+        }
         Session session = Session.getInstance(props);
-        IMAPStore openedStore = (IMAPStore) session.getStore("imaps");
+        IMAPStore openedStore = (IMAPStore) session.getStore(protocol);
         openedStore.connect(host, username, password);
+        // Publish the store before open() so a failed open() is still cleaned up by closeQuietly().
+        this.store = openedStore;
         IMAPFolder openedFolder = (IMAPFolder) openedStore.getFolder(folderName);
         openedFolder.open(Folder.READ_ONLY);
-        this.store = openedStore;
         this.folder = openedFolder;
     }
 
-    // Blocks in IDLE until the server reports activity, then fetches whatever arrived by UID. Doing
-    // the fetch after idle() returns (rather than inside the message-count callback) keeps IMAP
-    // commands off the IDLE protocol. A normal idle() return with no new mail (Gmail auto-ends IDLE
-    // roughly every 29 minutes) simply re-arms it, which doubles as a keep-alive.
+    // idle(true) returns after the first server notification (new mail) instead of blocking until
+    // the IDLE command terminates, so mail is picked up promptly; after each return we fetch whatever
+    // arrived by UID. Doing the fetch after idle() returns (rather than inside a message-count
+    // callback) keeps IMAP commands off the live IDLE protocol. A notification-less return (Gmail
+    // ends IDLE roughly every 29 minutes) simply re-arms IDLE, which doubles as a keep-alive.
     private void idleLoop() throws MessagingException {
-        folder.addMessageCountListener(new MessageCountAdapter() {
-        });
         while (running && folder.isOpen()) {
-            folder.idle();
+            folder.idle(true);
             long caught = catchUp(lastUid);
             if (caught > lastUid) {
                 lastUid = caught;

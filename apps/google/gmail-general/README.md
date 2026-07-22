@@ -19,7 +19,8 @@ auth server.
 | `SERVER_ADDRESS` | `127.0.0.1` | Bind address for the health endpoint. |
 | `SERVER_PORT` | `9100` | HTTP port for the health endpoint. |
 | `IMAP_HOST` | `imap.gmail.com` | IMAP server host. Optional, defaults to `imap.gmail.com`. |
-| `IMAP_PORT` | `993` | IMAP TLS port. Optional, defaults to `993`. |
+| `IMAP_PORT` | `993` | IMAP port. Optional, defaults to `993`. |
+| `IMAP_SSL` | `true` | Connect over TLS (`imaps`) with certificate identity checking. Optional, defaults to `true`; set `false` only for a plaintext local test server. |
 | `IMAP_USERNAME` | `you@gmail.com` | Mailbox address. **Required.** |
 | `IMAP_PASSWORD` | `<app password>` | Mailbox app password (see below). **Required.** |
 | `IMAP_FOLDER` | `INBOX` | Folder to watch. Optional, defaults to `INBOX`. |
