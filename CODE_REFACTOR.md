@@ -109,9 +109,7 @@ re-declare the Spring BOM + compiler/surefire pluginManagement. Point them at th
   `AlertClient` to a shared module and use it from both. Add connect/request timeouts either way.
 - **Dead `from(Map)` wrappers**: `AnalyzerEnvs`/`GmailEnvs`/`AlertEnvs`/`LogAnalyzerEnvs` each
   ship a zero-caller `from(Map)` alias; delete them (callers can use `X.ENV.from(map)`).
-- **`GmailService.gmail()` 401-retry** rebuilds the identical `HttpRequest` twice; extract a
-  `request(url, body, token)` helper so the primary and retry paths cannot drift.
-- **Gmail webhook auth**: `GmailService.save()` still hand-attaches auth headers; the
+- **Gmail webhook auth**: `GmailService.deliver()` still hand-attaches auth headers; the
   authenticated-client pattern (`ClientAuthSession`-style token cache with 401 refresh) exists in
   klippy's client-core and is also re-implemented in `SecretsManagerClient`/`BucketProxyClient`.
   One shared authenticated-HTTP helper would replace four variants.
