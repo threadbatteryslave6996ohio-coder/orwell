@@ -4,8 +4,9 @@ import dev.orwell.bootstrap.launch.AppServer;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * Gmail mailbox receiver server. Gmail push notifications arrive at {@code POST /gmail/pubsub};
- * {@code POST /gmail/watch} (authenticated) registers the mailbox watch.
+ * Gmail mailbox receiver server. A background {@link ImapMailListener} watches the mailbox over
+ * IMAP (IDLE) and forwards each new message to the configured webhook clients; there is no inbound
+ * HTTP trigger. The server itself exposes only the shared health endpoint.
  */
 @SpringBootApplication
 public class GmailApplication {
