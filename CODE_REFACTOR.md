@@ -12,6 +12,20 @@ wrappers are gone from `AnalyzerEnvs`/`GmailEnvs`/`AlertEnvs`/`LogAnalyzerEnvs`;
 logging facades" split is resolved — there is no app-local `JsonLogger` in `apps/alerting`, which
 imports `dev.orwell.logging.JsonLogger`.)
 
+Also done since (this pass): the `spring-boot-maven-plugin` repackage+`exec` block now lives once in
+the **root** `pluginManagement` — each app carries only a `<start-class>` property and a bare plugin
+ref (§1); `apps/auth/pom.xml` and `apps/secrets-manager/pom.xml` are re-parented to the root and no
+longer re-declare the Spring BOM or compiler/surefire management — `-parameters` was enabled on the
+root compiler plugin so secrets-manager keeps constructor-name binding (§1); the redundant `env-http`
+dependency was dropped from the six poms that pull it transitively via `server-bootstrap`; four dead
+files are gone — `Flag.java`, `packages/env/http/.../HttpExchangeResponses.java`, secrets
+`admin/GroupDetailResponse.java`, and secrets-client `PasswordAuthProvider.java`; `ClientAuthSession`
+(token cache + login + 401 refresh) was promoted from klippy into `auth-http-client` and `GmailService`
+now reuses it instead of its own inlined login cache (the §2 "Gmail webhook auth" item); and two
+in-file dedups landed — `BucketProxyClient`'s six copy-pasted try/catch blocks collapsed onto a shared
+`call(...)`/`rejected(...)` pair, and `SecretsManagerClient`'s two `execute` overloads merged into one
+deserializer-parameterized method.
+
 ## 0. Operational notes from the naming pass
 
 Not backlog items, but worth knowing:
@@ -23,15 +37,12 @@ Not backlog items, but worth knowing:
   `<app>.txt` or `<app>.jsonl` now watches a file nobody writes. `CustomLogger` still writes
   `.txt` where it is used directly (`EnvSnapshotLogger`, `PollInterval`).
 
-## 1. `spring-boot-maven-plugin` block → `server-parent` pluginManagement
+## 1. `spring-boot-maven-plugin` block → root pluginManagement — DONE
 
-12 poms repeat the identical plugin block (repackage + `exec` classifier), differing only in
-`mainClass`. The plugin natively resolves the `start-class` property, so the parent can own the
-block and each app pom shrinks to `<properties><start-class>…</start-class></properties>`.
-
-Related: `apps/auth/pom.xml` and `apps/secrets-manager/pom.xml` have **no parent** and
-re-declare the Spring BOM + compiler/surefire pluginManagement. Point them at the root (or
-`server-parent`) and delete the duplicated management sections.
+Done — see the note at the top. The repackage+`exec` block moved to the **root** `pluginManagement`
+(not `server-parent`, since only three of the ten executable apps use `server-parent`); each app now
+carries a `<start-class>` property plus a bare plugin ref. `apps/auth` and `apps/secrets-manager` are
+re-parented to the root.
 
 ## 2. Smaller cleanups
 
@@ -47,10 +58,13 @@ re-declare the Spring BOM + compiler/surefire pluginManagement. Point them at th
   timeout, no blank-URL guard, no transient/terminal outcome split) while `log-analyzer`'s
   `AlertClient` already encapsulates all of that for the same `/alerts` endpoint. Promote
   `AlertClient` to a shared module and use it from both. Add connect/request timeouts either way.
-- **Gmail webhook auth**: `GmailService.deliver()` still hand-attaches auth headers; the
-  authenticated-client pattern (`ClientAuthSession`-style token cache with 401 refresh) exists in
-  klippy's client-core and is also re-implemented in `SecretsManagerClient`/`BucketProxyClient`.
-  One shared authenticated-HTTP helper would replace four variants.
+- **Gmail webhook auth — DONE (partial).** `ClientAuthSession` (token cache + login + 401 refresh) was
+  promoted from klippy's client-core into `auth-http-client` (`dev.orwell.auth.http.client`), and
+  `GmailService` now reuses it instead of hand-rolling a `LoginHttpResponse` cache. The remaining two
+  "variants" turned out **not** to share this shape: `SecretsManagerClient` uses a static bearer token
+  (`TokenAuthProvider`) with no refresh, and `BucketProxyClient` takes the token per call from the
+  caller. The password-login-with-cache class (`PasswordAuthProvider`) was dead and is deleted, so
+  there is no live 401-refresh path left to unify there.
 - **`KeeboarderWebSocketRuntime`** reduces to a
   `@Bean(destroyMethod = "close") @ConditionalOnBooleanProperty RedisClientCache` whose bean
   method calls `ChatEndpoint.initialize(...)` — the holder class and its mutable state disappear.
@@ -131,8 +145,14 @@ re-declare the Spring BOM + compiler/surefire pluginManagement. Point them at th
   `apps/secrets-manager/client/.../dto/*.java`); the create/update request records also pair up
   near-identically. Merge into shared records.
 - **Maven shade plugin declared unconfigured in 5 klippy client poms**
-  (linux/mac/dummy/offline-sync/file-locker); declare once in a parent `pluginManagement`.
-- **Dead code**: `packages/primitives/.../Flag.java` has zero consumers — delete it.
+  (linux/mac/dummy/offline-sync/file-locker). Deferred deliberately: the shade *configuration* already
+  lives once in the root `pluginManagement`; what repeats is only the 4-line activation stanza, and the
+  four shaded clients share no parent that *only* they use — `apps/klippy/pom.xml` also parents the
+  server, utils, and client-core, which must **not** be shaded. Collapsing this cleanly needs a new
+  intermediate "clients" parent; not worth the structural churn for ~16 lines.
+- **Dead code**: DONE — `Flag.java` deleted, along with three other verified-orphan files found in the
+  same pass (`packages/env/http/.../HttpExchangeResponses.java`, secrets `admin/GroupDetailResponse.java`,
+  secrets-client `PasswordAuthProvider.java`).
 - **Unguarded auto-config registry**: nothing tests that the four entries in server-bootstrap's
   `META-INF/spring/...AutoConfiguration.imports` resolve; a typo silently drops the shared
   `/health` endpoint, 401 guard, logger, and auth-strategy beans. Add a `@SpringBootTest`

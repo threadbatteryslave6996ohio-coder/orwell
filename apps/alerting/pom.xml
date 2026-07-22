@@ -13,6 +13,7 @@
     <artifactId>alerting</artifactId>
 
     <properties>
+        <start-class>dev.orwell.alerting.AlertApplication</start-class>
         <jakarta.mail.version>2.0.1</jakarta.mail.version>
     </properties>
 
@@ -24,10 +25,6 @@
         <dependency>
             <groupId>dev.orwell</groupId>
             <artifactId>env-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>dev.orwell</groupId>
-            <artifactId>env-http</artifactId>
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
@@ -59,17 +56,6 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <mainClass>dev.orwell.alerting.AlertApplication</mainClass>
-                    <classifier>exec</classifier>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>repackage</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

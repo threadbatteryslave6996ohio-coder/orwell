@@ -69,6 +69,11 @@
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
+                <artifactId>auth-in-memory</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.orwell</groupId>
                 <artifactId>klippy-client-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -196,6 +201,19 @@
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
+                    <!-- Owns the repackage + exec-classifier build for every executable app.
+                         Each app activates it with a bare <plugin> ref and sets its own
+                         <start-class> property, which the plugin resolves as the mainClass. -->
+                    <configuration>
+                        <classifier>exec</classifier>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>repackage</goal>
+                            </goals>
+                        </execution>
+                    </executions>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -206,6 +224,8 @@
                 <version>3.13.0</version>
                 <configuration>
                     <release>${java.version}</release>
+                    <!-- Retain constructor parameter names for Spring binding. -->
+                    <parameters>true</parameters>
                 </configuration>
             </plugin>
             <plugin>

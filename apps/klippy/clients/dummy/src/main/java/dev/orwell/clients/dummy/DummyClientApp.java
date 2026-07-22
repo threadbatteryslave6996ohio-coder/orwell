@@ -6,7 +6,7 @@ import dev.orwell.clients.core.ClientAuthInitializer;
 import dev.orwell.clients.core.ClientConfig;
 import dev.orwell.clients.core.ClientIdentity;
 import dev.orwell.clients.core.ExceptionMessages;
-import dev.orwell.clients.core.env.ClientAuthSession;
+import dev.orwell.auth.http.client.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.env.Env;
 import dev.orwell.logging.ConsoleLogger;

@@ -12,6 +12,10 @@
 
     <artifactId>jarvis-bucket-proxy</artifactId>
 
+    <properties>
+        <start-class>dev.orwell.bucket.proxy.BucketProxyApplication</start-class>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
@@ -73,17 +77,6 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <mainClass>dev.orwell.bucket.proxy.BucketProxyApplication</mainClass>
-                    <classifier>exec</classifier>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>repackage</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

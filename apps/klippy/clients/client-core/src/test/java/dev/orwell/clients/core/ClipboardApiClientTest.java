@@ -1,7 +1,7 @@
 package dev.orwell.clients.core;
 
 import com.sun.net.httpserver.HttpServer;
-import dev.orwell.clients.core.env.ClientAuthSession;
+import dev.orwell.auth.http.client.ClientAuthSession;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;

@@ -69,13 +69,11 @@ public class SecretsManagerClient implements AutoCloseable {
     }
 
     private <T> T get(String path, Class<T> responseType) {
-        var request = buildRequest(path).GET().build();
-        return execute(request, responseType);
+        return execute(buildRequest(path).GET().build(), (mapper, body) -> mapper.readValue(body, responseType));
     }
 
     private <T> T get(String path, TypeReference<T> typeRef) {
-        var request = buildRequest(path).GET().build();
-        return execute(request, typeRef);
+        return execute(buildRequest(path).GET().build(), (mapper, body) -> mapper.readValue(body, typeRef));
     }
 
     private HttpRequest.Builder buildRequest(String path) {
@@ -86,7 +84,7 @@ public class SecretsManagerClient implements AutoCloseable {
                 .timeout(TIMEOUT);
     }
 
-    private <T> T execute(HttpRequest request, Class<T> responseType) {
+    private <T> T execute(HttpRequest request, ResponseReader<T> reader) {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -94,7 +92,7 @@ public class SecretsManagerClient implements AutoCloseable {
                         "Secrets manager returned " + response.statusCode() + ": " + response.body(),
                         response.statusCode());
             }
-            return objectMapper.readValue(response.body(), responseType);
+            return reader.read(objectMapper, response.body());
         } catch (IOException e) {
             throw new SecretsManagerException("Failed to parse response", e);
         } catch (InterruptedException e) {
@@ -103,21 +101,11 @@ public class SecretsManagerClient implements AutoCloseable {
         }
     }
 
-    private <T> T execute(HttpRequest request, TypeReference<T> typeRef) {
-        try {
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new SecretsManagerException(
-                        "Secrets manager returned " + response.statusCode() + ": " + response.body(),
-                        response.statusCode());
-            }
-            return objectMapper.readValue(response.body(), typeRef);
-        } catch (IOException e) {
-            throw new SecretsManagerException("Failed to parse response", e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new SecretsManagerException("Request interrupted", e);
-        }
+    /** Defers the choice of {@code Class} vs {@code TypeReference} deserialization to the caller
+     *  while keeping the send + status handling in one place. */
+    @FunctionalInterface
+    private interface ResponseReader<T> {
+        T read(ObjectMapper mapper, String body) throws IOException;
     }
 
     private static String normalizeBaseUrl(String url) {

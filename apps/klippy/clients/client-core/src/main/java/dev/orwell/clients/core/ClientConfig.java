@@ -1,6 +1,6 @@
 package dev.orwell.clients.core;
 
-import dev.orwell.clients.core.env.ClientAuthSession;
+import dev.orwell.auth.http.client.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.env.Env;
 

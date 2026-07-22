@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.function.Supplier;
 
 public final class BucketProxyClient {
     private static final ParameterizedTypeReference<ListResponse> LIST_RESPONSE_TYPE = new ParameterizedTypeReference<>() {};
@@ -83,34 +84,50 @@ public final class BucketProxyClient {
     }
 
     private <T> T get(String path, Class<T> responseType, String operation) {
-        try {
-            return restClient.get()
-                    .uri(path)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (request, response) -> {
-                        throw new BucketProxyClientException("Proxy rejected " + operation + " with HTTP " + response.getStatusCode().value(),
-                                response.getStatusCode().value());
-                    })
-                    .body(responseType);
-        } catch (BucketProxyClientException exception) {
-            throw exception;
-        } catch (RestClientException exception) {
-            throw new BucketProxyClientException("Cannot complete " + operation + " with proxy.", exception);
-        }
+        return call(operation, () -> restClient.get().uri(path)
+                .retrieve().onStatus(HttpStatusCode::isError, rejected(operation)).body(responseType));
     }
 
     private <T> T postJson(String path, Object body, Class<T> responseType, String operation) {
+        return call(operation, () -> restClient.post().uri(path)
+                .contentType(MediaType.APPLICATION_JSON).body(body)
+                .retrieve().onStatus(HttpStatusCode::isError, rejected(operation)).body(responseType));
+    }
+
+    private <T> T postMultipart(String path, String clientId, String bearerToken,
+                                MultiValueMap<String, HttpEntity<?>> body, Class<T> responseType, String operation) {
+        return call(operation, () -> restClient.post().uri(path)
+                .headers(headers -> authenticate(headers, clientId, bearerToken))
+                .contentType(MediaType.MULTIPART_FORM_DATA).body(body)
+                .retrieve().onStatus(HttpStatusCode::isError, rejected(operation)).body(responseType));
+    }
+
+    private <T> T getAuthenticated(String path, String clientId, String bearerToken,
+                                   Class<T> responseType, String operation) {
+        return call(operation, () -> restClient.get().uri(path)
+                .headers(headers -> authenticate(headers, clientId, bearerToken))
+                .retrieve().onStatus(HttpStatusCode::isError, rejected(operation)).body(responseType));
+    }
+
+    private <T> T getAuthenticated(String path, String clientId, String bearerToken,
+                                   ParameterizedTypeReference<T> responseType, String operation) {
+        return call(operation, () -> restClient.get().uri(path)
+                .headers(headers -> authenticate(headers, clientId, bearerToken))
+                .retrieve().onStatus(HttpStatusCode::isError, rejected(operation)).body(responseType));
+    }
+
+    private <T> T deleteAuthenticated(String path, String clientId, String bearerToken,
+                                      Class<T> responseType, String operation) {
+        return call(operation, () -> restClient.delete().uri(path)
+                .headers(headers -> authenticate(headers, clientId, bearerToken))
+                .retrieve().onStatus(HttpStatusCode::isError, rejected(operation)).body(responseType));
+    }
+
+    /** Shared request wrapper: preserves a thrown {@link BucketProxyClientException}, and maps any
+     *  other transport failure to a terminal one tagged with the operation name. */
+    private static <T> T call(String operation, Supplier<T> action) {
         try {
-            return restClient.post()
-                    .uri(path)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(body)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (request, response) -> {
-                        throw new BucketProxyClientException("Proxy rejected " + operation + " with HTTP " + response.getStatusCode().value(),
-                                response.getStatusCode().value());
-                    })
-                    .body(responseType);
+            return action.get();
         } catch (BucketProxyClientException exception) {
             throw exception;
         } catch (RestClientException exception) {
@@ -118,95 +135,12 @@ public final class BucketProxyClient {
         }
     }
 
-    private <T> T postMultipart(String path,
-                                String clientId,
-                                String bearerToken,
-                                MultiValueMap<String, HttpEntity<?>> body,
-                                Class<T> responseType,
-                                String operation) {
-        try {
-            return restClient.post()
-                    .uri(path)
-                    .headers(headers -> authenticate(headers, clientId, bearerToken))
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(body)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (request, response) -> {
-                        throw new BucketProxyClientException("Proxy rejected " + operation + " with HTTP " + response.getStatusCode().value(),
-                                response.getStatusCode().value());
-                    })
-                    .body(responseType);
-        } catch (BucketProxyClientException exception) {
-            throw exception;
-        } catch (RestClientException exception) {
-            throw new BucketProxyClientException("Cannot complete " + operation + " with proxy.", exception);
-        }
-    }
-
-    private <T> T getAuthenticated(String path,
-                                   String clientId,
-                                   String bearerToken,
-                                   Class<T> responseType,
-                                   String operation) {
-        try {
-            return restClient.get()
-                    .uri(path)
-                    .headers(headers -> authenticate(headers, clientId, bearerToken))
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (request, response) -> {
-                        throw new BucketProxyClientException("Proxy rejected " + operation + " with HTTP " + response.getStatusCode().value(),
-                                response.getStatusCode().value());
-                    })
-                    .body(responseType);
-        } catch (BucketProxyClientException exception) {
-            throw exception;
-        } catch (RestClientException exception) {
-            throw new BucketProxyClientException("Cannot complete " + operation + " with proxy.", exception);
-        }
-    }
-
-    private <T> T getAuthenticated(String path,
-                                   String clientId,
-                                   String bearerToken,
-                                   ParameterizedTypeReference<T> responseType,
-                                   String operation) {
-        try {
-            return restClient.get()
-                    .uri(path)
-                    .headers(headers -> authenticate(headers, clientId, bearerToken))
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (request, response) -> {
-                        throw new BucketProxyClientException("Proxy rejected " + operation + " with HTTP " + response.getStatusCode().value(),
-                                response.getStatusCode().value());
-                    })
-                    .body(responseType);
-        } catch (BucketProxyClientException exception) {
-            throw exception;
-        } catch (RestClientException exception) {
-            throw new BucketProxyClientException("Cannot complete " + operation + " with proxy.", exception);
-        }
-    }
-
-    private <T> T deleteAuthenticated(String path,
-                                      String clientId,
-                                      String bearerToken,
-                                      Class<T> responseType,
-                                      String operation) {
-        try {
-            return restClient.delete()
-                    .uri(path)
-                    .headers(headers -> authenticate(headers, clientId, bearerToken))
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (request, response) -> {
-                        throw new BucketProxyClientException("Proxy rejected " + operation + " with HTTP " + response.getStatusCode().value(),
-                                response.getStatusCode().value());
-                    })
-                    .body(responseType);
-        } catch (BucketProxyClientException exception) {
-            throw exception;
-        } catch (RestClientException exception) {
-            throw new BucketProxyClientException("Cannot complete " + operation + " with proxy.", exception);
-        }
+    private static RestClient.ResponseSpec.ErrorHandler rejected(String operation) {
+        return (request, response) -> {
+            throw new BucketProxyClientException(
+                    "Proxy rejected " + operation + " with HTTP " + response.getStatusCode().value(),
+                    response.getStatusCode().value());
+        };
     }
 
     private static void authenticate(HttpHeaders headers, String clientId, String bearerToken) {

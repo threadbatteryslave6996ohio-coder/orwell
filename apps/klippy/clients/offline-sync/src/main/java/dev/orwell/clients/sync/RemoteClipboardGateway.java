@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import dev.orwell.clients.core.ClipboardApiClient;
 import dev.orwell.clients.core.ClipboardEntry;
 import dev.orwell.clients.core.ClipboardJson;
-import dev.orwell.clients.core.env.ClientAuthSession;
+import dev.orwell.auth.http.client.ClientAuthSession;
 
 import java.io.IOException;
 import java.net.URI;

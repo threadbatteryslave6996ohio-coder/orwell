@@ -1,7 +1,7 @@
 package dev.orwell.clients.dummy;
 
 import dev.orwell.clients.core.ClipboardApiClient;
-import dev.orwell.clients.core.env.ClientAuthSession;
+import dev.orwell.auth.http.client.ClientAuthSession;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;

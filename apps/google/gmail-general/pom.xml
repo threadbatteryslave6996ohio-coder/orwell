@@ -7,6 +7,9 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>gmail-general</artifactId>
+    <properties>
+        <start-class>dev.orwell.google.gmail.GmailApplication</start-class>
+    </properties>
     <dependencies>
         <dependency><groupId>dev.orwell</groupId><artifactId>auth-core</artifactId></dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>auth-http-client</artifactId></dependency>
@@ -24,17 +27,6 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <mainClass>dev.orwell.google.gmail.GmailApplication</mainClass>
-                    <classifier>exec</classifier>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>repackage</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

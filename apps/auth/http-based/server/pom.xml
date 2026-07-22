@@ -12,6 +12,10 @@
 
     <artifactId>auth-http-server</artifactId>
 
+    <properties>
+        <start-class>dev.orwell.auth.http.server.KlippyAuthServerApplication</start-class>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
@@ -25,10 +29,6 @@
             <groupId>dev.orwell</groupId>
             <artifactId>klippy-utils</artifactId>
         </dependency>
-        <dependency>
-            <groupId>dev.orwell</groupId>
-            <artifactId>env-http</artifactId>
-        </dependency>
     </dependencies>
 
     <build>
@@ -36,17 +36,6 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <classifier>exec</classifier>
-                    <mainClass>dev.orwell.auth.http.server.KlippyAuthServerApplication</mainClass>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>repackage</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

@@ -11,7 +11,7 @@ import dev.orwell.clients.core.MacClipboardPolicy;
 import dev.orwell.clients.core.OfflineFileLockerFactory;
 import dev.orwell.clients.core.OfflineLogPath;
 import dev.orwell.clients.core.PollInterval;
-import dev.orwell.clients.core.env.ClientAuthSession;
+import dev.orwell.auth.http.client.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.clients.filelocker.OfflineFileLockerClient;
 import dev.orwell.env.Env;

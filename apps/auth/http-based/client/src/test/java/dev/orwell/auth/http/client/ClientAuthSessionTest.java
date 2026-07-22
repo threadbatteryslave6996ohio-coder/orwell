@@ -1,4 +1,4 @@
-package dev.orwell.clients.core.env;
+package dev.orwell.auth.http.client;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -61,7 +61,7 @@ class ClientAuthSessionTest {
 
         IllegalStateException exception = assertThrows(IllegalStateException.class, session::token);
 
-        assertTrue(exception.getMessage().contains("CLIENT_TOKEN is required"));
+        assertTrue(exception.getMessage().contains("An initial token is required"));
     }
 
     private String baseUrl() {
