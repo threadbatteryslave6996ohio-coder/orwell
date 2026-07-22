@@ -1,8 +1,7 @@
 package dev.orwell.google.gmail;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.orwell.auth.http.api.LoginHttpResponse;
-import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
+import dev.orwell.auth.http.client.ClientAuthSession;
 import dev.orwell.bootstrap.web.SharedJson;
 import dev.orwell.logging.Logger;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,14 +30,11 @@ import java.util.Objects;
 public class GmailService {
     private final ObjectMapper json = SharedJson.mapper();
     private final HttpClient http = HttpClient.newHttpClient();
-    private final HttpAuthenticationStrategy auth;
-    private final String authClientId;
-    private final String authClientSecret;
+    // One token is cached and reused across deliveries; a 401 refreshes it and the call is retried.
+    private final ClientAuthSession session;
     private final Path store;
     private final List<String> clients;
     private final Logger logger;
-    // One login is cached and reused across deliveries; a 401 clears it so the next call re-logs in.
-    private volatile LoginHttpResponse login;
 
     public GmailService(
             @Value("${orwell.auth.base-url}") String authBaseUrl,
@@ -49,9 +45,7 @@ public class GmailService {
             Logger logger
     ) throws IOException {
         this.logger = Objects.requireNonNull(logger, "logger");
-        this.auth = new HttpAuthenticationStrategy(authBaseUrl);
-        this.authClientId = authClientId;
-        this.authClientSecret = authClientSecret;
+        this.session = new ClientAuthSession(authBaseUrl, authClientId, authClientSecret, null);
         this.store = Path.of(storeDir);
         this.clients = Arrays.stream(webhookClients.split(","))
                 .map(String::trim).filter(value -> !value.isBlank()).toList();
@@ -74,9 +68,8 @@ public class GmailService {
         for (String client : clients) {
             try {
                 HttpResponse<Void> response = postWebhook(client, payload);
-                if (response.statusCode() == 401) {
+                if (response.statusCode() == 401 && session.refreshIfUnauthorized(401)) {
                     // The cached token may have expired: refresh once and retry.
-                    invalidateLogin();
                     response = postWebhook(client, payload);
                 }
                 if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -97,24 +90,12 @@ public class GmailService {
     }
 
     private HttpResponse<Void> postWebhook(String client, String payload) throws Exception {
-        LoginHttpResponse authenticated = login();
         return http.send(HttpRequest.newBuilder(URI.create(client))
                         .header("Content-Type", "application/json")
-                        .header("X-Client-Id", authenticated.clientId())
-                        .header("Authorization", "Bearer " + authenticated.token())
+                        .header("X-Client-Id", session.clientId())
+                        .header("Authorization", "Bearer " + session.token())
                         .POST(HttpRequest.BodyPublishers.ofString(payload)).build(),
                 HttpResponse.BodyHandlers.discarding());
-    }
-
-    private synchronized LoginHttpResponse login() throws Exception {
-        if (login == null) {
-            login = auth.login(authClientId, authClientSecret);
-        }
-        return login;
-    }
-
-    private synchronized void invalidateLogin() {
-        login = null;
     }
 
     // Message-IDs contain characters that are not safe in a file name (<, >, @); map anything

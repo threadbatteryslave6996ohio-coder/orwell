@@ -7,6 +7,9 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <artifactId>analyzer</artifactId>
+    <properties>
+        <start-class>dev.orwell.analyzer.AnalyzerApplication</start-class>
+    </properties>
     <dependencies>
         <dependency><groupId>dev.orwell</groupId><artifactId>gmail-general</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>auth-core</artifactId></dependency>
@@ -21,17 +24,6 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <mainClass>dev.orwell.analyzer.AnalyzerApplication</mainClass>
-                    <classifier>exec</classifier>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>repackage</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

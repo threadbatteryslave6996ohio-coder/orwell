@@ -1,10 +1,16 @@
-package dev.orwell.clients.core.env;
+package dev.orwell.auth.http.client;
 
 import dev.orwell.auth.http.api.LoginHttpResponse;
-import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
 
 import java.util.Objects;
 
+/**
+ * Caches a bearer token from the auth server for a single client identity and refreshes it on
+ * demand. Two modes: when a client secret is configured the session can {@link #refresh()} by
+ * logging in again (e.g. after a 401); otherwise it serves a fixed initial token and cannot
+ * refresh. All state changes are synchronized, so one session is safe to share across request
+ * threads.
+ */
 public final class ClientAuthSession {
     private final String authServerUrl;
     private final String clientId;
@@ -25,7 +31,7 @@ public final class ClientAuthSession {
     public synchronized String token() {
         if (clientToken == null) {
             if (!canRefresh()) {
-                throw new IllegalStateException("CLIENT_TOKEN is required when CLIENT_SECRET is not set.");
+                throw new IllegalStateException("An initial token is required when no client secret is configured for refresh.");
             }
             refresh();
         }
@@ -42,10 +48,10 @@ public final class ClientAuthSession {
 
     public synchronized String refresh() {
         if (!canRefresh()) {
-            throw new IllegalStateException("CLIENT_SECRET is required to request a fresh token from the auth server.");
+            throw new IllegalStateException("A client secret is required to request a fresh token from the auth server.");
         }
         if (authServerUrl == null) {
-            throw new IllegalStateException("AUTH_SERVER_URL is required to request a fresh token from the auth server.");
+            throw new IllegalStateException("An auth server URL is required to request a fresh token from the auth server.");
         }
 
         HttpAuthenticationStrategy authClient = new HttpAuthenticationStrategy(authServerUrl);

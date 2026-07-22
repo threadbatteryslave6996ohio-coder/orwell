@@ -12,6 +12,10 @@
 
     <artifactId>klippy-server</artifactId>
 
+    <properties>
+        <start-class>dev.orwell.server.application.KlippyServerApplication</start-class>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
@@ -31,10 +35,6 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
-            <artifactId>env-http</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>dev.orwell</groupId>
             <artifactId>server-test-support</artifactId>
             <scope>test</scope>
         </dependency>
@@ -45,17 +45,6 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <classifier>exec</classifier>
-                    <mainClass>dev.orwell.server.application.KlippyServerApplication</mainClass>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>repackage</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

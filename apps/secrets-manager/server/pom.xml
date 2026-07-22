@@ -12,6 +12,10 @@
 
     <artifactId>secrets-manager-server</artifactId>
 
+    <properties>
+        <start-class>dev.orwell.secrets.SecretsManagerApplication</start-class>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
@@ -45,17 +49,6 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <classifier>exec</classifier>
-                    <mainClass>dev.orwell.secrets.SecretsManagerApplication</mainClass>
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>repackage</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

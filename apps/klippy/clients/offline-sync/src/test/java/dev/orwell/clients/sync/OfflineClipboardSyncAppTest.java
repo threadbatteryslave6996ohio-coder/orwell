@@ -2,7 +2,7 @@ package dev.orwell.clients.sync;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import dev.orwell.clients.core.env.ClientAuthSession;
+import dev.orwell.auth.http.client.ClientAuthSession;
 import dev.orwell.logging.Logger;
 import dev.orwell.utils.ClipboardLimits;
 import org.junit.jupiter.api.Test;
