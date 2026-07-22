@@ -63,8 +63,9 @@ Java packages predate the renames and do NOT always match — use this table, do
 - `apps/combined-server` was deleted deliberately. Do not recreate it; ignore references to it
   in old commits.
 - `apps/klippy/devops` (Terraform + cloud-init for Azure) was deleted deliberately — it is no
-  longer used. Don't recreate it; ignore references to it in old commits. `apps/jarvis` keeps its
-  own unrelated Terraform under `bucket/deployment`.
+  longer used. Don't recreate it; ignore references to it in old commits. `apps/jarvis`'s AWS
+  Terraform/EC2 stack under `bucket/deployment` was likewise removed when the repo dropped all
+  AWS-specific infrastructure — don't recreate it either.
 - **There is exactly one Postgres and one Redis**, defined in `docker-compose.all-services.yml`
   (services `db` and `redis`). Nothing else in the repo may create one: the per-app compose files
   and `apps/jarvis/.../local-stack.sh` all use this instance, and `db-init/all-services.sql` is
@@ -82,6 +83,43 @@ Java packages predate the renames and do NOT always match — use this table, do
 - Alerting, log-analyzer, and Jarvis detection also support Undertow through
   `packages/undertow-bootstrap`. Their neutral main classes select the engine with
   `SERVER_ENGINE=spring|undertow`; keep business logic shared between both engines.
+- **Logging goes through `dev.orwell.logging.Logger`** (`packages/logger`) — a hand-written
+  `@FunctionalInterface`, deliberately **not** slf4j. `log(LogEntry)` is the single abstract
+  method (so a test double can be a lambda); `trace/debug/info/warn/error` are defaults, each
+  with an optional `Map<String, Object>` metadata overload. Levels are `TRACE|DEBUG|INFO|WARN|
+  ERROR`. See `packages/logger/README.md` for which sink to use.
+- **Records are structured — put detail in the metadata map, not in the message.** Write
+  `logger.info("Registered with the server.", Map.of("clientId", id))`, not string
+  concatenation. There is no `{}` formatting and **no `(String, Throwable)` overload**: pass
+  exception detail as metadata (`metadata.put("error", exception.toString())`). `LogEntry`
+  permits null metadata *values* on purpose — `exception.getMessage()` is null more often than
+  people expect, and a logging call must never be what brings a caller down. That is why it
+  copies into a `LinkedHashMap` rather than `Map.copyOf`; keep it that way.
+- **Sinks compose.** `ConsoleLogger` (human-readable, stdout/stderr), `JsonLogger` (JSON lines
+  to a file), `LokiLogger` (async batched push to Loki from a bounded queue — never blocks the
+  caller), `CustomLogger` (named `.txt` in the log directory), `CompositeLogger` to fan one
+  record out, and `FailSafeLogger` to wrap the lot so a sink failure can't turn a request into
+  an HTTP 500. Which sinks you get is a choice of what you construct, not a change to any call
+  site.
+- **Loggers are passed in.** Spring components take `Logger` as a constructor parameter (the
+  bean comes from `dev.orwell.bootstrap.logging.LoggerConfiguration`); clients build one in
+  `main` and pass it down. `PollInterval` holds a static `CustomLogger` — that is the one
+  outlier, not the pattern to copy.
+- The Spring `Logger` bean defaults to `FailSafeLogger(Composite(Console, Loki))` when
+  `LOKI_URL` is set, and console-only with a warning when it isn't. Override by declaring your
+  own `Logger` bean. `LOKI_URL`/`LOKI_TENANT_ID`/`LOGGING_FILE_NAME` are common keys on
+  `AppServerEnv`. **Servers no longer write an app log file by default** — the default sink is
+  console plus Loki push.
+- A synchronous network or database sink is not an acceptable addition: it would put a round
+  trip on every request path, and `FailSafeLogger` protects against a sink being *down*, not
+  against it being *slow*. `DatabaseLogger` was deleted for this reason — don't reintroduce it.
+- Never add `System.out`/`System.err` outside the paths that run before a logger can exist
+  (`AppServer`, `AuthenticationStrategyConfiguration`, undertow `ServerRuntime`, `env-http`
+  `EnvLoader`) or the last-resort reporting inside a failing sink itself (`FailSafeLogger`,
+  `LokiLogger`). Anywhere else it is a regression.
+- Spring Boot still puts slf4j and logback on the server classpath transitively — that is
+  unavoidable and is where Spring's *own* framework logging goes. Do not use them from repo
+  code, and do not try to exclude them.
 - Env vars are declared through the typed `EnvSchema` framework (`packages/env`); apps expose
   an `*Envs` class. Common keys (`SERVER_ADDRESS`, `SERVER_PORT`, `LOGGING_FILE_NAME`,
   `AUTH_BASE_URL`) come from `AppServerEnv` — don't redeclare them per app.

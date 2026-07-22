@@ -35,7 +35,7 @@ defaults to `Linux-<hostname>` when omitted. `KEEBOARDER_SERVER_URL` defaults to
 Then run:
 
 ```bash
-java -jar apps/keeboarder/clients/linux/target/keeboarder-linux-client-0.1.0.jar
+java -jar apps/keeboarder/clients/linux/target/keeboarder-linux-client-0.1.0-SNAPSHOT.jar
 ```
 
 On Wayland, grant the logged-in user access to input devices before starting

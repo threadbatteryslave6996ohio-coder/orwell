@@ -1,8 +1,9 @@
 # HTTP Auth Server
 
-Spring Boot service that owns client identities and issues login tokens.
-
-The clipboard app server does not store client secrets or token records. It receives a bearer token on clipboard writes and calls this auth server's `/tokens/check` endpoint to verify that the token belongs to the request `clientId`.
+Spring Boot service that owns client identities and issues login tokens. It is
+the only service that stores client secrets or token records; every other
+service delegates verification to it. See
+[App Server Integration](#app-server-integration).
 
 ## Responsibilities
 
@@ -20,13 +21,11 @@ Testcontainers-based tests.
 
 ## Start Locally
 
-Start the shared database stack, then run the server:
+Start the shared database stack, then run the server. Both commands run from
+the repository root:
 
 ```bash
-docker compose -f ../../../../docker-compose.all-services.yml up -d db
-```
-
-```bash
+docker compose -f docker-compose.all-services.yml up -d db
 mvn -pl apps/auth/http-based/server spring-boot:run
 ```
 
@@ -114,14 +113,6 @@ Constraints:
 - `secret` is required and must be 8 to 256 characters.
 - Duplicate `clientId` values return `409 Conflict`.
 
-Example:
-
-```bash
-curl -i http://localhost:8081/identities \
-  -H 'Content-Type: application/json' \
-  -d '{"clientId":"dummy","secret":"change-me-please"}'
-```
-
 ### Login
 
 ```http
@@ -149,14 +140,6 @@ Use the returned token as `CLIENT_TOKEN` in Klippy client configuration. The raw
 
 Invalid credentials return `401 Unauthorized`.
 
-Example:
-
-```bash
-curl -s http://localhost:8081/login \
-  -H 'Content-Type: application/json' \
-  -d '{"clientId":"dummy","secret":"change-me-please"}'
-```
-
 ### Check a Token
 
 This endpoint is primarily for the app server.
@@ -183,14 +166,6 @@ Response:
 ```
 
 The endpoint returns `valid: false` when the token is unknown, when the identity is inactive, or when the token belongs to a different `clientId`.
-
-Example:
-
-```bash
-curl -s http://localhost:8081/tokens/check \
-  -H 'Content-Type: application/json' \
-  -d '{"clientId":"dummy","token":"generated-token"}'
-```
 
 ## App Server Integration
 
@@ -220,48 +195,6 @@ The app server passes the clipboard request `clientId` and bearer token to `/tok
 - Identity records have an `active` flag in the database, but there is no HTTP endpoint for changing it yet.
 - Secrets are never returned by the API.
 - Token values cannot be recovered from the database because only token hashes are stored.
-
-## Known Issues
-
-### Transaction boundaries & OSIV dependency
-
-Controller methods (`login`, `createIdentity`, `checkToken`) lack `@Transactional`. Entity objects passed between repository calls (e.g., `ClientIdentity` from `findByClientId` into `new ClientToken`) rely on Spring Boot's Open Session In View being enabled by default. If OSIV is ever disabled, these calls will fail with detached-entity errors.
-
-### TOCTOU race in identity creation
-
-`createIdentity` checks `existsByClientId` before `save`, but a concurrent request can insert between the two calls. The `DataIntegrityViolationException` catch does recover, but the `existsByClientId` round-trip is redundant — the `UNIQUE` constraint alone is sufficient.
-
-### `PBEKeySpec` secret not cleared from memory
-
-`CredentialHasher.pbkdf2` never calls `PBEKeySpec.clearPassword()` in a `finally` block, leaving the secret char array in heap memory indefinitely.
-
-### No token expiration
-
-`ClientToken` has no `expiresAt` field. Issued tokens are valid forever. There is also no endpoint to revoke a single token or to deactivate an identity (the `active` column on `ClientIdentity` has no setter).
-
-### No rate limiting on `/login`
-
-The login endpoint performs 120k PBKDF2 iterations per request with no throttling, lockout, or CAPTCHA — enabling brute-force attacks and DoS amplification.
-
-### Unbounded `token` input
-
-`CheckTokenHttpRequest.token` has `@NotBlank` but no `@Size` constraint. An attacker can send multi-megabyte tokens, triggering expensive SHA-256 hashing and oversized database query parameters.
-
-### Timing side-channel on inactive identities
-
-The `isActive` filter is checked before PBKDF2 verification, so inactive accounts reject faster than active accounts with wrong passwords — allowing remote timing to infer account status.
-
-### Data corruption not handled in `matches()`
-
-`CredentialHasher.matches()` does not catch `NumberFormatException` or `IllegalArgumentException` from parsing a malformed stored hash, which would surface as a 500 error instead of a graceful 401.
-
-### Test gaps
-
-- `DataIntegrityViolationException` catch path is never exercised.
-- No assertion that `tokens.save()` is never called on failed login.
-- Real PBKDF2 (120k iterations) in unit tests makes them slow.
-- No test for token-not-found in `checkToken`.
-- `CredentialHasherTest` and `TokenGeneratorTest` hardcode literal values (`120000`, `43`) instead of referencing the source constants.
 
 ## Tests
 

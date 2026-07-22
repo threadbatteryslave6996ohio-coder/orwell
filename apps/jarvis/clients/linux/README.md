@@ -1,6 +1,8 @@
 # Jarvis Ubuntu GNOME Client - FFmpeg
 
-Shell-based Linux client for Ubuntu GNOME on Wayland or Xorg. It records screen, microphone, and system audio, starts automatically in the user's graphical session with systemd user services, and uploads recordings through the Bucket Proxy by default.
+Shell-based Linux **recording** client for Ubuntu GNOME on Wayland or Xorg. It records screen, microphone, and system audio to local files and starts automatically in the user's graphical session with a systemd user service.
+
+This client is **record-only**. It does not upload. Completed recording segments are drained to the bucket by the separate **syncer** client at `apps/jarvis/clients/syncer/`, run on a timer (see [Uploads](#uploads)).
 
 ## GNOME Capture Backends
 
@@ -19,8 +21,6 @@ sudo apt install ffmpeg curl pulseaudio-utils x11-utils gjs
 sudo apt install gstreamer1.0-tools gstreamer1.0-pipewire gstreamer1.0-plugins-good
 ```
 
-`awscli` and `aws configure` are only needed if you set `UPLOAD_MODE="s3"` for direct S3 upload.
-
 Verify audio sources:
 
 ```bash
@@ -37,7 +37,7 @@ chmod +x *.sh
 ./install.sh
 ```
 
-Edit `config.sh` first if you need a different S3 bucket, capture backend, display, screen size, or audio source.
+Edit `config.sh` first if you need a different capture backend, display, screen size, or audio source.
 
 ## How It Works
 
@@ -46,16 +46,17 @@ Edit `config.sh` first if you need a different S3 bucket, capture backend, displ
   - microphone audio to `~/recordings/mic/*.wav`
   - system audio monitor source to `~/recordings/system-audio/*.wav`
 - Live streaming is enabled by default and starts once `REMOTE_STREAM_URL` is set. It runs in a separate supervised FFmpeg loop, so stream failures do not stop local recording and local-recorder failures do not stop the stream.
-- `setup-systemd.sh` creates a user systemd recorder service plus upload/verification timers.
-- `upload_to_s3.sh` uploads completed files through the proxy with username/password login and Bearer-token retry on `401`. Direct S3 upload remains available with `UPLOAD_MODE="s3"`.
+- `setup-systemd.sh` creates a user systemd recorder service.
 - Screen video is written as fragmented MP4, so a sudden power loss is much less likely to corrupt the active segment.
 - Local recording and remote streaming run as independent FFmpeg jobs, so a failure in one does not stop the other.
-- Uploads run `ffprobe` before uploading/deleting media, so broken or partially written files stay local for inspection.
-- Completed videos are checked against the server before upload. A matching remote size is skipped; a missing or different object is uploaded. Local files are retained by default.
-- `sync_videos.sh` (or `./manage.sh sync`) runs this check-and-upload flow for videos only.
-- Sync/upload runs use a single-process lock. Files still open by FFmpeg are skipped, and size/mtime are checked again immediately before transfer. If open-file inspection is unavailable, the client requires an unchanged stability window before proceeding.
-- `verify_uploads.sh` checks local files against S3.
-- `manage.sh` starts/stops services, checks status, tails logs, uploads, verifies, and cleans old files.
+- `manage.sh` starts/stops the recorder service, checks status, tails logs, and cleans old local files.
+
+## Uploads
+
+Uploading recordings is **not** this client's job. Point the **syncer** client at
+`apps/jarvis/clients/syncer/` at the recordings directory (`~/recordings`) and run it on a timer;
+it logs in to the bucket proxy and drains completed segments through the proxy's `/upload` flow.
+See that client's README for configuration and the recommended timer interval.
 
 ## File Layout
 
@@ -65,17 +66,7 @@ Edit `config.sh` first if you need a different S3 bucket, capture backend, displ
 ├── mic/
 ├── system-audio/
 └── logs/
-    ├── recorder.log
-    ├── uploader.log
-    └── verification.log
-```
-
-S3 layout:
-
-```text
-s3://BUCKET/recordings/HOSTNAME/screen/
-s3://BUCKET/recordings/HOSTNAME/microphone/
-s3://BUCKET/recordings/HOSTNAME/system-audio/
+    └── recorder.log
 ```
 
 ## Common Commands
@@ -85,8 +76,6 @@ s3://BUCKET/recordings/HOSTNAME/system-audio/
 ./manage.sh logs
 ./manage.sh logs journal
 ./manage.sh restart
-./manage.sh upload
-./manage.sh verify
 ./manage.sh cleanup 30
 ```
 
@@ -94,7 +83,6 @@ Direct systemd commands:
 
 ```bash
 systemctl --user status keeboarder-recorder.service
-systemctl --user list-timers 'keeboarder-*'
 journalctl --user -u keeboarder-recorder.service -f
 ```
 
@@ -119,23 +107,6 @@ pactl list short sources
 
 Use `@DEFAULT_SOURCE@` for the microphone and a source ending in `.monitor` for system audio.
 
-## Proxy Authentication Mode
-
-Set these in `config.sh` to upload through `bucket/proxy`:
-
-```bash
-UPLOAD_MODE="proxy"
-PROXY_URL="https://your-proxy-host"
-PROXY_USERNAME="uploader"
-PROXY_PASSWORD="change-me"
-```
-
-`PROXY_USERNAME` and `PROXY_PASSWORD` must be an auth-server client identity issued from the proxy's `/admin` management panel.
-
-The uploader logs every auth attempt, auth response, upload send, upload response, unauthorized retry, and token save to `~/recordings/logs/uploader.log`. Tokens are cached in `~/recordings/logs/.proxy_token` with `0600` permissions.
-
-Verification uses the same cached token and refresh-on-`401` behavior for `/metadata` requests. It logs each metadata send and response to `~/recordings/logs/verification.log`.
-
 ## Optional Remote Stream
 
 To mirror the screen capture to a live endpoint, set these in `config.sh`:
@@ -146,6 +117,6 @@ REMOTE_STREAM_URL="rtmp://stream.example.com/live"
 REMOTE_STREAM_FORMAT="flv"
 ```
 
-`REMOTE_STREAM_ENABLED` defaults to `true`; an empty `REMOTE_STREAM_URL` logs a warning while local recording continues. Live screen streaming currently requires the X11 backend; GNOME Wayland still records locally. Set `DELETE_AFTER_UPLOAD="true"` only if synchronized local copies should be removed.
+`REMOTE_STREAM_ENABLED` defaults to `true`; an empty `REMOTE_STREAM_URL` logs a warning while local recording continues. Live screen streaming currently requires the X11 backend; GNOME Wayland still records locally.
 
 Use `flv` for RTMP/RTMPS and `mpegts` for SRT/UDP-style ingest endpoints. The stream job is isolated from local recording, so if the endpoint goes down the saved files keep writing.

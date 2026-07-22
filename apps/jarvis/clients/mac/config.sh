@@ -3,20 +3,6 @@
 # Customize these settings before running install.sh
 
 # ============================================================
-# AWS S3 Configuration
-# ============================================================
-
-# S3 Bucket name (where recordings will be uploaded)
-S3_BUCKET="keeboarder-recordings"
-
-# AWS region
-AWS_REGION="us-east-1"
-
-# S3 path prefix for this machine (optional, for organization)
-# Leave empty to store in bucket root, or use "recordings/" for a folder
-S3_PREFIX="recordings/"
-
-# ============================================================
 # Recording Directories
 # ============================================================
 
@@ -93,37 +79,6 @@ REMOTE_STREAM_TUNE="zerolatency"
 REMOTE_STREAM_KEYFRAME_INTERVAL="$SCREEN_KEYFRAME_INTERVAL"
 
 # ============================================================
-# Upload Settings
-# ============================================================
-
-# Minimum file age in seconds before uploading (to avoid uploading incomplete files)
-# Set to 5 seconds to allow time for file to be closed
-MIN_FILE_AGE="5"
-
-# Used only when neither lsof nor fuser is available.
-FILE_STABILITY_WAIT_SECONDS="3"
-
-# Upload batch size (number of files to upload at once)
-UPLOAD_BATCH_SIZE="10"
-
-# Delete local files after successful upload (true/false)
-DELETE_AFTER_UPLOAD="false"
-
-# Check the remote object and size before uploading a completed video.
-CHECK_REMOTE_BEFORE_UPLOAD="true"
-
-# ============================================================
-# Verification Settings
-# ============================================================
-
-# Check that S3 files match local file sizes
-VERIFY_FILE_SIZE="true"
-
-# Email for alerts (optional, leave empty to disable)
-# Requires mail configured on system
-ALERT_EMAIL=""
-
-# ============================================================
 # Logging Settings
 # ============================================================
 
@@ -140,13 +95,10 @@ LOG_RETENTION_DAYS="30"
 # Parallel FFmpeg processes (use with caution, impacts CPU)
 PARALLEL_FFMPEG="3"
 
-# AWS CLI profile to use (leave empty for default)
-AWS_PROFILE=""
-
 # Enable verbose output for debugging
 DEBUG_MODE="false"
 
-# Device hostname for S3 metadata (auto-detected if not set)
+# Device hostname used to label this machine's recordings (auto-detected if not set)
 DEVICE_HOSTNAME="$(hostname)"
 
 # ============================================================
@@ -160,30 +112,9 @@ LAUNCHAGENT_LABEL="com.keeboarder.recorder"
 RESTART_INTERVAL="60"
 
 # ============================================================
-# Cron Job Settings (for uploads and verification)
-# ============================================================
-
-# Upload frequency (cron format)
-# Examples: "*/15 * * * *" = every 15 minutes
-#           "0 * * * *" = every hour
-#           "0 */6 * * *" = every 6 hours
-UPLOAD_CRON="*/15 * * * *"
-
-# Verification frequency (cron format)
-# Example: "0 * * * *" = every hour
-VERIFY_CRON="0 * * * *"
-
-# Cleanup frequency (cron format - removes old local files)
-# Example: "0 3 * * *" = daily at 3 AM
-CLEANUP_CRON="0 3 * * *"
-
-# ============================================================
 # Export all for use in scripts
 # ============================================================
 
-export S3_BUCKET
-export AWS_REGION
-export S3_PREFIX
 export RECORDINGS_DIR
 export SCREEN_DIR
 export MIC_DIR
@@ -210,17 +141,9 @@ export REMOTE_STREAM_CRF
 export REMOTE_STREAM_PIXEL_FORMAT
 export REMOTE_STREAM_TUNE
 export REMOTE_STREAM_KEYFRAME_INTERVAL
-export MIN_FILE_AGE
-export FILE_STABILITY_WAIT_SECONDS
-export UPLOAD_BATCH_SIZE
-export DELETE_AFTER_UPLOAD
-export CHECK_REMOTE_BEFORE_UPLOAD
-export VERIFY_FILE_SIZE
-export ALERT_EMAIL
 export LOG_LEVEL
 export LOG_RETENTION_DAYS
 export PARALLEL_FFMPEG
-export AWS_PROFILE
 export DEBUG_MODE
 export DEVICE_HOSTNAME
 export LAUNCHAGENT_LABEL

@@ -150,7 +150,6 @@ JARVIS_S3_BUCKET=$(create_env "$JARVIS_GROUP" "PROXY_S3_BUCKET_NAME"          "y
 JARVIS_S3_REGION=$(create_env "$JARVIS_GROUP" "PROXY_S3_REGION"               "us-east-1")
 JARVIS_S3_ENDPOINT=$(create_env "$JARVIS_GROUP" "PROXY_S3_ENDPOINT"           "")
 JARVIS_S3_PATH=$(create_env "$JARVIS_GROUP"   "PROXY_S3_PATH_STYLE_ACCESS"    "false")
-JARVIS_S3_SSE=$(create_env "$JARVIS_GROUP"    "PROXY_S3_SSE"                  "AES256")
 JARVIS_AZURE_ACCT=$(create_env "$JARVIS_GROUP" "AZURE_STORAGE_ACCOUNT"        "")
 JARVIS_AZURE_CONT=$(create_env "$JARVIS_GROUP" "AZURE_STORAGE_CONTAINER"      "")
 JARVIS_AZURE_ENDP=$(create_env "$JARVIS_GROUP" "AZURE_STORAGE_ENDPOINT"       "")
@@ -243,7 +242,7 @@ set_bundle_envs "$AUTH_BUNDLE_ID" "$( \
 STORAGE_BUNDLE=$(post "/bundles" '{"name":"object-storage","description":"S3 / Azure object storage settings"}')
 STORAGE_BUNDLE_ID=$(echo "$STORAGE_BUNDLE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 set_bundle_envs "$STORAGE_BUNDLE_ID" "$( \
-  echo '[' "$JARVIS_STORAGE,$JARVIS_MAXFILE,$JARVIS_S3_BUCKET,$JARVIS_S3_REGION,$JARVIS_S3_ENDPOINT,$JARVIS_S3_PATH,$JARVIS_S3_SSE,$JARVIS_AZURE_ACCT,$JARVIS_AZURE_CONT,$JARVIS_AZURE_ENDP,$JARVIS_AZURE_CONN" ']' | sed 's/ //g' \
+  echo '[' "$JARVIS_STORAGE,$JARVIS_MAXFILE,$JARVIS_S3_BUCKET,$JARVIS_S3_REGION,$JARVIS_S3_ENDPOINT,$JARVIS_S3_PATH,$JARVIS_AZURE_ACCT,$JARVIS_AZURE_CONT,$JARVIS_AZURE_ENDP,$JARVIS_AZURE_CONN" ']' | sed 's/ //g' \
 )" && echo "  bundle 'object-storage' created"
 
 # --- Messaging bundle ---

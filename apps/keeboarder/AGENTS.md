@@ -1,1 +1,0 @@
-Before doing anything else, an agent must run `git pull` in each Git repository in this workspace, then in each submodule, then in each submodule's submodules, and continue recursively until every nested submodule has been updated.

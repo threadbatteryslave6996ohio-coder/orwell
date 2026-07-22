@@ -1,7 +1,7 @@
 proxy:
   s3:
-    # Optional S3-compatible endpoint override (e.g. a local MinIO for testing).
-    # Leave blank to use real AWS S3.
+    # S3-compatible endpoint (e.g. a self-hosted MinIO). Point this at your
+    # bucket service; there is no default remote endpoint.
     endpoint: ""
   azure:
     # Optional. When blank, DefaultAzureCredential is used (managed identity,

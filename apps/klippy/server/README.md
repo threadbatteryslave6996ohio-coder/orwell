@@ -5,20 +5,9 @@ Spring Boot API that persists clipboard entries in PostgreSQL.
 The server does not own client identities. It validates each clipboard request
 by calling the separate Klippy auth server.
 
-## Code Layout
-
-The server code is grouped by responsibility under `dev.orwell.server`:
-
-- `application`: Spring Boot application and standalone launcher.
-- `config`: environment schema and Spring property mapping.
-- `controller`: HTTP endpoints.
-- `dto`: HTTP request and response records.
-- `model`: JPA entities.
-- `repository`: Spring Data persistence interfaces.
-
 ## Requirements
 
-Use the JDK, Maven, and Docker versions listed in the [root README](../README.md).
+Use the JDK, Maven, and Docker versions listed in the [root README](../../../README.md).
 Docker is required for local PostgreSQL and Testcontainers-based tests.
 
 ## Start Locally
@@ -42,20 +31,13 @@ mvn -pl apps/klippy/server -am package
 java -jar apps/klippy/server/target/klippy-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
-Or run Maven from the root POM:
-
-```bash
-mvn -f pom.xml -pl apps/klippy/server -am package
-java -jar apps/klippy/server/target/klippy-server-0.1.0-SNAPSHOT-exec.jar
-```
-
 The example configuration runs the app server on `http://localhost:8080` and the auth server on `http://localhost:8081`.
 
 ## Configuration
 
 The launcher loads configuration from a `.env` file in the current directory or any parent directory, applies nonblank shell values as overrides, and passes the resolved map into the server core. The core never fetches configuration itself.
 
-All values are required. A local configuration is:
+A local configuration is:
 
 ```text
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/klippy
@@ -69,10 +51,17 @@ SPRING_JPA_HIBERNATE_DDL_AUTO=update
 SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE=UTC
 ```
 
-Set those values in `.env` before starting the server. The launcher resolves
-`.env` from the current directory or any parent and overlays nonblank shell
-variables. The server core receives only the resolved map; it does not read
-shell exports or Spring command-line properties independently.
+Every value above is required. Two further keys come from `AppServerEnv` and are
+optional:
+
+```text
+LOKI_URL=http://localhost:3100
+LOKI_TENANT_ID=orwell
+```
+
+`LOKI_URL` enables the Loki log sink described below; `LOKI_TENANT_ID` is sent as
+the `X-Scope-OrgID` header when Loki is multi-tenant. Without `LOKI_URL` the
+server logs to the console only.
 
 ## Endpoint
 
@@ -111,11 +100,13 @@ content is limited to 1,000,000 characters.
 
 ## Logging
 
-The app server writes its normal Spring Boot logs to `LOGGING_FILE_NAME` and also writes a custom audit log file named `klippy-server.txt` in the configured directory.
+The server logs through the injected `dev.orwell.logging.Logger`. Its bean comes from `LoggerConfiguration` in `packages/server-bootstrap` and is a `FailSafeLogger` wrapping a `CompositeLogger` of `ConsoleLogger` and `LokiLogger`: records go to stdout and are pushed asynchronously to Loki. The server writes no application log file of its own.
 
-Each successful `POST /clipboard` request records a line noting the `clientId`, generated entry id, and timestamp. Raw clipboard content is not written to the custom log.
+Set `LOKI_URL` to enable the Loki sink, and `LOKI_TENANT_ID` when the Loki instance is multi-tenant. If `LOKI_URL` is unset the bean falls back to console-only logging and warns at startup.
 
-The custom audit log is best-effort. If it cannot be written, the clipboard insert still succeeds.
+Each successful `POST /clipboard` request records the `clientId`, generated entry id, and timestamp as structured metadata. Raw clipboard content is never logged.
+
+Logging is best-effort: `FailSafeLogger` absorbs sink failures, and `LokiLogger` batches from a bounded queue on its own thread, so neither a failing nor a slow sink can turn a clipboard insert into an error.
 
 ## Tests
 

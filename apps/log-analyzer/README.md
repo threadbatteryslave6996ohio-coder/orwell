@@ -2,7 +2,12 @@
 
 Polls logs through Grafana's datasource proxy, runs recent error logs through an AI model, and forwards important findings to the alert service.
 
-Configure `GRAFANA_URL`, `GRAFANA_API_TOKEN`, and `GRAFANA_LOKI_DATASOURCE_UID` to point at a Grafana instance with a Loki datasource.
+Configure `GRAFANA_URL`, `GRAFANA_API_TOKEN`, and `GRAFANA_LOKI_DATASOURCE_UID` to point at a
+Grafana instance with a Loki datasource. All three are declared `optional` with defaults
+(`http://127.0.0.1:3000` and two empty strings), so **the app starts happily misconfigured** —
+there is no startup validation error to tell you they are wrong. That is the failure mode
+described under [What direct push costs](#what-direct-push-costs): it queries an instance nothing
+writes to and reports zero errors forever. Treat them as required in practice.
 
 ## What it queries
 
@@ -86,7 +91,26 @@ Set `SERVER_ENGINE` to `undertow` for the lightweight runtime or `spring` for
 the existing Spring Boot/Tomcat runtime. Both engines expose the same
 `GET /health` and `POST /run-once` endpoints and share the analyzer service.
 
-See [README.docker.md](./README.docker.md) for the compose-based setup.
+## Docker
+
+A compose stack runs this service together with a local `alerting` service. From this directory:
+
+```bash
+docker compose up --build
+```
+
+Set `GRAFANA_URL`, `GRAFANA_API_TOKEN`, `GRAFANA_LOKI_DATASOURCE_UID`, and `AI_API_KEY` before
+starting. Edit them in **`.env.example`**, not `.env` — this is deliberate, not a typo:
+`docker-compose.yml` genuinely lists the `.example` files in its `env_file`, so a value you put
+in `.env` is not read.
+
+The two services are reachable through:
+
+- `http://localhost:9010/alerting`
+- `http://localhost:9010/log-analyzer`
+
+To use a remote Grafana, point `GRAFANA_URL` at it and make sure the Loki datasource UID you set
+is valid in *that* Grafana.
 
 ## Example env
 

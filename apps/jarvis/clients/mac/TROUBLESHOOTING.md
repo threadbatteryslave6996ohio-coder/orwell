@@ -1,6 +1,8 @@
 # Keeboarder macOS - Troubleshooting Guide
 
-Complete troubleshooting for common issues.
+Complete troubleshooting for common issues with this **record-only** client. Uploading is handled
+by the separate syncer client at `apps/jarvis/clients/syncer/` — see its own README for
+upload/sync troubleshooting.
 
 ## Quick Diagnostics
 
@@ -95,207 +97,12 @@ ffmpeg -codecs | grep pcm_s16le
 - Check logs: `tail -f ~/recordings/logs/recorder.log`
 - Verify permissions again
 
-## S3 Upload Issues
+## Uploading Recordings
 
-### AWS Credentials Not Working
-
-**Check 1: Verify Credentials**
-```bash
-aws sts get-caller-identity
-```
-
-Should return:
-```json
-{
-    "UserId": "AIDAI...",
-    "Account": "123456789012",
-    "Arn": "arn:aws:iam::123456789012:user/keeboarder-recorder"
-}
-```
-
-**Check 2: Configure/Reconfigure**
-```bash
-aws configure
-# Or for specific profile:
-aws configure --profile keeboarder
-```
-
-**Check 3: Check Environment Variables**
-```bash
-echo $AWS_ACCESS_KEY_ID
-echo $AWS_SECRET_ACCESS_KEY
-echo $AWS_DEFAULT_REGION
-```
-
-If not set, add to `~/.bash_profile` or `~/.zshrc`:
-```bash
-export AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE"
-export AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-export AWS_DEFAULT_REGION="us-east-1"
-```
-
-### Cannot Access S3 Bucket
-
-**Check 1: Bucket Exists and is Accessible**
-```bash
-aws s3 ls | grep keeboarder
-aws s3 ls s3://keeboarder-recordings
-```
-
-**Check 2: IAM Permissions**
-```bash
-# Check inline policy
-aws iam list-user-policies --user-name keeboarder-recorder
-```
-
-Required actions:
-- `s3:PutObject`
-- `s3:GetObject`
-- `s3:ListBucket`
-
-See AWS_SETUP.md for IAM configuration.
-
-**Check 3: Verify Region**
-```bash
-# Check what region is configured
-aws configure get region
-
-# Check bucket region
-aws s3api get-bucket-location --bucket keeboarder-recordings
-```
-
-Update config.sh if regions don't match:
-```bash
-AWS_REGION="us-east-1"
-```
-
-**Check 4: Test Upload Manually**
-```bash
-echo "test" > /tmp/test.txt
-aws s3 cp /tmp/test.txt s3://keeboarder-recordings/test.txt
-```
-
-### Upload Jobs Not Running
-
-**Check 1: Verify Cron Jobs**
-```bash
-crontab -l
-```
-
-Should show:
-```
-*/15 * * * * /Users/username/scripts/upload_to_s3.sh
-0 * * * * /Users/username/scripts/verify_uploads.sh
-```
-
-**Check 2: Reinstall Cron Jobs**
-```bash
-# Back up current crontab
-crontab -l > crontab_backup.txt
-
-# Clear crontab
-crontab -r
-
-# Re-run installer
-./install.sh
-```
-
-**Check 3: Check Cron Logs**
-```bash
-# View cron execution logs
-log stream --predicate 'eventMessage contains[cd] "upload_to_s3"' --level debug
-
-# Or check system logs
-log show --predicate 'process == "cron"' --last 1h
-```
-
-**Check 4: Manual Upload Test**
-```bash
-# Run upload script manually
-bash ~/scripts/upload_to_s3.sh
-
-# Check logs
-tail -50 ~/recordings/logs/uploader.log
-```
-
-### File Upload Permissions Denied
-
-**Error**: "Access Denied" or "InvalidAccessKeyId"
-
-**Solution**:
-1. Verify IAM user has s3:PutObject permission
-2. Check access key is valid and not deactivated
-3. Check bucket policy allows the IAM user
-4. Verify bucket doesn't have ACL restrictions
-
-See AWS_SETUP.md section "Set Bucket Policies"
-
-### Some Files Not Uploading
-
-**Check 1: File Age Filter**
-Files must be at least 5 seconds old before uploading (to avoid incomplete files)
-
-```bash
-# Change minimum age if needed
-MIN_FILE_AGE="10"  # in config.sh
-```
-
-**Check 2: File Size Check**
-Files smaller than 1KB are skipped:
-
-```bash
-# Check file sizes
-ls -lh ~/recordings/screen/*.mp4
-ls -lh ~/recordings/mic/*.wav
-```
-
-**Check 3: View Uploader Logs**
-```bash
-tail -100 ~/recordings/logs/uploader.log
-```
-
-**Check 4: Manually Upload Specific File**
-```bash
-aws s3 cp ~/recordings/screen/screen-2024-01-15-14.mp4 \
-  s3://keeboarder-recordings/recordings/$(hostname)/screen/ \
-  --metadata "uploaded=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-```
-
-## Verification Issues
-
-### Verification Jobs Not Running
-
-Same as upload jobs, see section above.
-
-### Verification Showing Missing Files
-
-**Check 1: Verify Recent Uploads**
-```bash
-# Check what's on S3
-aws s3 ls s3://keeboarder-recordings/recordings/$(hostname)/ --recursive | tail -20
-
-# Check what's local
-ls -lh ~/recordings/screen/*.mp4 | tail -10
-ls -lh ~/recordings/mic/*.wav | tail -10
-```
-
-**Check 2: Run Manual Verification**
-```bash
-./manage.sh verify
-cat ~/recordings/logs/verification_report.txt
-```
-
-**Check 3: File Size Mismatch**
-This can happen if:
-- File was still being written when uploaded
-- Network interruption during upload
-- S3 object corruption
-
-**Solution**: Re-upload the file:
-```bash
-aws s3 cp ~/recordings/screen/screen-XXXX.mp4 \
-  s3://keeboarder-recordings/recordings/$(hostname)/screen/
-```
+Uploads are not performed by this client. Completed recording segments are drained to the bucket
+proxy by the separate syncer client at `apps/jarvis/clients/syncer/`. If recordings are not
+reaching the bucket, check that the syncer is scheduled and configured correctly and consult
+`apps/jarvis/clients/syncer/README.md`.
 
 ## Performance Issues
 
@@ -326,29 +133,6 @@ du -sh ~/recordings/{screen,mic,system-audio}
 ```bash
 ./manage.sh cleanup 7  # Remove files > 7 days old
 ./manage.sh cleanup 1  # Remove files > 1 day old
-```
-
-Or enable S3 lifecycle policies to auto-delete old files.
-
-### Network/Upload Slow
-
-**Check 1: Network Speed**
-```bash
-# Test network connectivity
-ping -c 5 8.8.8.8
-curl -I https://www.amazon.com
-
-# Test S3 upload speed
-time aws s3 cp ~/recordings/screen/screen-*.mp4 \
-  s3://keeboarder-recordings/recordings/$(hostname)/screen/ \
-  --recursive --exclude "*" --include "*-14.mp4" | head -1
-```
-
-**Solution**: Increase upload frequency or batch size:
-```bash
-# config.sh
-UPLOAD_BATCH_SIZE="20"  # Upload more files per run
-UPLOAD_CRON="*/10 * * * *"  # Upload every 10 minutes instead of 15
 ```
 
 ## Service Management Issues
@@ -390,7 +174,7 @@ tail -50 ~/recordings/logs/recorder.log
 - Insufficient disk space
 - FFmpeg crash
 
-**Solution**: 
+**Solution**:
 1. Fix the underlying issue
 2. Restart service: `./manage.sh restart`
 
@@ -448,17 +232,11 @@ LOG_LEVEL="DEBUG"
 tail -100 ~/recordings/logs/recorder.log
 ```
 
-### Run Individual Scripts Manually
+### Run the Recorder Manually
 
 ```bash
 # Test recorder
 bash ~/scripts/start_recorder.sh
-
-# Test uploader
-bash ~/scripts/upload_to_s3.sh
-
-# Test verification
-bash ~/scripts/verify_uploads.sh
 ```
 
 ### Check System Resources
@@ -478,16 +256,6 @@ du -sh ~/recordings/*
 networksetup -getinfo Wi-Fi
 ```
 
-### Verify AWS CLI Connection
-
-```bash
-# Test S3 access
-aws s3 ls --region us-east-1 --debug 2>&1 | head -50
-
-# Test with specific profile
-aws s3 ls --profile keeboarder --debug 2>&1 | head -50
-```
-
 ## Getting Help
 
 **Gather Diagnostic Info**:
@@ -499,24 +267,19 @@ aws s3 ls --profile keeboarder --debug 2>&1 | head -50
   echo ""
   echo "=== Tools ==="
   ffmpeg -version | head -1
-  aws --version
   echo ""
   echo "=== Configuration ==="
   cat config.sh | grep -E "^[A-Z_]+="
-  echo ""
-  echo "=== Cron Jobs ==="
-  crontab -l
   echo ""
   echo "=== Permissions ==="
   ls -la ~/Library/LaunchAgents/com.keeboarder.recorder.plist
   echo ""
   echo "=== Recent Logs ==="
   tail -20 ~/recordings/logs/recorder.log
-  tail -20 ~/recordings/logs/uploader.log
 } > ~/keeboarder_diagnostics.txt
 
 # Review and share
 cat ~/keeboarder_diagnostics.txt
 ```
 
-Check this file against the README.md and AWS_SETUP.md documentation.
+Check this file against the README.md documentation.

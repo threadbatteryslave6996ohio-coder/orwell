@@ -2,17 +2,20 @@
 
 Run the full upload path — client → proxy → bucket — entirely on your machine,
 with no AWS account and no remote auth server. A local [MinIO](https://min.io)
-container stands in for S3, and the auth server runs against a local PostgreSQL
-container.
+container stands in for S3, and the auth server runs against the monorepo's single
+shared PostgreSQL — the `db` service in `docker-compose.all-services.yml`, not a
+container private to this app.
 
-Requires: Docker, JDK 17+, Maven, `curl`.
+Requires: Docker, JDK 25+, Maven, `curl`.
 
 ## Quick start
 
 ```bash
 cd apps/jarvis/bucket/proxy
 
-# 1. Start MinIO (S3) + PostgreSQL and create the bucket.
+# 1. Start MinIO (S3), bring up the shared `db` service, and create the bucket.
+#    Note: `up` touches the monorepo-wide stack — it runs `docker compose -f
+#    docker-compose.all-services.yml up -d db`, the same Postgres every other app uses.
 scripts/local-stack.sh up
 
 # 2. In one terminal, run the auth server (builds the jar on first run).
@@ -54,28 +57,26 @@ docker run --rm --network=host --entrypoint sh minio/mc -c \
 
 The MinIO web console is at http://localhost:9001 (minioadmin / minioadmin).
 
-Tear down the containers (named volumes are kept) with:
+Tear down with:
 
 ```bash
 scripts/local-stack.sh down
 ```
 
+`down` removes only the containers this script started (MinIO; named volumes are kept). It
+deliberately leaves the shared Postgres running, since other apps depend on it — stop that with
+`docker compose -f docker-compose.all-services.yml stop db` from the repo root if you really
+want it down.
+
 ## How the proxy is pointed at the local bucket
 
-The proxy's S3 client now supports an endpoint override. `local-stack.sh proxy`
-starts it with:
+The proxy's S3 client supports an endpoint override. `local-stack.sh proxy` starts it pointed at
+MinIO on `http://localhost:9000` with path-style addressing, the `keeboarder-recordings` bucket,
+`minioadmin`/`minioadmin` as the S3 credentials, and `AUTH_BASE_URL=http://localhost:8081` for
+the local auth server.
 
-| System property / env | Local value | Purpose |
-| --- | --- | --- |
-| `proxy.s3.endpoint` | `http://localhost:9000` | Point the S3 client at MinIO instead of AWS |
-| `proxy.s3.path-style-access` | `true` | MinIO needs path-style bucket addressing |
-| `proxy.s3.server-side-encryption` | *(empty)* | Disable SSE-S3 (a bare MinIO has no KMS) |
-| `proxy.s3.bucket-name` | `keeboarder-recordings` | Local bucket name |
-| `orwell.auth.base-url` | `http://localhost:8081` | Local auth server |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | `minioadmin` | MinIO root credentials |
-
-All of these default to production-safe values when unset: no endpoint override
-(real AWS), and `server-side-encryption: AES256`. See `application.yml`.
+Point `PROXY_S3_ENDPOINT` at whichever S3-compatible bucket service you run; there is no default
+remote endpoint. See `application.yml`.
 
 ## Pointing the syncer / recorder clients at it
 

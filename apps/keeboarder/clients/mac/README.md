@@ -11,10 +11,6 @@ mvn -pl apps/keeboarder/clients/mac -am package
 
 ## Run
 
-```bash
-java -jar apps/keeboarder/clients/mac/target/keeboarder-mac-client-0.1.0.jar
-```
-
 Set environment variables or put them in the repository `.env` file:
 
 ```dotenv
@@ -29,6 +25,12 @@ KEEBOARDER_CLIENT_NAME=My-Mac
 `KEEBOARDER_CLIENT_NAME` defaults to `Mac-<hostname>` when omitted.
 `KEEBOARDER_SERVER_URL` defaults to `ws://localhost:8025/ws/chat` and
 `KEEBOARDER_AUTH_BASE_URL` defaults to `http://localhost:8081`.
+
+Then run:
+
+```bash
+java -jar apps/keeboarder/clients/mac/target/keeboarder-mac-client-0.1.0-SNAPSHOT.jar
+```
 
 ## Behavior
 

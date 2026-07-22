@@ -65,11 +65,3 @@ Content-Type: application/json
   "timestamp": "2026-06-23T12:00:00Z"
 }
 ```
-
-## Notes
-
-- `CLIENT_TOKEN` is the normal development path for Android.
-- Use the same `clientId` in the identity, login request, and app token field.
-- The app can only poll the clipboard while it is open; Android does not allow
-  a normal third-party app to silently monitor clipboard changes in the
-  background.

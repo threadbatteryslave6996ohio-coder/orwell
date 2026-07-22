@@ -3,7 +3,6 @@
 **/.gradle
 **/build
 **/logs
-**/.terraform
 .env
 .env.*
 !**/.env.example
@@ -14,7 +13,3 @@
 .idea
 .vscode
 *.iml
-*.tfstate
-*.tfstate.*
-*.tfvars
-!*.tfvars.example

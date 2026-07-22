@@ -22,9 +22,13 @@ sudo apt install openjdk-25-jdk maven wl-clipboard xclip
 
 ## Run the Client
 
-Start the shared database (both `auth` and `klippy` live in one PostgreSQL on port `5432`)
-using your preferred local PostgreSQL setup, then run the auth server, app
-server, and client.
+Start the shared database, then run the auth server, app server, and client. The
+repository has exactly one PostgreSQL; it serves the `klippy`, `auth`, and
+`secrets` databases on port `5432` and is provisioned by `db-init/all-services.sql`:
+
+```bash
+docker compose -f docker-compose.all-services.yml up -d db
+```
 
 The client reads configuration from `.env` in the repository root:
 
@@ -59,8 +63,9 @@ Keep the file-locker running, then start the client in another terminal:
 ./apps/klippy/scripts/start-linux-client.sh
 ```
 
-The launcher changes to the repository root before starting Java, so the client
-consistently finds the repository root `.env` file.
+The launcher changes to `apps/klippy` before starting Java. The client still
+finds the repository-root `.env` because `EnvFiles.load()` walks up the parent
+directories from the working directory.
 
 Offline clipboard entries are appended through the file-locker service over a
 Unix-domain socket. The client exits at startup if it cannot connect, preventing

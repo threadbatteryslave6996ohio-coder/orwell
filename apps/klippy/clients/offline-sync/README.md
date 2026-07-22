@@ -31,10 +31,14 @@ OFFLINE_SYNC_INTERVAL_MINUTES=30
 ```
 
 `CLIENT_TOKEN` can be used instead of `CLIENT_SECRET`. If `CLIENT_ID` is
-omitted, the sync client uses the single client id found in the file. If the
-file is missing, unreadable, empty, or contains only oversized legacy entries
-at startup, it waits and retries every 30 minutes; a usable clipboard entry
-must appear before the client id can be derived. `OFFLINE_SYNC_INTERVAL_MINUTES`
+omitted, the sync client uses the single client id found in the file. A usable
+clipboard entry must appear before the client id can be derived, and how long
+the client waits for one depends on why the read produced nothing. A missing or
+unreadable file is a failed read, so it is retried on the 5, 10, 20, 40, and
+80-second backoff described below. A file that reads successfully but holds no
+usable clipboard entries — empty, or only oversized legacy entries — is not a
+failure, so the client waits the configured sync interval (30 minutes by
+default) before looking again. `OFFLINE_SYNC_INTERVAL_MINUTES`
 is optional, defaults to `30`, and must be at least `1`.
 
 Retryable file-locker, network, authentication, throttling, and server failures

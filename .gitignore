@@ -53,23 +53,6 @@ klippy-offline-clipboard.json
 *.wav
 *.m4a
 
-# Terraform local state and plans
-**/.terraform/
-*.tfstate
-*.tfstate.*
-*.tfvars
-*.tfvars.json
-!*.tfvars.example
-!*.tfvars.json.example
-*.tfplan
-.terraformrc
-terraform.rc
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
-!example_override.tf
-
 # Editors and operating systems
 .idea/
 .vscode/

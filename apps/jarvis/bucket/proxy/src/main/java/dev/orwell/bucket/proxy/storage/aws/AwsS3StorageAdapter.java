@@ -44,9 +44,6 @@ public class AwsS3StorageAdapter implements BucketStorage {
                 .bucket(properties.bucketName())
                 .key(key)
                 .contentType(contentType == null || contentType.isBlank() ? "application/octet-stream" : contentType);
-        if (properties.serverSideEncryption() != null && !properties.serverSideEncryption().isBlank()) {
-            requestBuilder.serverSideEncryption(properties.serverSideEncryption());
-        }
         var response = s3.putObject(requestBuilder.build(), RequestBody.fromFile(file));
         return new UploadResult(key, response.eTag());
     }

@@ -52,18 +52,6 @@ show_status() {
         print_error "Recorder service is not active"
     fi
 
-    if systemctl --user is-active --quiet "$UPLOAD_TIMER_NAME.timer"; then
-        print_success "Upload timer is active"
-    else
-        print_error "Upload timer is not active"
-    fi
-
-    if systemctl --user is-active --quiet "$VERIFY_TIMER_NAME.timer"; then
-        print_success "Verification timer is active"
-    else
-        print_error "Verification timer is not active"
-    fi
-
     echo ""
     echo -e "${YELLOW}Session${NC}"
     echo "  Desktop: ${XDG_CURRENT_DESKTOP:-unknown}"
@@ -79,20 +67,6 @@ show_status() {
     if [ -d "$RECORDINGS_DIR" ]; then
         du -sh "$RECORDINGS_DIR" "$SCREEN_DIR" "$MIC_DIR" "$SYSTEM_AUDIO_DIR" 2>/dev/null || true
     fi
-
-    echo ""
-    echo -e "${YELLOW}AWS${NC}"
-    if aws sts get-caller-identity ${AWS_PROFILE:+--profile "$AWS_PROFILE"} >/dev/null 2>&1; then
-        print_success "AWS credentials valid"
-    else
-        print_error "AWS credentials invalid or unavailable"
-    fi
-
-    if aws s3 ls "s3://$S3_BUCKET" --region "$AWS_REGION" ${AWS_PROFILE:+--profile "$AWS_PROFILE"} >/dev/null 2>&1; then
-        print_success "S3 bucket accessible: $S3_BUCKET"
-    else
-        print_error "S3 bucket inaccessible: $S3_BUCKET"
-    fi
 }
 
 show_logs() {
@@ -102,12 +76,6 @@ show_logs() {
         recorder)
             tail -50 "$LOGS_DIR/recorder.log" 2>/dev/null || true
             ;;
-        uploader)
-            tail -50 "$LOGS_DIR/uploader.log" 2>/dev/null || true
-            ;;
-        verification|verify)
-            tail -50 "$LOGS_DIR/verification.log" 2>/dev/null || true
-            ;;
         journal)
             journalctl --user -u "$SYSTEMD_SERVICE_NAME.service" -n 100 --no-pager
             ;;
@@ -115,29 +83,8 @@ show_logs() {
             print_header "Recent Logs"
             echo -e "${YELLOW}Recorder${NC}"
             tail -20 "$LOGS_DIR/recorder.log" 2>/dev/null || true
-            echo ""
-            echo -e "${YELLOW}Uploader${NC}"
-            tail -20 "$LOGS_DIR/uploader.log" 2>/dev/null || true
-            echo ""
-            echo -e "${YELLOW}Verification${NC}"
-            tail -20 "$LOGS_DIR/verification.log" 2>/dev/null || true
             ;;
     esac
-}
-
-manual_upload() {
-    print_header "Manual S3 Upload"
-    "$SCRIPT_DIR/upload_to_s3.sh"
-}
-
-manual_sync() {
-    print_header "Synchronize Videos"
-    "$SCRIPT_DIR/sync_videos.sh"
-}
-
-manual_verify() {
-    print_header "Manual S3 Verification"
-    "$SCRIPT_DIR/verify_uploads.sh"
 }
 
 cleanup_old_files() {
@@ -164,20 +111,17 @@ ${YELLOW}Usage:${NC}
   ./manage.sh [command] [options]
 
 ${YELLOW}Commands:${NC}
-  start              Start recorder and timers
-  stop               Stop recorder and timers
-  restart            Restart recorder and timers
+  start              Start the recorder service
+  stop               Stop the recorder service
+  restart            Restart the recorder service
   status             Show current status
   logs               Show recent logs
   logs recorder      Show recorder log
-  logs uploader      Show uploader log
-  logs verify        Show verification log
   logs journal       Show systemd journal
-  upload             Run manual S3 upload
-  sync               Check and synchronize videos with the server
-  verify             Run manual S3 verification
   cleanup [days]     Remove local files older than N days
   help               Show this help message
+
+Uploads are handled by the syncer client at apps/jarvis/clients/syncer/.
 EOF
 }
 
@@ -196,15 +140,6 @@ case "${1:-}" in
         ;;
     logs)
         show_logs "${2:-all}"
-        ;;
-    upload)
-        manual_upload
-        ;;
-    sync)
-        manual_sync
-        ;;
-    verify|verification|check)
-        manual_verify
         ;;
     cleanup)
         cleanup_old_files "${2:-7}"

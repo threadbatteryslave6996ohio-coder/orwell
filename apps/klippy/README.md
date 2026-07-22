@@ -6,53 +6,20 @@ Spring Boot server backed by PostgreSQL.
 The Java code is a JDK 25 multi-module Maven project. The Android client is a
 separate Kotlin/Gradle project under `apps/klippy/clients/android`.
 
-## Requirements
-
-- JDK 25+ with `javac` on `PATH`
-- Maven 3.9+
-- Docker with Compose for local databases and integration tests
-- Android Studio or a compatible Android toolchain for the Android client
-
 Authentication is supplied by the sibling `apps/auth` directory in this repository.
-
-Verify the Java toolchain before troubleshooting Maven compilation errors:
-
-```bash
-java -version
-javac -version
-mvn -version
-```
-
-## Build and Test
-
-Build every Java module from the repository root:
-
-```bash
-mvn package
-```
-
-Run tests without packaging:
-
-```bash
-mvn test
-```
-
-Server integration tests use Testcontainers and require Docker. To work on one
-module while also building its dependencies, use:
-
-```bash
-mvn -pl <module> -am test
-mvn -pl <module> -am package
-```
-
-The Android project is built separately from `apps/klippy/clients/android`; see its README
-for the available toolchain and tasks.
+See the root `README.md` for toolchain requirements and the repo-wide build and
+test commands; the Android client is built with Gradle instead, as its README describes.
 
 ## Run Locally
 
-The simplest complete deployment uses Docker Compose:
+The simplest way to run the servers is Docker Compose. This stack contains no
+database of its own — both servers connect out to `host.docker.internal:5432` —
+so the shared PostgreSQL must already be running:
 
 ```bash
+# The one shared Postgres, serving the klippy and auth databases
+docker compose -f docker-compose.all-services.yml up -d db
+
 # Nginx proxy on 8080; auth and clipboard stay on the Docker network
 docker compose -f apps/klippy/docker-compose.yml up --build
 ```
@@ -101,11 +68,6 @@ Shell environment variables override `.env` values.
 ## Documentation
 
 - [Clipboard server](server/README.md)
-- [Shared server bootstrap](../../packages/server-bootstrap/README.md)
-- [Authentication modules](../auth/README.md)
-- [HTTP auth server](../auth/http-based/server/README.md)
-- [HTTP API contracts](../auth/http-based/api/README.md)
-- [HTTP auth client](../auth/http-based/client/README.md)
 - [macOS client](clients/mac/README.md)
 - [Linux client](clients/linux/README.md)
 - [Offline sync client](clients/offline-sync/README.md)
@@ -113,5 +75,6 @@ Shell environment variables override `.env` values.
 - [Dummy client](clients/dummy/README.md)
 - [Android client](clients/android/README.md)
 
-The server READMEs document the HTTP contracts, configuration, and deployment
-details. Each client README covers only that client's setup and behavior.
+The server README documents the HTTP contract, configuration, and deployment
+details. Each client README covers only that client's setup and behavior. The
+auth and shared-package READMEs are linked from the root `README.md`.

@@ -24,10 +24,6 @@ authentication, omit `CLIENT_SECRET` and provide `CLIENT_TOKEN` instead.
 `CLIENT_ID` defaults to `dummy-` plus the machine hostname. Shell environment
 variables override `.env` values.
 
-At startup the client prints a redacted snapshot of the loaded client
-environment values to the console. `CLIENT_SECRET` and similar credential-like
-values are masked.
-
 ## Run
 
 Build and send one command from the repository root:

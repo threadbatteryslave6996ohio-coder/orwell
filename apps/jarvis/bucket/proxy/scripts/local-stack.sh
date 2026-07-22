@@ -3,10 +3,11 @@ set -uo pipefail
 
 # Local test stack for the bucket proxy.
 #
-# Brings up an S3-compatible bucket (MinIO) and the auth server's PostgreSQL in
-# Docker, then runs the auth server and the proxy configured to use them. This
-# lets you exercise the full upload path (client -> proxy -> bucket) without AWS
-# or a remote auth server.
+# Brings up an S3-compatible bucket (MinIO) in Docker and the monorepo's single
+# shared PostgreSQL (the `db` service in docker-compose.all-services.yml), then
+# runs the auth server and the proxy configured to use them. This lets you
+# exercise the full upload path (client -> proxy -> bucket) without AWS or a
+# remote auth server.
 #
 # Usage:
 #   ./local-stack.sh up        # start MinIO + Postgres, create the bucket
@@ -14,7 +15,8 @@ set -uo pipefail
 #   ./local-stack.sh proxy     # build (if needed) and run the proxy against MinIO
 #   ./local-stack.sh identity <clientId> <secret>   # create an upload identity
 #   ./local-stack.sh status    # show container + endpoint status
-#   ./local-stack.sh down      # stop and remove the containers
+#   ./local-stack.sh down      # stop and remove the containers this script started
+#                              # (MinIO only - the shared `db` is left running)
 #
 # `auth` and `proxy` run in the foreground; use separate terminals (or append &).
 
@@ -95,9 +97,9 @@ cmd_proxy() {
         (cd "$PROXY_DIR" && mvn -q package -DskipTests) || die "proxy build failed"
         jar="$(ls "$PROXY_DIR"/target/jarvis-bucket-proxy-*.jar 2>/dev/null | grep -v original | head -n1)"
     fi
-    log "Running proxy on :$PROXY_PORT against MinIO (SSE disabled for local MinIO)"
-    # AWS_* creds are the MinIO root credentials; SSE is disabled because a local
-    # MinIO has no KMS configured.
+    log "Running proxy on :$PROXY_PORT against MinIO"
+    # The S3 credentials are the MinIO root credentials; the SDK reads them from
+    # the standard credential environment variables.
     AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" \
     AWS_SECRET_ACCESS_KEY="$MINIO_ROOT_PASSWORD" \
     AWS_REGION=us-east-1 \
@@ -109,7 +111,6 @@ cmd_proxy() {
         -Dproxy.s3.region=us-east-1 \
         -Dproxy.s3.endpoint="$S3_ENDPOINT" \
         -Dproxy.s3.path-style-access=true \
-        -Dproxy.s3.server-side-encryption= \
         -jar "$jar"
 }
 
@@ -125,8 +126,12 @@ cmd_identity() {
 cmd_status() {
     require_docker
     echo "Containers:"
-    docker ps --filter "name=$MINIO_CONTAINER" --filter "name=$PG_CONTAINER" \
+    docker ps --filter "name=$MINIO_CONTAINER" \
         --format '  {{.Names}}  {{.Status}}  {{.Ports}}'
+    echo "Shared PostgreSQL (docker-compose.all-services.yml):"
+    docker compose -f "$MONO_ROOT/docker-compose.all-services.yml" ps db \
+        --format '  {{.Name}}  {{.Status}}  {{.Ports}}' 2>/dev/null \
+        || echo "  db  not running"
     echo "Endpoints:"
     printf '  MinIO S3   %s -> %s\n' "$S3_ENDPOINT" "$(curl -s -o /dev/null -w '%{http_code}' "$S3_ENDPOINT/minio/health/live" 2>/dev/null || echo down)"
     printf '  Auth       http://localhost:%s -> %s\n' "$AUTH_PORT" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"clientId":"x","secret":"x"}' "http://localhost:${AUTH_PORT}/login" 2>/dev/null || echo down)"
@@ -135,8 +140,12 @@ cmd_status() {
 
 cmd_down() {
     require_docker
-    log "Removing containers (named volumes are kept)"
-    docker rm -f "$MINIO_CONTAINER" "$PG_CONTAINER" 2>/dev/null || true
+    log "Removing MinIO (named volumes are kept)"
+    docker rm -f "$MINIO_CONTAINER" 2>/dev/null || true
+    # The shared PostgreSQL from docker-compose.all-services.yml is deliberately left running:
+    # every other app in the monorepo uses that same instance. Stop it explicitly with
+    # `docker compose -f docker-compose.all-services.yml stop db` from the repo root.
+    log "Left the shared PostgreSQL ('db') running - other apps depend on it."
     log "Note: stop the auth/proxy JVMs manually if running."
 }
 

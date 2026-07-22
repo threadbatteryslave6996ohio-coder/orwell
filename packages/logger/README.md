@@ -33,7 +33,7 @@ that takes its caller down.
 | `ConsoleLogger` | stdout, with WARN/ERROR to stderr | desktop clients, standalone `main`s, the debug half of the server default |
 | `JsonLogger` | one JSON object per line to a file | anything machine-read from disk |
 | `LokiLogger` | async batched push to Loki | the shipped half of the server default |
-| `CustomLogger` | `logs/<name>.txt` | a durable human-readable file record |
+| `CustomLogger` | `<log dir>/<name>.txt` | a durable human-readable file record |
 | `CompositeLogger` | fans out to several sinks | combining the above |
 | `FailSafeLogger` | contains sink failures | wrapping any sink used from a request path |
 
@@ -41,6 +41,11 @@ Text sinks render as `<timestamp> [name] [LEVEL] message key=value`. Values cont
 whitespace, `=`, or a quote are quoted, so a field like `error="Connection refused: connect"`
 survives as one field. Metadata keys are sorted, so the same entry always renders identically —
 do not rely on insertion order reaching the output.
+
+File sinks resolve their directory through `LogFiles`, which reads the `custom.logger.dir` system
+property. On a server the bootstrap derives that from `logging.file.name`, so the app's own file
+lands beside Spring's log rather than in `logs/` — `logs/` is only the fallback when nothing set
+the property (typically a standalone `main`).
 
 `JsonLogger` emits `timestamp`, `level`, `message`, then metadata flattened alongside them.
 Metadata keys colliding with those three reserved names are dropped rather than allowed to
@@ -81,9 +86,21 @@ named after the artifactId in `main` and pass it down through constructors.
 Logger logger = new ConsoleLogger("klippy-mac-client");
 ```
 
-Two places legitimately construct a sink instead of receiving one, both because no Spring context
-exists yet: `KlippyAuthServerApplication`'s startup hook (runs before `SpringApplication.run`) and
-`AnalysisWorker` (standalone `main`). Both type the variable as `Logger`.
+Four places construct a sink instead of receiving one. Three are legitimate:
+
+- `AnalysisWorker` — a standalone `main`, so there is nothing to inject from. Types the variable
+  as `Logger`.
+- `AlertService` (`apps/alerting`) — `new JsonLogger(...)` at `${alert.log-file}`. This is a
+  second, deliberately separate sink: the alert trail is its own on-disk contract, not the
+  app-wide `Logger` bean. Held as `Logger` so the sink stays swappable.
+- `EnvSnapshotLogger` (`packages/env`) — `new CustomLogger(this.name)`. It runs during env
+  validation, before any logger bean can exist.
+
+The fourth is the known outlier, not a pattern to copy: `PollInterval`
+(`apps/klippy/clients/client-core`) holds a `private static final CustomLogger LOGGER` — static,
+and typed as the concrete sink rather than as `Logger`, so its sink cannot be swapped or
+substituted in a test. It is called out as an outlier in the root `CLAUDE.md`; new code passes a
+`Logger` in.
 
 ## The two log categories
 

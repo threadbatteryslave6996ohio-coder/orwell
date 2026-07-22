@@ -17,7 +17,7 @@ public record ProxyProperties(
 ) {
     public record Storage(String provider, long maxFileSize) {}
 
-    public record S3(String bucketName, String region, String endpoint, boolean pathStyleAccess, String serverSideEncryption) {}
+    public record S3(String bucketName, String region, String endpoint, boolean pathStyleAccess) {}
 
     public record Azure(String accountName, String containerName, String endpoint, String connectionString) {}
 

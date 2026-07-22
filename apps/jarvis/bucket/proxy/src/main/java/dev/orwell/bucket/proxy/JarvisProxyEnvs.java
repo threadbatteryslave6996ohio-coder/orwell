@@ -12,7 +12,6 @@ public final class JarvisProxyEnvs {
     public static final EnvOption<String> PROXY_S3_REGION;
     public static final EnvOption<String> PROXY_S3_ENDPOINT;
     public static final EnvOption<Boolean> PROXY_S3_PATH_STYLE_ACCESS;
-    public static final EnvOption<String> PROXY_S3_SSE;
     public static final EnvOption<String> AZURE_STORAGE_ACCOUNT;
     public static final EnvOption<String> AZURE_STORAGE_CONTAINER;
     public static final EnvOption<String> AZURE_STORAGE_ENDPOINT;
@@ -34,7 +33,6 @@ public final class JarvisProxyEnvs {
         PROXY_S3_REGION = ENV.optional("PROXY_S3_REGION", EnvType.string(), "us-east-1");
         PROXY_S3_ENDPOINT = ENV.optional("PROXY_S3_ENDPOINT", EnvType.string(), "");
         PROXY_S3_PATH_STYLE_ACCESS = ENV.optional("PROXY_S3_PATH_STYLE_ACCESS", EnvType.bool(), false);
-        PROXY_S3_SSE = ENV.optional("PROXY_S3_SSE", EnvType.string(), "AES256");
         AZURE_STORAGE_ACCOUNT = ENV.optional("AZURE_STORAGE_ACCOUNT", EnvType.string(), "");
         AZURE_STORAGE_CONTAINER = ENV.optional("AZURE_STORAGE_CONTAINER", EnvType.string(), "");
         AZURE_STORAGE_ENDPOINT = ENV.optional("AZURE_STORAGE_ENDPOINT", EnvType.string(), "");
@@ -54,7 +52,6 @@ public final class JarvisProxyEnvs {
         ENV.property("proxy.s3.region", PROXY_S3_REGION);
         ENV.property("proxy.s3.endpoint", PROXY_S3_ENDPOINT);
         ENV.property("proxy.s3.path-style-access", PROXY_S3_PATH_STYLE_ACCESS);
-        ENV.property("proxy.s3.server-side-encryption", PROXY_S3_SSE);
         ENV.property("proxy.azure.account-name", AZURE_STORAGE_ACCOUNT);
         ENV.property("proxy.azure.container-name", AZURE_STORAGE_CONTAINER);
         ENV.property("proxy.azure.endpoint", AZURE_STORAGE_ENDPOINT);

@@ -14,6 +14,6 @@ auth/
 ```
 
 Application cores depend on `auth-core` and accept an
-`AuthenticationStrategy`. Standalone and combined Spring configurations wire
+`AuthenticationStrategy`. The standalone Spring configuration wires
 `HttpAuthenticationStrategy`, which validates tokens using the configured auth
 server URL. The in-memory implementation must be selected explicitly.

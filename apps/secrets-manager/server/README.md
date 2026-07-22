@@ -4,6 +4,11 @@ Spring Boot service for secrets groups, environments, bundles, admins, and
 accessors. The server validates bearer tokens against the auth server
 configured by `AUTH_BASE_URL`.
 
+Secrets are key-value environment variables held in a **group**. A **bundle** is
+a named collection of references to environments, so one bundle can gather
+envs from several groups without copying their values. Deleting a group
+cascades to its environments.
+
 ## Requirements
 
 - JDK 25+
@@ -35,6 +40,24 @@ The required runtime variables are:
 - `SECRETS_JPA_HIBERNATE_DDL_AUTO`
 - `SECRETS_JPA_JDBC_TIME_ZONE`
 - `AUTH_BASE_URL`
+
+`SECRETS_ROUTE_PREFIX` is optional and defaults to empty. It is published as
+`secrets.route-prefix` and sets the controller prefix described below.
+
+## Authentication And Authorization
+
+Roles are resolved per request, not stored as claims:
+
+1. The request carries `Authorization: Bearer <token>` and `X-Client-Id`.
+2. The token is checked against the auth server with
+   `AuthenticationStrategy.isTokenValidForClient(clientId, token)`. A missing
+   client id, a missing bearer token, or a token that does not belong to that
+   client is `401 Unauthorized`.
+3. The `clientId` is looked up in the admin and accessor tables to grant the
+   admin or accessor role. A valid token with neither role is `403 Forbidden`.
+
+No auth material — passwords, tokens, or client secrets — is stored in this
+service's database.
 
 ## Routes
 

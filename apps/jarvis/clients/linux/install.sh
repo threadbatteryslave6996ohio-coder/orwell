@@ -54,9 +54,6 @@ if [ "$CAPTURE_BACKEND" = "gnome-wayland" ] || { [ "$CAPTURE_BACKEND" = "auto" ]
 else
     check_tool "xdpyinfo" "sudo apt install x11-utils" || all_tools_ok=false
 fi
-if [ "$UPLOAD_MODE" != "proxy" ]; then
-    check_tool "aws" "sudo apt install awscli" || all_tools_ok=false
-fi
 
 if [ "$all_tools_ok" = false ]; then
     echo ""
@@ -64,7 +61,6 @@ if [ "$all_tools_ok" = false ]; then
     echo "  sudo apt update"
     echo "  sudo apt install ffmpeg curl pulseaudio-utils x11-utils gjs"
     echo "  sudo apt install gstreamer1.0-tools gstreamer1.0-pipewire gstreamer1.0-plugins-good"
-    echo "  sudo apt install awscli  # only needed for UPLOAD_MODE=s3"
     exit 1
 fi
 
@@ -83,35 +79,6 @@ if [ "$wayland_capture" = true ]; then
             exit 1
             ;;
     esac
-fi
-
-echo ""
-if [ "$UPLOAD_MODE" = "proxy" ]; then
-    echo -e "${YELLOW}Checking proxy upload configuration...${NC}"
-    if [ -z "$PROXY_URL" ] || [ -z "$PROXY_USERNAME" ] || [ -z "$PROXY_PASSWORD" ]; then
-        echo -e "${RED}x PROXY_URL, PROXY_USERNAME, and PROXY_PASSWORD are required when UPLOAD_MODE=proxy${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}✓ Proxy upload configuration present${NC}"
-else
-    echo -e "${YELLOW}Checking AWS credentials...${NC}"
-    if ! aws sts get-caller-identity ${AWS_PROFILE:+--profile "$AWS_PROFILE"} >/dev/null 2>&1; then
-        echo -e "${RED}x AWS credentials not configured or invalid${NC}"
-        echo "  Configure with: aws configure"
-        exit 1
-    fi
-    identity=$(aws sts get-caller-identity ${AWS_PROFILE:+--profile "$AWS_PROFILE"} --query 'Arn' --output text)
-    echo -e "${GREEN}✓ AWS credentials valid${NC}"
-    echo "  Account: $identity"
-
-    echo ""
-    echo -e "${YELLOW}Checking S3 bucket...${NC}"
-    if ! aws s3 ls "s3://$S3_BUCKET" --region "$AWS_REGION" ${AWS_PROFILE:+--profile "$AWS_PROFILE"} >/dev/null 2>&1; then
-        echo -e "${RED}x Cannot access S3 bucket: $S3_BUCKET${NC}"
-        echo "  Create it or update S3_BUCKET in config.sh."
-        exit 1
-    fi
-    echo -e "${GREEN}✓ S3 bucket accessible${NC}"
 fi
 
 echo ""
@@ -141,9 +108,6 @@ echo ""
 echo -e "${YELLOW}Installing scripts to $SCRIPTS_DIR...${NC}"
 install -m 755 "$SCRIPT_DIR/start_recorder.sh" "$SCRIPTS_DIR/start_recorder.sh"
 install -m 755 "$SCRIPT_DIR/gnome_wayland_recorder.js" "$SCRIPTS_DIR/gnome_wayland_recorder.js"
-install -m 755 "$SCRIPT_DIR/upload_to_s3.sh" "$SCRIPTS_DIR/upload_to_s3.sh"
-install -m 755 "$SCRIPT_DIR/sync_videos.sh" "$SCRIPTS_DIR/sync_videos.sh"
-install -m 755 "$SCRIPT_DIR/verify_uploads.sh" "$SCRIPTS_DIR/verify_uploads.sh"
 install -m 755 "$SCRIPT_DIR/setup-systemd.sh" "$SCRIPTS_DIR/setup-systemd.sh"
 install -m 644 "$SCRIPT_DIR/config.sh" "$SCRIPTS_DIR/config.sh"
 echo -e "${GREEN}✓ Scripts installed${NC}"
@@ -151,7 +115,7 @@ echo -e "${GREEN}✓ Scripts installed${NC}"
 echo ""
 echo -e "${YELLOW}Creating and starting systemd user services...${NC}"
 "$SCRIPTS_DIR/setup-systemd.sh" load
-echo -e "${GREEN}✓ systemd user service and timers configured${NC}"
+echo -e "${GREEN}✓ systemd recorder service configured${NC}"
 
 echo ""
 echo -e "${BLUE}========================================${NC}"
@@ -159,15 +123,13 @@ echo -e "${GREEN}Installation Complete${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 echo "Configuration:"
-echo "  S3 Bucket: $S3_BUCKET"
-echo "  AWS Region: $AWS_REGION"
-echo "  Upload Mode: $UPLOAD_MODE"
 echo "  Recordings: $RECORDINGS_DIR"
 echo "  Scripts: $SCRIPTS_DIR"
+echo ""
+echo "This client records only. Uploads are handled by the syncer client at"
+echo "apps/jarvis/clients/syncer/, run separately on a timer."
 echo ""
 echo "Useful commands:"
 echo "  ./manage.sh status"
 echo "  ./manage.sh logs"
-echo "  ./manage.sh upload"
-echo "  ./manage.sh sync"
 echo ""

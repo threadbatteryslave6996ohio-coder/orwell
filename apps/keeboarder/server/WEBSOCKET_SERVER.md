@@ -1,24 +1,21 @@
-# Keeboarder WebSocket Redis Server
+# Keeboarder WebSocket Protocol
 
-A Java WebSocket server that maintains a Redis cache of all connected clients and validates client login tokens against the auth server before registration succeeds.
+The wire protocol spoken by the Keeboarder WebSocket endpoint, and the Redis
+schema behind it. For building, running, configuring, and the HTTP API, see
+[README.md](README.md).
 
-## Features
-
-- **WebSocket Communication**: Real-time bidirectional communication using WebSocket protocol
-- **Redis-Backed Client Registry**: All connected clients are stored in Redis for persistence and scalability
-- **Personalized Messages**: Send targeted messages to specific clients by their ID
-- **Auth Validation**: Client registration requires a valid token issued by the auth server for the same `clientId`
-- **Host Advertisement**: New clients can advertise themselves with a custom name
-- **Broadcast Messages**: Send messages to all connected clients
+The server maintains a Redis cache of all connected clients and validates client
+login tokens against the auth server before registration succeeds.
 
 ## Architecture
 
 ### Components
 
-1. **ChatServer** - Main server entry point that initializes and starts the WebSocket server
-2. **ChatEndpoint** - WebSocket endpoint handler that manages client connections and message routing
-3. **RedisClientCache** - Redis client wrapper for managing connected client metadata
-4. **Message** - Data class representing client messages
+1. **KeeboarderServerApplication** - Spring Boot entry point for the server
+2. **KeeboarderWebSocketRuntime** - Starts the WebSocket endpoint and owns the Redis client cache
+3. **ChatEndpoint** - WebSocket endpoint handler that manages client connections and message routing
+4. **RedisClientCache** - Redis client wrapper for managing connected client metadata
+5. **Message** - Data class representing client messages
 
 ### Message Flow
 
@@ -37,63 +34,22 @@ Client connects → Register with clientId, name, token
          On disconnect → Cleanup Redis entry
 ```
 
-## Prerequisites
+## Endpoint
 
-- Java 25+
-- Redis server running on localhost:6379 (or configured via environment variables)
-- Auth server running on localhost:8081 by default (or configured via `AUTH_BASE_URL`)
-- Maven (for building from source)
+The REST API and the WebSocket endpoint share one port, set by `SERVER_ADDRESS`
+and `SERVER_PORT`. `WEBSOCKET_CONTEXT_PATH` sets the path prefix and defaults to
+`/ws`, so the standalone default endpoint is:
 
-## Building
-
-```bash
-# From the repository root:
-mvn -pl :keeboarder-server -am package -DskipTests
+```
+ws://host:port/ws/chat
 ```
 
-This creates in `apps/keeboarder/server/target/`:
-- `keeboarder-server-0.1.0-SNAPSHOT.jar` - Lightweight JAR
-- `keeboarder-server-0.1.0-SNAPSHOT-exec.jar` - Executable Spring Boot JAR
-
-## Running the Server
-
-### Prerequisites: Start Redis
-
-```bash
-# Using Docker
-docker run -d -p 6379:6379 redis:latest
-
-# Or if Redis is installed locally
-redis-server
-```
-
-### Start the WebSocket Server
-
-```bash
-java -jar target/keeboarder-server-0.1.0-SNAPSHOT-exec.jar
-```
-
-### Configuration via Environment Variables
-
-```bash
-WEBSOCKET_HOST=0.0.0.0          # Default: localhost
-WEBSOCKET_PORT=8025             # Default: 8025
-REDIS_HOST=localhost            # Default: localhost
-REDIS_PORT=6379                 # Default: 6379
-SERVER_NAME=KeeboarderWS        # Default: KeeboarderWS
-AUTH_BASE_URL=http://localhost:8081  # Default: http://localhost:8081
-```
-
-Example with custom configuration:
-
-```bash
-WEBSOCKET_HOST=0.0.0.0 WEBSOCKET_PORT=9000 REDIS_HOST=redis.example.com \
-  java -jar target/keeboarder-server-0.1.0-SNAPSHOT-exec.jar
-```
+The Docker Compose setup in this module sets the prefix to `/keeboarder/ws`,
+which makes the endpoint `ws://localhost:8025/keeboarder/ws/chat`.
 
 ## Message Protocol
 
-All messages are JSON formatted. The server communicates on `ws://host:port/ws/chat`.
+All messages are JSON formatted.
 
 ### Client Registration
 
@@ -157,18 +113,22 @@ When a new host registers, all other connected clients receive:
 ```json
 {
   "type": "broadcast",
-  "content": "Message for everyone except me"
+  "content": "Message for everyone"
 }
 ```
 
-**Broadcast** (Server → All Other Clients):
+**Broadcast** (Server → All Registered Clients):
 ```json
 {
   "type": "broadcast",
   "fromClientId": "sender-id",
-  "content": "Message for everyone except me"
+  "content": "Message for everyone"
 }
 ```
+
+The sender is not excluded: a broadcast is delivered to every registered
+client, including the one that sent it. Only the `host_joined` announcement
+excludes its originator.
 
 ### Error Messages
 
@@ -210,161 +170,3 @@ The server uses Redis to store client information:
 3) "connectedAt"
 4) "2026-06-21T15:30:45.123Z"
 ```
-
-## Example Client (JavaScript/WebSocket)
-
-```javascript
-const ws = new WebSocket('ws://localhost:8025/ws/chat');
-
-ws.onopen = () => {
-  console.log('Connected to server');
-  
-  // Register with the server
-  ws.send(JSON.stringify({
-    type: 'register',
-    clientId: 'my-keyboard',
-    name: 'My Keyboard',
-    token: '<token-from-auth-login>'
-  }));
-};
-
-ws.onmessage = (event) => {
-  const msg = JSON.parse(event.data);
-  
-  if (msg.type === 'registered') {
-    console.log('Got clientId:', msg.clientId);
-    window.myClientId = msg.clientId;
-  } else if (msg.type === 'host_joined') {
-    console.log(`${msg.name} joined!`);
-  } else if (msg.type === 'personal') {
-    console.log(`Message from ${msg.fromClientId}:`, msg.content);
-  } else if (msg.type === 'broadcast') {
-    console.log(`Broadcast from ${msg.fromClientId}:`, msg.content);
-  }
-};
-
-ws.onerror = (error) => {
-  console.error('WebSocket error:', error);
-};
-
-// Send a personal message
-function sendPersonal(targetClientId, message) {
-  ws.send(JSON.stringify({
-    type: 'personal',
-    toClientId: targetClientId,
-    content: message
-  }));
-}
-
-// Send a broadcast message
-function sendBroadcast(message) {
-  ws.send(JSON.stringify({
-    type: 'broadcast',
-    content: message
-  }));
-}
-```
-
-## Example Client (Python)
-
-```python
-import asyncio
-import json
-import websockets
-async def main():
-    async with websockets.connect('ws://localhost:8025/ws/chat') as ws:
-        # Register
-        await ws.send(json.dumps({
-            'type': 'register',
-            'clientId': 'python-client',
-            'name': 'Python Client',
-            'token': '<token-from-auth-login>'
-        }))
-        
-        # Receive registration response
-        response = json.loads(await ws.recv())
-        print(f"Registered: {response}")
-        # Listen for messages
-        while True:
-            msg = json.loads(await ws.recv())
-            print(f"Received: {msg}")
-            
-            if msg['type'] == 'host_joined':
-                print(f"New host: {msg['name']}")
-            elif msg['type'] == 'personal':
-                print(f"Personal message from {msg['fromClientId']}: {msg['content']}")
-            elif msg['type'] == 'broadcast':
-                print(f"Broadcast from {msg['fromClientId']}: {msg['content']}")
-
-asyncio.run(main())
-```
-
-## Deployment
-
-### Docker
-
-Create a `Dockerfile`:
-
-```dockerfile
-FROM openjdk:21-jdk-slim
-WORKDIR /app
-COPY target/keeboarder-server-0.1.0-SNAPSHOT-exec.jar app.jar
-ENV WEBSOCKET_HOST=0.0.0.0
-ENV WEBSOCKET_PORT=8025
-ENV REDIS_HOST=redis
-ENV REDIS_PORT=6379
-EXPOSE 8025
-CMD ["java", "-jar", "app.jar"]
-```
-
-Build and run with Docker Compose:
-
-```yaml
-version: '3.8'
-services:
-  redis:
-    image: redis:latest
-    ports:
-      - "6379:6379"
-  
-  websocket-server:
-    build: .
-    ports:
-      - "8025:8025"
-    depends_on:
-      - redis
-    environment:
-      REDIS_HOST: redis
-```
-
-Run:
-```bash
-docker-compose up
-```
-
-## Troubleshooting
-
-### Connection Refused
-- Check that Redis is running: `redis-cli ping`
-- Verify WebSocket server is started: `netstat -an | grep 8025`
-
-### Clients Not Appearing
-- Verify Redis is accessible with correct host/port
-- Check server logs for connection errors
-- Use `redis-cli SMEMBERS ws:clients` to verify client registration
-
-### Message Not Delivered
-- Verify target clientId exists: `redis-cli SMEMBERS ws:clients`
-- Check client is still connected (not disconnected)
-- Ensure proper JSON formatting in message
-
-## Performance Considerations
-
-- Each client connection maintains a WebSocket session
-- Redis operations are optimized with connection pooling (via Jedis)
-- Server scales horizontally by connecting multiple instances to the same Redis
-- Message broadcasting is done in-memory for active sessions
-
-## License
-
-MIT

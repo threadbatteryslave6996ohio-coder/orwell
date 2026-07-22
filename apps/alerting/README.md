@@ -1,14 +1,7 @@
 # Alerting
 
 Standalone alert-delivery service. It receives alert events over HTTP and
-forwards them via email (SMTP). It was previously bundled under `jarvis/bucket`
-and is now its own top-level app (`apps/alerting`).
-
-## Flow
-
-```text
-detection service -> alert service -> email
-```
+forwards them via email (SMTP).
 
 ## HTTP server
 
@@ -27,11 +20,11 @@ SERVER_ENGINE=spring java -jar target/alerting-0.1.0-SNAPSHOT-exec.jar
 Environment variables control the listening host and port, alert delivery, and
 SMTP settings (see `.env.example`):
 
-| Variable | Default | Purpose |
+| Variable | Default / `.env.example` value | Purpose |
 |---|---|---|
-| `SERVER_ADDRESS` | `127.0.0.1` | Alert server bind address |
-| `SERVER_PORT` | `9000` | Alert server port |
-| `SERVER_ENGINE` | `spring` | HTTP engine: `spring` or `undertow` |
+| `SERVER_ADDRESS` | **required** — `.env.example` uses `127.0.0.1` | Alert server bind address |
+| `SERVER_PORT` | **required** — `.env.example` uses `9000` | Alert server port |
+| `SERVER_ENGINE` | `spring` (see note) | HTTP engine: `spring` or `undertow` |
 | `ALERT_EMAIL_ENABLED` | `false` | Enable email delivery |
 | `ALERT_EMAIL_TO` | — | Recipient for alert emails |
 | `ALERT_EMAIL_FROM` | — | Sender address (defaults to `ALERT_EMAIL_TO`) |
@@ -41,6 +34,13 @@ SMTP settings (see `.env.example`):
 | `SMTP_PASSWORD` | — | SMTP password |
 | `SMTP_USE_TLS` | `true` | Use STARTTLS |
 | `ALERT_LOG_FILE` | `/var/log/streaming/alerts.log` | Alert log file path |
+
+`SERVER_ADDRESS` and `SERVER_PORT` are registered as `required` by `AppServerEnv`: unset, the
+app exits at startup with a validation error rather than falling back to the values above.
+
+`SERVER_ENGINE` is **not** part of `AlertEnvs` and is not validated by the env schema —
+`ServerRuntime` reads it straight from the process environment before the schema runs, so don't
+go looking for it there.
 
 ## Alert log format
 

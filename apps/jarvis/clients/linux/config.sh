@@ -1,22 +1,10 @@
 #!/bin/bash
 # Configuration file for Keeboarder Ubuntu GNOME recorder.
 # Customize these settings before running install.sh.
-
-# ============================================================
-# AWS S3 Configuration
-# ============================================================
-
-S3_BUCKET="keeboarder-recordings"
-AWS_REGION="us-east-1"
-S3_PREFIX="recordings/"
-
-# Upload mode:
-# - s3: direct AWS CLI upload
-# - proxy: upload through bucket/proxy using auth-server clientId/secret auth
-UPLOAD_MODE="proxy"
-PROXY_URL="http://localhost:5000"
-PROXY_USERNAME="d"
-PROXY_PASSWORD="d"
+#
+# This client is RECORD-ONLY. It captures screen, microphone, and system audio
+# to local files. Uploading recordings to the bucket is handled by the separate
+# syncer client at apps/jarvis/clients/syncer/, run on a timer.
 
 # ============================================================
 # Recording Directories
@@ -28,7 +16,6 @@ MIC_DIR="$RECORDINGS_DIR/mic"
 SYSTEM_AUDIO_DIR="$RECORDINGS_DIR/system-audio"
 LOGS_DIR="$RECORDINGS_DIR/logs"
 SCRIPTS_DIR="$HOME/scripts"
-PROXY_TOKEN_FILE="$LOGS_DIR/.proxy_token"
 
 # ============================================================
 # Ubuntu GNOME Capture Settings
@@ -53,7 +40,7 @@ SCREEN_OFFSET_X="0"
 SCREEN_OFFSET_Y="0"
 
 # GNOME Wayland uses the Shell screencast service, whose reliable native output
-# is WebM. Screen segments from both backends are accepted by the uploader.
+# is WebM. Both backends write segments that the syncer client then uploads.
 WAYLAND_SCREEN_EXTENSION="webm"
 WAYLAND_DRAW_CURSOR="true"
 
@@ -84,17 +71,6 @@ SCREEN_SEGMENT_FORMAT_OPTIONS="movflags=+empty_moov+default_base_moof+frag_keyfr
 SCREEN_KEYFRAME_INTERVAL="15"
 
 # ============================================================
-# Upload Settings
-# ============================================================
-
-MIN_FILE_AGE="5"
-FILE_STABILITY_WAIT_SECONDS="3"
-UPLOAD_BATCH_SIZE="10"
-DELETE_AFTER_UPLOAD="false"
-VALIDATE_MEDIA_BEFORE_UPLOAD="true"
-CHECK_REMOTE_BEFORE_UPLOAD="true"
-
-# ============================================================
 # Remote Streaming Settings
 # ============================================================
 
@@ -115,13 +91,6 @@ REMOTE_STREAM_TUNE="zerolatency"
 REMOTE_STREAM_KEYFRAME_INTERVAL="15"
 
 # ============================================================
-# Verification Settings
-# ============================================================
-
-VERIFY_FILE_SIZE="true"
-ALERT_EMAIL=""
-
-# ============================================================
 # Logging Settings
 # ============================================================
 
@@ -132,7 +101,6 @@ LOG_RETENTION_DAYS="30"
 # Advanced Settings
 # ============================================================
 
-AWS_PROFILE=""
 DEBUG_MODE="false"
 DEVICE_HOSTNAME="$(hostname)"
 
@@ -141,23 +109,16 @@ DEVICE_HOSTNAME="$(hostname)"
 # ============================================================
 
 SYSTEMD_SERVICE_NAME="keeboarder-recorder"
-UPLOAD_TIMER_NAME="keeboarder-upload"
-VERIFY_TIMER_NAME="keeboarder-verify"
-UPLOAD_INTERVAL="15min"
-VERIFY_INTERVAL="1h"
 
-export S3_BUCKET AWS_REGION S3_PREFIX UPLOAD_MODE PROXY_URL PROXY_USERNAME PROXY_PASSWORD PROXY_TOKEN_FILE
 export RECORDINGS_DIR SCREEN_DIR MIC_DIR SYSTEM_AUDIO_DIR LOGS_DIR SCRIPTS_DIR
 export CAPTURE_BACKEND REQUIRE_XORG DISPLAY_NAME SCREEN_SIZE SCREEN_OFFSET_X SCREEN_OFFSET_Y
 export WAYLAND_SCREEN_EXTENSION WAYLAND_DRAW_CURSOR
 export MIC_SOURCE SYSTEM_AUDIO_SOURCE
 export SCREEN_FPS SCREEN_CRF SCREEN_PRESET SEGMENT_DURATION
 export SCREEN_SEGMENT_EXTENSION SCREEN_SEGMENT_FORMAT SCREEN_SEGMENT_FORMAT_OPTIONS SCREEN_KEYFRAME_INTERVAL
-export MIN_FILE_AGE FILE_STABILITY_WAIT_SECONDS UPLOAD_BATCH_SIZE DELETE_AFTER_UPLOAD VALIDATE_MEDIA_BEFORE_UPLOAD CHECK_REMOTE_BEFORE_UPLOAD
 export REMOTE_STREAM_ENABLED REMOTE_STREAM_URL REMOTE_STREAM_FORMAT REMOTE_STREAM_CODEC
 export REMOTE_STREAM_PRESET REMOTE_STREAM_CRF REMOTE_STREAM_PIXEL_FORMAT REMOTE_STREAM_TUNE
 export REMOTE_STREAM_KEYFRAME_INTERVAL
-export VERIFY_FILE_SIZE ALERT_EMAIL
 export LOG_LEVEL LOG_RETENTION_DAYS
-export AWS_PROFILE DEBUG_MODE DEVICE_HOSTNAME
-export SYSTEMD_SERVICE_NAME UPLOAD_TIMER_NAME VERIFY_TIMER_NAME UPLOAD_INTERVAL VERIFY_INTERVAL
+export DEBUG_MODE DEVICE_HOSTNAME
+export SYSTEMD_SERVICE_NAME

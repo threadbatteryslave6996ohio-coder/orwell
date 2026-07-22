@@ -1,7 +1,8 @@
 # Jarvis
 
-Surveillance services (bucket proxy, alerting) and macOS/Linux recorder
+Surveillance services (bucket proxy, detection) and macOS/Linux recorder
 clients. Bucket services are under `bucket/`, recorder clients under `clients/`.
+Alert delivery is no longer part of jarvis; it is a standalone app at `apps/alerting`.
 The bucket proxy also bundles the stream analysis worker and its ingest scripts
 (see `bucket/proxy/`).
 

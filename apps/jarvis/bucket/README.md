@@ -1,30 +1,26 @@
-# AWS S3 Private Bucket
+# Bucket object storage proxy
 
-This project deploys a private object storage bucket plus a Java-based EC2 proxy
-and Java stream services. The only shell-based pieces are the stream helper
-scripts and the deployment bootstrap.
+This subsystem is a Java upload proxy in front of an object-storage bucket. The proxy speaks the
+S3 protocol against any S3-compatible store (e.g. a self-hosted [MinIO](https://min.io)) or Azure
+Blob, so uploads never need cloud-vendor credentials on the clients. The Java services carry the
+stream work too; the shell pieces are the stream helper scripts and the recorder clients under
+`../clients/`.
 
 ## Components
 
-- `deployment/`: Terraform and EC2 bootstrap
-- `proxy/`: Java S3 upload proxy
-- `alerting/`: Java alert server (includes person detection)
-- `streaming/`: Java stream worker plus shell scripts
+- `proxy/`: Java upload proxy, which also runs the stream analysis worker as
+  `--mode=stream-worker` and carries the stream helper scripts in `proxy/scripts/`
 
-## Runtime
-
-- `proxy`: Spring Boot service packaged as a jar
-- `alerting`: executable jar (includes detection)
-- `streaming`: executable jar invoked by `analyze_stream.sh`
-- `record_stream.sh` and `analyze_stream.sh` remain shell scripts
+Alert delivery lives in `apps/alerting` and person detection in `apps/jarvis/detection`; both
+are standalone apps deployed alongside the proxy.
 
 ## Deployment
 
-1. Copy `deployment/terraform.tfvars.example` to `deployment/terraform.tfvars`
-2. Set `source_repo_url` and the other deployment variables
-3. Run `terraform init`, `terraform plan`, and `terraform apply` from `deployment/`
-
-The EC2 user-data script installs Java 25, Maven, Docker, and ffmpeg, then builds `bucket/pom.xml` and installs the generated jars.
+The proxy ships as a container. See [`proxy/docker/deployment/`](proxy/docker/deployment/) for
+the compose file and `.env.example`; point `PROXY_S3_ENDPOINT` at your bucket service and set the
+storage credentials. For local development against MinIO, use
+[`proxy/scripts/local-stack.sh`](proxy/scripts/local-stack.sh) (see
+[proxy/LOCAL_TESTING.md](proxy/LOCAL_TESTING.md)).
 
 ## Proxy API
 
@@ -38,8 +34,6 @@ MediaMTX receives RTMP input, the recorder writes segmented MP4 files, and the a
 
 ## Documentation
 
-- [deployment/README.md](deployment/README.md)
 - [proxy/README.md](proxy/README.md)
-- [proxy/START_SERVER.md](proxy/START_SERVER.md)
-- [alerting/README.md](alerting/README.md)
-- [streaming/README.md](streaming/README.md)
+- [proxy/LOCAL_TESTING.md](proxy/LOCAL_TESTING.md)
+- [../../alerting/README.md](../../alerting/README.md)

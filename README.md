@@ -27,6 +27,17 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 | Server bootstrap | `packages/server-bootstrap` | Shared Spring Boot wiring |
 | Undertow bootstrap | `packages/undertow-bootstrap` | Shared lightweight HTTP runtime |
 | Server parent | `packages/server-parent` | Parent POM for server modules |
+| Server test support | `packages/server-test-support` | Shared Testcontainers base for integration tests |
+
+## Other directories
+
+| Directory | Purpose |
+|---|---|
+| `dashboard` | Local dev UI over the auth, secrets, and klippy servers — see `dashboard/README.md` |
+| `benchmarks` | Ad-hoc measurement harnesses and dated result notes |
+| `scripts` | Deploy-host and seeding scripts — see `scripts/README.md` |
+| `db-init` | `all-services.sql`, the single source of the klippy/auth/secrets roles and databases |
+| `nginx` | Reverse-proxy configs for the local stack |
 
 ## Build
 

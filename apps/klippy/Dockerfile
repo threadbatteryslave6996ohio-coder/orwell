@@ -7,7 +7,7 @@ FROM maven:3-eclipse-temurin-25 AS build
 WORKDIR /workspace
 
 # Copy the parent reactor. The parent .dockerignore keeps target/, Git data,
-# logs, Terraform state, and local secrets out of the build context.
+# logs, and local secrets out of the build context.
 COPY . .
 
 RUN --mount=type=cache,target=/root/.m2 \
