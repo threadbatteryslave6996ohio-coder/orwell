@@ -93,21 +93,23 @@ the existing Spring Boot/Tomcat runtime. Both engines expose the same
 
 ## Docker
 
-A compose stack runs this service together with a local `alerting` service. From this directory:
+This service and the sibling `alerting` service run as part of the whole-stack
+compose file at the repository root. From the repository root:
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose.all-services.yml up --build
 ```
 
 Set `GRAFANA_URL`, `GRAFANA_API_TOKEN`, `GRAFANA_LOKI_DATASOURCE_UID`, and `AI_API_KEY` before
 starting. Edit them in **`.env.example`**, not `.env` — this is deliberate, not a typo:
-`docker-compose.yml` genuinely lists the `.example` files in its `env_file`, so a value you put
-in `.env` is not read.
+`docker-compose.all-services.yml` genuinely lists the `.example` files in its `env_file`, so a
+value you put in `.env` is not read.
 
-The two services are reachable through:
+The two services are reachable through the shared Nginx entrypoint (port 8080 by default,
+overridable with `ORWELL_HTTP_PORT`):
 
-- `http://localhost:9010/alerting`
-- `http://localhost:9010/log-analyzer`
+- `http://localhost:8080/alerting`
+- `http://localhost:8080/log-analyzer`
 
 To use a remote Grafana, point `GRAFANA_URL` at it and make sure the Loki datasource UID you set
 is valid in *that* Grafana.
