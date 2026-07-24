@@ -27,6 +27,7 @@ AUTH_SERVER_URL=http://localhost:8081
 CLIENT_ID=my-mac
 CLIENT_SECRET=change-me-please
 CLIPBOARD_POLL_INTERVAL_MS=1000
+CLIENT_HEARTBEAT_INTERVAL_MS=5000
 ```
 
 `REMOTE_SERVER_URL` is required and may be the server base URL or the full
@@ -35,6 +36,13 @@ machine hostname with a random fallback. `CLIPBOARD_POLL_INTERVAL_MS`
 defaults to `1000` and must be at least `100`. A lower value is fatal: the
 client reports it on stderr and in `logs/klippy-client.txt`, then exits with
 status `1`.
+
+Alongside clipboard polling, the client posts a liveness heartbeat to the
+server's `POST /heartbeat` every `CLIENT_HEARTBEAT_INTERVAL_MS` (default `5000`),
+on its own schedule independent of the clipboard poll. The server logs each beat
+to Loki, where `apps/liveness-analyzer` watches for the absence of beats to detect
+that the client has stopped running. The client stays quiet on success and only
+logs when a beat cannot be delivered.
 
 With `CLIENT_SECRET`, the client logs in at startup and refreshes its token
 after a `401`; `AUTH_SERVER_URL` is then required. For static authentication,

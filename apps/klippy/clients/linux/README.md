@@ -38,6 +38,7 @@ AUTH_SERVER_URL=http://localhost:8081
 CLIENT_ID=ubuntu-gnome
 CLIENT_SECRET=change-me-please
 CLIPBOARD_POLL_INTERVAL_MS=1000
+CLIENT_HEARTBEAT_INTERVAL_MS=5000
 ```
 
 `REMOTE_SERVER_URL` is required and may be either the server base URL or the
@@ -48,6 +49,12 @@ client reports it on stderr and in `logs/klippy-client.txt`, then exits with
 status `1`. `CLIENT_SECRET` enables startup login
 and token refresh; omit it and set `CLIENT_TOKEN` if you want to use a static
 auth token instead.
+
+Like the macOS client, the Linux client posts a liveness heartbeat to the
+server's `POST /heartbeat` every `CLIENT_HEARTBEAT_INTERVAL_MS` (default `5000`,
+floored at `1000`) on its own schedule — this lives in the shared
+`DesktopClientRunner`, so both desktop clients beat. `apps/liveness-analyzer`
+watches for the absence of those beats to detect a client that has stopped.
 
 Shell environment variables override values from `.env` when both are set.
 

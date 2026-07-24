@@ -2,6 +2,7 @@ package dev.orwell.clients.core;
 
 import dev.orwell.logging.Logger;
 
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -19,11 +20,14 @@ public final class DesktopClientRunner {
 
     private final DesktopClipboardMonitor monitor;
     private final long pollIntervalMs;
+    private final long heartbeatIntervalMs;
     private final Logger logger;
 
-    public DesktopClientRunner(DesktopClipboardMonitor monitor, long pollIntervalMs, Logger logger) {
+    public DesktopClientRunner(
+            DesktopClipboardMonitor monitor, long pollIntervalMs, long heartbeatIntervalMs, Logger logger) {
         this.monitor = Objects.requireNonNull(monitor, "monitor");
         this.pollIntervalMs = pollIntervalMs;
+        this.heartbeatIntervalMs = heartbeatIntervalMs;
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -37,10 +41,27 @@ public final class DesktopClientRunner {
     public void start(String label, ClientConfig config, Map<String, String> extraFields) {
         logger.info(label, startupFields(config, pollIntervalMs, extraFields));
 
+        startHeartbeat(config);
+
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         Runtime.getRuntime().addShutdownHook(new Thread(() ->
                 ExecutorShutdown.shutdown(scheduler, SHUTDOWN_TIMEOUT_MESSAGE, logger)));
         scheduler.scheduleWithFixedDelay(this::pollSafely, 0, pollIntervalMs, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Starts the liveness heartbeat shared by every desktop client, on its own scheduler and
+     * cadence so an external monitor can tell the process is alive even when the clipboard is idle.
+     * Its request timeout is kept short and under the interval (but positive) so a slow-but-alive
+     * server cannot stretch the gap between logged beats toward the monitor's down-threshold.
+     */
+    private void startHeartbeat(ClientConfig config) {
+        long timeoutMs = Math.min(Math.max(heartbeatIntervalMs, HeartbeatScheduler.MINIMUM_INTERVAL_MS), 3000L);
+        ClipboardApiClient heartbeatApiClient =
+                new ClipboardApiClient(config.endpoint(), config.authSession(), Duration.ofMillis(timeoutMs));
+        new HeartbeatScheduler(
+                heartbeatApiClient, config.endpoint().resolve("heartbeat"), config.clientId(),
+                heartbeatIntervalMs, logger).start();
     }
 
     /**

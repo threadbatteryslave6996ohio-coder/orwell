@@ -58,6 +58,7 @@ public final class LinuxClipboardClientApp {
         Env env = ClientEnvs.load();
         ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("linux-"));
         long pollIntervalMs = PollInterval.resolve(env);
+        long heartbeatIntervalMs = env.get(ClientEnvs.CLIENT_HEARTBEAT_INTERVAL_MS);
         LinuxClipboardReader clipboardReader = LinuxClipboardReaderFactory.create(env);
         OfflineFileLockerClient fileLocker = OfflineFileLockerFactory.create(env);
         fileLocker.ping();
@@ -69,7 +70,7 @@ public final class LinuxClipboardClientApp {
         LinuxClipboardClientApp app = new LinuxClipboardClientApp(
                 clipboardReader, config.endpoint(), config.authServerUrl(), config.clientId(),
                 config.authSession(), fileLocker, auditLogger, logger);
-        new DesktopClientRunner(app.monitor, pollIntervalMs, logger)
+        new DesktopClientRunner(app.monitor, pollIntervalMs, heartbeatIntervalMs, logger)
                 .start("Klippy Linux client started.", config, Map.of("clipboardBackend", clipboardReader.name()));
     }
 

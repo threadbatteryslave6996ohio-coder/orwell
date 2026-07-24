@@ -98,13 +98,26 @@ Optional `limit` (1-1000), `afterTimestamp`, and `afterId` parameters provide
 cursor pagination. Both cursor parameters must be supplied together. Clipboard
 content is limited to 1,000,000 characters.
 
+Record a client liveness heartbeat:
+
+```http
+POST /heartbeat
+Authorization: Bearer <client-token>
+```
+
+The body is ignored; the client id comes from the authenticated token. Nothing is
+persisted — the request only logs `Client heartbeat.` with the `clientId`, which the
+Loki sink ships onward. `apps/liveness-analyzer` watches for the *absence* of those
+lines to detect a client that has stopped running. Returns `204 No Content`, or `401`
+when the token is missing.
+
 ## Logging
 
 The server logs through the injected `dev.orwell.logging.Logger`. Its bean comes from `LoggerConfiguration` in `packages/server-bootstrap` and is a `FailSafeLogger` wrapping a `CompositeLogger` of `ConsoleLogger` and `LokiLogger`: records go to stdout and are pushed asynchronously to Loki. The server writes no application log file of its own.
 
 Set `LOKI_URL` to enable the Loki sink, and `LOKI_TENANT_ID` when the Loki instance is multi-tenant. If `LOKI_URL` is unset the bean falls back to console-only logging and warns at startup.
 
-Each successful `POST /clipboard` request records the `clientId`, generated entry id, and timestamp as structured metadata. Raw clipboard content is never logged.
+Each successful `POST /clipboard` request records the `clientId`, generated entry id, and timestamp as structured metadata. Raw clipboard content is never logged. Each `POST /heartbeat` records the `clientId` under the message `Client heartbeat.`, which is what `apps/liveness-analyzer` queries.
 
 Logging is best-effort: `FailSafeLogger` absorbs sink failures, and `LokiLogger` batches from a bounded queue on its own thread, so neither a failing nor a slow sink can turn a clipboard insert into an error.
 

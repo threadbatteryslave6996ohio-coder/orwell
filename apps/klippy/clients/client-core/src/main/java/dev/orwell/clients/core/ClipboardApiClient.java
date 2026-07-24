@@ -52,6 +52,22 @@ public final class ClipboardApiClient {
                 .build());
     }
 
+    /**
+     * Sends a liveness heartbeat to {@code heartbeatUri}. Carries the same client identity and
+     * bearer token as a clipboard write (and the same 401-refresh retry), so the server can log
+     * the beat against an authenticated client. The body is an empty JSON object: the server
+     * derives the client id from the token, not the payload.
+     */
+    public HttpResponse<String> heartbeat(URI heartbeatUri) throws IOException, InterruptedException {
+        return sendWithAuthRetry(token -> HttpRequest.newBuilder(heartbeatUri)
+                .timeout(requestTimeout)
+                .header("Content-Type", "application/json")
+                .header("X-Client-Id", authSession.clientId())
+                .header("Authorization", "Bearer " + token)
+                .POST(HttpRequest.BodyPublishers.ofString("{}", StandardCharsets.UTF_8))
+                .build());
+    }
+
     public HttpResponse<String> get(URI uri) throws IOException, InterruptedException {
         return sendWithAuthRetry(token -> HttpRequest.newBuilder(uri)
                 .timeout(requestTimeout)

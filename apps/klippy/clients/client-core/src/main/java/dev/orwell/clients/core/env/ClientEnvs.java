@@ -17,6 +17,7 @@ public final class ClientEnvs {
     public static final EnvOption<String> CLIENT_SECRET;
     public static final EnvOption<String> AUTH_SERVER_URL;
     public static final EnvOption<Long> CLIPBOARD_POLL_INTERVAL_MS;
+    public static final EnvOption<Long> CLIENT_HEARTBEAT_INTERVAL_MS;
     public static final EnvOption<String> CLIPBOARD_BACKEND;
     public static final EnvOption<String> OFFLINE_FILE_LOCKER_SOCKET;
     public static final EnvOption<Long> OFFLINE_SYNC_INTERVAL_MINUTES;
@@ -30,6 +31,7 @@ public final class ClientEnvs {
         CLIENT_SECRET = builder.optional("CLIENT_SECRET", EnvType.string());
         AUTH_SERVER_URL = builder.optional("AUTH_SERVER_URL", EnvType.string());
         CLIPBOARD_POLL_INTERVAL_MS = builder.optional("CLIPBOARD_POLL_INTERVAL_MS", EnvType.longInteger(), 1000L);
+        CLIENT_HEARTBEAT_INTERVAL_MS = builder.optional("CLIENT_HEARTBEAT_INTERVAL_MS", EnvType.longInteger(), 5000L);
         CLIPBOARD_BACKEND = builder.optional("CLIPBOARD_BACKEND", EnvType.string());
         OFFLINE_FILE_LOCKER_SOCKET = builder.optional("OFFLINE_FILE_LOCKER_SOCKET", EnvType.string());
         OFFLINE_SYNC_INTERVAL_MINUTES = builder.optional("OFFLINE_SYNC_INTERVAL_MINUTES", EnvType.longInteger());
