@@ -42,6 +42,18 @@ IMAP with a password requires an **app password**, not the account login passwor
 
 No Google Cloud project, OAuth client, or Pub/Sub topic is required.
 
+## Checking credentials without starting the service
+
+`scripts/check-imap-creds.sh` connects over IMAP, logs in, and fetches the headers of the most
+recent message in the configured folder — a quick way to confirm `IMAP_USERNAME`/`IMAP_PASSWORD`
+are correct before running the full service. It reads the same environment variables as the app
+(defaults match `GmailEnvs`); if `IMAP_PASSWORD` isn't set it prompts for it with hidden input.
+
+```bash
+set -a; source .env; set +a
+./scripts/check-imap-creds.sh
+```
+
 ## Build and run
 
 ```bash
