@@ -34,7 +34,7 @@ public final class HttpAuthenticationStrategy implements AuthenticationStrategy 
                     .body(new LoginHttpRequest(clientId, secret))
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (request, response) -> {
-                        throw new HttpAuthenticationException("Auth server rejected login with HTTP " + response.getStatusCode().value());
+                        throw new HttpAuthenticationException("Auth server rejected login with HTTP " + response.getStatusCode().value(), response.getStatusCode().value());
                     })
                     .body(LoginHttpResponse.class);
         } catch (RestClientException exception) {
@@ -55,7 +55,7 @@ public final class HttpAuthenticationStrategy implements AuthenticationStrategy 
                     .body(new CheckTokenHttpRequest(clientId, token))
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (request, serverResponse) -> {
-                        throw new HttpAuthenticationException("Auth server rejected token check with HTTP " + serverResponse.getStatusCode().value());
+                        throw new HttpAuthenticationException("Auth server rejected token check with HTTP " + serverResponse.getStatusCode().value(), serverResponse.getStatusCode().value());
                     })
                     .body(CheckTokenHttpResponse.class);
 

@@ -13,7 +13,7 @@ public final class DetectionEnvs {
     static {
         DETECTION_ALERT_URL = ENV.optional("DETECTION_ALERT_URL", EnvType.string(), "http://127.0.0.1:9000/alerts");
         DETECTION_ALERT_COOLDOWN_SECONDS = ENV.optional("DETECTION_ALERT_COOLDOWN_SECONDS", EnvType.integer(), 60);
-        DETECTION_MIN_CONFIDENCE = ENV.optional("DETECTION_MIN_CONFIDENCE", EnvType.of(Double.class, "double", Double::parseDouble), 0.0);
+        DETECTION_MIN_CONFIDENCE = ENV.optional("DETECTION_MIN_CONFIDENCE", EnvType.of(Double.class, "double", Double::parseDouble), 0.35);
         ENV.property("detection.alert-url", DETECTION_ALERT_URL);
         ENV.property("detection.cooldown-seconds", DETECTION_ALERT_COOLDOWN_SECONDS);
         ENV.property("detection.min-confidence", DETECTION_MIN_CONFIDENCE);

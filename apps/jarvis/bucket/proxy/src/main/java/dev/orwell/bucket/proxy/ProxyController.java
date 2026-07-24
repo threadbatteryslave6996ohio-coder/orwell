@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("${jarvis.server.route-prefix:}")
@@ -163,11 +164,11 @@ public class ProxyController {
 
     @GetMapping(value = "/admin", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> admin(@CookieValue(value = "s3proxy_admin", required = false) String token) {
-        String[] username = new String[1];
-        if (token == null || !sessions.tryValidate(token, username)) {
+        Optional<String> username = token == null ? Optional.empty() : sessions.validate(token);
+        if (username.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(adminLoginPage(""));
         }
-        return ResponseEntity.ok(adminDashboard(username[0], ""));
+        return ResponseEntity.ok(adminDashboard(username.get(), ""));
     }
 
     @PostMapping(value = "/admin/login", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
@@ -194,8 +195,8 @@ public class ProxyController {
     public ResponseEntity<String> createIdentity(@CookieValue(value = "s3proxy_admin", required = false) String token,
                                                  @RequestParam("clientId") String clientId,
                                                  @RequestParam("secret") String secret) {
-        String[] username = new String[1];
-        if (token == null || !sessions.tryValidate(token, username)) {
+        Optional<String> username = token == null ? Optional.empty() : sessions.validate(token);
+        if (username.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(adminLoginPage("Please sign in."));
         }
         var result = authServerClient.createIdentity(clientId, secret);
@@ -204,7 +205,7 @@ public class ProxyController {
                 ? "Created auth-server identity '" + escapeHtml(clientId) + "'."
                 : "Auth server rejected identity creation with HTTP " + status + ".";
         int responseStatus = result.success() ? HttpStatus.OK.value() : status;
-        return ResponseEntity.status(responseStatus).body(adminDashboard(username[0], message));
+        return ResponseEntity.status(responseStatus).body(adminDashboard(username.get(), message));
     }
 
     private ResponseEntity<Map<String, Object>> unauthorized() {

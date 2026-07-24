@@ -40,7 +40,7 @@ public class AuthServerClient {
             audit.write("authserver.login.response", java.util.Map.of("clientId", clientId, "statusCode", 200));
             return new AuthCallResult(response.token() != null && !response.token().isBlank(), 200, response.clientId(), response.token());
         } catch (HttpAuthenticationException exception) {
-            Integer statusCode = extractStatusCode(exception);
+            Integer statusCode = exception.statusCode();
             if (statusCode != null) {
                 audit.write("authserver.login.response_error", java.util.Map.of("clientId", clientId, "statusCode", statusCode));
                 return new AuthCallResult(false, statusCode, null, null);
@@ -71,30 +71,6 @@ public class AuthServerClient {
         } catch (Exception exception) {
             audit.write("authserver.identity.create.error", java.util.Map.of("clientId", clientId, "error", exception.getMessage()));
             return new AuthCallResult(false, 503, clientId, null);
-        }
-    }
-
-    private static Integer extractStatusCode(HttpAuthenticationException exception) {
-        String message = exception.getMessage();
-        if (message == null) {
-            return null;
-        }
-        int marker = message.lastIndexOf("HTTP ");
-        if (marker < 0) {
-            return null;
-        }
-        String suffix = message.substring(marker + 5).trim();
-        int end = 0;
-        while (end < suffix.length() && Character.isDigit(suffix.charAt(end))) {
-            end++;
-        }
-        if (end == 0) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(suffix.substring(0, end));
-        } catch (NumberFormatException ignored) {
-            return null;
         }
     }
 

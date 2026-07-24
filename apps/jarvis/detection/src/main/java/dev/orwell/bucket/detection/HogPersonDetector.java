@@ -34,7 +34,7 @@ final class HogPersonDetector implements PersonDetector {
         double average = averageBrightness(image);
         double center = averageBrightness(image.getSubimage(width / 4, height / 4, width / 2, height / 2));
         double confidence = Math.min(1.0, Math.max(0.0, (center - average + 128.0) / 255.0));
-        if (confidence < minConfidence || confidence < 0.35) {
+        if (confidence < minConfidence) {
             return List.of();
         }
 
