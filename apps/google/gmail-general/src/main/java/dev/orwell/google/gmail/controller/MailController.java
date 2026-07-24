@@ -1,5 +1,6 @@
 package dev.orwell.google.gmail.controller;
 
+import dev.orwell.bootstrap.auth.RequireAuthentication;
 import dev.orwell.google.gmail.repository.EmailMessageRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -17,10 +18,13 @@ import java.util.Objects;
  * (see {@link dev.orwell.google.gmail.entity.EmailMessageEntity}) is assigned in insertion order,
  * so it doubles as a consumption cursor: a consumer polls {@code GET /mails/latest} to get
  * started, then repeatedly calls {@code GET /mails/latest?checkpoint=<last id it saw>} to fetch
- * only what arrived since.
+ * only what arrived since. Mail content is sensitive, so every route here requires the same
+ * bearer-token authentication as the outbound webhook calls in {@link
+ * dev.orwell.google.gmail.GmailService}.
  */
 @RestController
 @RequestMapping("${gmail.route-prefix:}/mails")
+@RequireAuthentication
 public class MailController {
     private static final int DEFAULT_LIMIT = 50;
     private static final int MAX_LIMIT = 500;

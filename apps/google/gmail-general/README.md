@@ -65,7 +65,10 @@ Uses the shared Postgres instance defined in `docker-compose.all-services.yml`
 
 ## API
 
-All endpoints return JSON and are served under `GMAIL_ROUTE_PREFIX` (empty by default).
+All endpoints return JSON and are served under `GMAIL_ROUTE_PREFIX` (empty by default). Mail
+content is sensitive, so every `/mails` route requires the same `X-Client-Id` +
+`Authorization: Bearer <token>` headers as any other `@RequireAuthentication`-guarded endpoint in
+this repo; the token is checked against the auth server at `AUTH_BASE_URL`.
 
 ### List recent mail
 

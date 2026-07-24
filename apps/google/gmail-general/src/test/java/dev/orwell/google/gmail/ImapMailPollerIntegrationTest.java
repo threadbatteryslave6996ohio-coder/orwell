@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.icegreen.greenmail.user.GreenMailUser;
 import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.ServerSetupTest;
+import dev.orwell.auth.AuthenticationStrategy;
 import dev.orwell.testing.PostgresIntegrationTest;
 import jakarta.mail.Message;
 import jakarta.mail.Session;
@@ -14,7 +15,10 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -118,8 +122,19 @@ class ImapMailPollerIntegrationTest extends PostgresIntegrationTest {
     }
 
     private HttpResponse<String> httpGet(String path) throws IOException, InterruptedException {
-        return httpClient.send(
-                HttpRequest.newBuilder(URI.create("http://localhost:%d%s".formatted(port, path))).GET().build(),
-                HttpResponse.BodyHandlers.ofString());
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:%d%s".formatted(port, path)))
+                .header("X-Client-Id", "test-client")
+                .header("Authorization", "Bearer valid-token")
+                .GET().build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        @Primary
+        AuthenticationStrategy authenticationStrategy() {
+            return (clientId, token) -> "valid-token".equals(token);
+        }
     }
 }
