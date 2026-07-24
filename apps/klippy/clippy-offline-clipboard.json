@@ -1,0 +1,14 @@
+[
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8080/auth","operation":"refresh","status":"started","message":"startup token refresh","timestamp":"2026-07-14T11:51:42.234691398Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8080/auth","operation":"refresh","status":"succeeded","message":"startup token refresh","timestamp":"2026-07-14T11:51:42.588603210Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8081","operation":"refresh","status":"started","message":"startup token refresh","timestamp":"2026-07-15T12:04:11.330638537Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8081","operation":"refresh","status":"succeeded","message":"startup token refresh","timestamp":"2026-07-15T12:04:12.896452942Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8081","operation":"refresh","status":"started","message":"startup token refresh","timestamp":"2026-07-15T12:13:37.198561907Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8081","operation":"refresh","status":"succeeded","message":"startup token refresh","timestamp":"2026-07-15T12:13:37.675362207Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8081","operation":"refresh","status":"started","message":"startup token refresh","timestamp":"2026-07-15T12:45:24.892054341Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8081","operation":"refresh","status":"failed","message":"Cannot login with auth server.: I/O error on POST request for \"http://localhost:8081/login\": null","timestamp":"2026-07-15T12:45:25.146728296Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8081","operation":"refresh","status":"started","message":"startup token refresh","timestamp":"2026-07-15T12:46:12.144640701Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8081","operation":"refresh","status":"failed","message":"Cannot login with auth server.: I/O error on POST request for \"http://localhost:8081/login\": null","timestamp":"2026-07-15T12:46:12.347436570Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8081","operation":"refresh","status":"started","message":"startup token refresh","timestamp":"2026-07-15T12:54:34.995727441Z"},
+  {"type":"auth","clientId":"linux-clip","authServer":"http://localhost:8081","operation":"refresh","status":"succeeded","message":"startup token refresh","timestamp":"2026-07-15T12:54:35.373738959Z"}
+]
