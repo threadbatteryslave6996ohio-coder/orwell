@@ -1,0 +1,4 @@
+[
+  {"type":"auth","clientId":"clippy-linux-test","authServer":"http://localhost:8080/auth","operation":"refresh","status":"started","message":"startup token refresh","timestamp":"2026-07-08T08:26:02.982463497Z"},
+  {"type":"auth","clientId":"clippy-linux-test","authServer":"http://localhost:8080/auth","operation":"refresh","status":"succeeded","message":"startup token refresh","timestamp":"2026-07-08T08:26:05.243934936Z"}
+]
