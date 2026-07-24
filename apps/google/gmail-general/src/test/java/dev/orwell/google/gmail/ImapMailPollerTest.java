@@ -13,11 +13,11 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ImapMailListenerTest {
+class ImapMailPollerTest {
     private static final Session SESSION = Session.getInstance(new Properties());
 
     @Test
-    void mapsPlainTextMessageToWebhookDto() throws Exception {
+    void mapsPlainTextMessageToStorageDto() throws Exception {
         String raw = "Message-ID: <abc@example.com>\r\n"
                 + "Subject: Hello there\r\n"
                 + "From: Alice <alice@example.com>\r\n"
@@ -29,7 +29,7 @@ class ImapMailListenerTest {
         MimeMessage message = new MimeMessage(SESSION,
                 new ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8)));
 
-        GmailMessage result = ImapMailListener.toGmailMessage(message, 42L);
+        GmailMessage result = ImapMailPoller.toGmailMessage(message, 42L);
 
         assertEquals("<abc@example.com>", result.id());
         assertEquals("Hello there", result.subject());
@@ -44,7 +44,7 @@ class ImapMailListenerTest {
         MimeMessage message = new MimeMessage(SESSION,
                 new ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8)));
 
-        GmailMessage result = ImapMailListener.toGmailMessage(message, 7L);
+        GmailMessage result = ImapMailPoller.toGmailMessage(message, 7L);
 
         assertEquals("uid-7", result.id());
     }
@@ -64,7 +64,7 @@ class ImapMailListenerTest {
         message.setContent(multipart);
         message.saveChanges();
 
-        GmailMessage result = ImapMailListener.toGmailMessage(message, 1L);
+        GmailMessage result = ImapMailPoller.toGmailMessage(message, 1L);
 
         assertEquals("the plain part", result.body().strip());
     }
