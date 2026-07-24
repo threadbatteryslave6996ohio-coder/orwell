@@ -87,6 +87,8 @@ public final class ClipboardClientApp {
         ClipboardClientApp app = new ClipboardClientApp(
                 clipboard, config.endpoint(), config.authServerUrl(), config.clientId(), config.authSession(),
                 fileLocker, logger);
-        new DesktopClientRunner(app.monitor, pollIntervalMs, logger).start("Klippy client started.", config);
+        long heartbeatIntervalMs = env.get(ClientEnvs.CLIENT_HEARTBEAT_INTERVAL_MS);
+        new DesktopClientRunner(app.monitor, pollIntervalMs, heartbeatIntervalMs, logger)
+                .start("Klippy client started.", config);
     }
 }

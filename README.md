@@ -15,6 +15,7 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 | Keeboarder | `apps/keeboarder` | Keyboard/message relay |
 | Klippy | `apps/klippy` | Clipboard history sync |
 | Log analyzer | `apps/log-analyzer` | AI-assisted log triage feeding the alerting service |
+| Liveness analyzer | `apps/liveness-analyzer` | Heartbeat dead-man's switch alerting when a client stops running |
 | Secrets manager | `apps/secrets-manager` | Secret bundle/environment management |
 
 ## Packages
@@ -79,6 +80,7 @@ There is no log collector and no log file to scrape; set `LOKI_URL` (see `.env.e
 entries arrive labelled `{stream_type="app", app=..., level=...}`.
 
 Leave `LOKI_URL` empty and logs stay on the console, with a warning at startup so the choice is
-visible. `apps/log-analyzer` is the consumer: it queries that stream through Grafana and feeds
-the alerting service. Label scheme and cardinality rules are in `apps/log-analyzer/README.md`;
+visible. Two services consume that stream through Grafana: `apps/log-analyzer` triages error logs
+with an AI model, and `apps/liveness-analyzer` watches for client heartbeat lines and alerts when
+a client stops beating. Label scheme and cardinality rules are in `apps/log-analyzer/README.md`;
 the sink design is in `packages/logger/README.md`.
