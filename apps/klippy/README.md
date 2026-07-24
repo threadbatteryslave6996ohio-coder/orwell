@@ -12,21 +12,17 @@ test commands; the Android client is built with Gradle instead, as its README de
 
 ## Run Locally
 
-The simplest way to run the servers is Docker Compose. This stack contains no
-database of its own — both servers connect out to `host.docker.internal:5432` —
-so the shared PostgreSQL must already be running:
+The simplest way to run the servers is the whole-stack Docker Compose file at the
+repository root, which brings up the shared PostgreSQL, the auth and clipboard
+servers, and an Nginx entrypoint together:
 
 ```bash
-# The one shared Postgres, serving the klippy and auth databases
-docker compose -f docker-compose.all-services.yml up -d db
-
-# Nginx proxy on 8080; auth and clipboard stay on the Docker network
-docker compose -f apps/klippy/docker-compose.yml up --build
+docker compose -f docker-compose.all-services.yml up --build
 ```
 
-Nginx is the single entrypoint: auth is served at `http://localhost:8080/auth` and
-clipboard requests at `http://localhost:8080/clipboard`. Set `KLIPPY_HTTP_PORT` to
-publish the proxy on a port other than 8080.
+Nginx is the single entrypoint (port 8080 by default, overridable with
+`ORWELL_HTTP_PORT`): auth is served at `http://localhost:8080/auth` and clipboard
+requests at `http://localhost:8080/clipboard`.
 
 For a host-based Linux development stack, configure the repository-root `.env`
 and start each service in its own terminal:

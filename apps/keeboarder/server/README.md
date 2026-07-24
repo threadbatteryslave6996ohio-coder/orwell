@@ -20,11 +20,11 @@ mvn -pl apps/keeboarder/server -am package
 java -jar apps/keeboarder/server/target/keeboarder-server-0.1.0-SNAPSHOT-exec.jar
 ```
 
-For Docker Compose with the same internal-Nginx pattern used in the other app
-stacks:
+For Docker Compose, use the whole-stack file at the repository root, which runs
+this server behind the shared Nginx entrypoint alongside the other services:
 
 ```bash
-docker compose -f apps/keeboarder/server/docker-compose.yml up --build
+docker compose -f docker-compose.all-services.yml up --build
 ```
 
 The launcher loads `.env` from the current directory or any parent, then applies
