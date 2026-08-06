@@ -61,7 +61,7 @@ public class GmailService {
             return;
         }
         repository.save(new EmailMessageEntity(
-                message.id(), imapUid, message.threadId(), message.subject(),
+                message.id(), imapUid, message.subject(),
                 message.from(), message.to(), Instant.ofEpochMilli(message.receivedAt()),
                 message.body(), Instant.now()));
         forwardToWebhooks(message);
