@@ -72,6 +72,11 @@ If a remote write fails, the client asks the file-locker to append the payload
 to `klippy-offline-clipboard.json`. The client exits at startup when the
 file-locker is unavailable, preventing uncoordinated file writes.
 
+Authentication failures count as a failed write: an expired token, an
+unreachable auth server, a missing `CLIENT_TOKEN`/`CLIENT_SECRET`, or a rejected
+refresh all send the entry to the offline log rather than dropping it. The sync
+client replays it once auth works again.
+
 ## Test
 
 ```bash

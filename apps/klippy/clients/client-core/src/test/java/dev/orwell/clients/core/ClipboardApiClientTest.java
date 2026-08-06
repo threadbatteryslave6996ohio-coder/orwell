@@ -2,6 +2,7 @@ package dev.orwell.clients.core;
 
 import com.sun.net.httpserver.HttpServer;
 import dev.orwell.auth.http.client.ClientAuthSession;
+import dev.orwell.auth.http.client.HttpAuthenticationException;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
@@ -13,8 +14,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class ClipboardApiClientTest {
+    @Test
+    void reportsAnUnobtainableTokenAsAnAuthenticationFailure() {
+        ClipboardApiClient client = new ClipboardApiClient(
+                URI.create("http://127.0.0.1:1/clipboard"),
+                new ClientAuthSession(null, "client-a", null, null),
+                Duration.ofMillis(100));
+
+        assertThrows(HttpAuthenticationException.class, () -> client.create(
+                new ClipboardEntry("client-a", "text", Instant.parse("2026-06-27T15:30:45Z"))));
+    }
+
     @Test
     void postsSerializedEntryWithBearerToken() throws Exception {
         AtomicReference<String> authorization = new AtomicReference<>();

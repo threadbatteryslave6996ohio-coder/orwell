@@ -64,6 +64,28 @@ class DesktopClipboardMonitorTest {
         }
     }
 
+    @Test
+    void recordsTheEntryOfflineWhenNoBearerTokenCanBeObtained() throws Exception {
+        Path socket = tempDir.resolve("locker.sock");
+        Path offlineLog = tempDir.resolve("offline.json");
+        OfflineFileLockerClient fileLocker = new OfflineFileLockerClient(socket);
+        // No initial token and no secret to refresh with: the send fails at the auth boundary,
+        // before any request reaches the network.
+        ClientAuthSession auth = new ClientAuthSession(null, "client-a", null, null);
+        ClipboardApiClient apiClient = new ClipboardApiClient(
+                URI.create("http://127.0.0.1:1/clipboard"), auth, Duration.ofMillis(100));
+        DesktopClipboardMonitor monitor = new DesktopClipboardMonitor(
+                () -> "unsendable text", apiClient, null, "client-a", fileLocker,
+                offlineLog, new LinuxClipboardPolicy(), NO_OP_LOGGER);
+
+        try (RunningFileLocker ignored = startFileLocker(socket)) {
+            monitor.poll();
+            String content = fileLocker.read(offlineLog);
+            assertEquals("unsendable text",
+                    ClipboardJson.mapper().readTree(content).get(0).get("content").textValue());
+        }
+    }
+
     private static DesktopClipboardMonitor monitor(
             ClipboardReader reader, OfflineFileLockerClient fileLocker, Path offlineLog) {
         ClientAuthSession auth = new ClientAuthSession(null, "client-a", null, "token-a");

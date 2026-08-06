@@ -78,6 +78,11 @@ Offline clipboard entries are appended through the file-locker service over a
 Unix-domain socket. The client exits at startup if it cannot connect, preventing
 uncoordinated direct writes while a sync is reading the file.
 
+Authentication failures count as a failed write: an expired token, an
+unreachable auth server, a missing `CLIENT_TOKEN`/`CLIENT_SECRET`, or a rejected
+refresh all send the entry to the offline log rather than dropping it. The sync
+client replays it once auth works again.
+
 ## Clipboard Backend
 
 Backend selection is automatic:

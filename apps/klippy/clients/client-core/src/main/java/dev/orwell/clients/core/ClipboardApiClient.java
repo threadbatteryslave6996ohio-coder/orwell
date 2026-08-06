@@ -1,6 +1,7 @@
 package dev.orwell.clients.core;
 
 import dev.orwell.auth.http.client.ClientAuthSession;
+import dev.orwell.auth.http.client.HttpAuthenticationException;
 
 import java.io.IOException;
 import java.net.URI;
@@ -79,7 +80,7 @@ public final class ClipboardApiClient {
 
     private HttpResponse<String> sendWithAuthRetry(RequestFactory requestFactory)
             throws IOException, InterruptedException {
-        HttpResponse<String> response = send(requestFactory.create(authSession.token()));
+        HttpResponse<String> response = send(requestFactory.create(currentToken()));
         if (response.statusCode() != 401 || !authSession.canRefresh()) {
             return response;
         }
@@ -90,9 +91,36 @@ public final class ClipboardApiClient {
             refreshListener.afterRefresh();
         } catch (RuntimeException exception) {
             refreshListener.refreshFailed(exception);
-            throw exception;
+            throw asAuthenticationFailure("Could not refresh the bearer token after HTTP 401.", exception);
         }
-        return send(requestFactory.create(authSession.token()));
+        return send(requestFactory.create(currentToken()));
+    }
+
+    /**
+     * Reads the bearer token for a request. {@link ClientAuthSession#token()} logs in lazily when it
+     * holds no token yet, so this is an auth boundary and not a plain getter.
+     */
+    private String currentToken() {
+        try {
+            return authSession.token();
+        } catch (RuntimeException exception) {
+            throw asAuthenticationFailure("Could not obtain a bearer token for the request.", exception);
+        }
+    }
+
+    /**
+     * Presents every failure raised at the auth boundary as an {@link HttpAuthenticationException}.
+     * {@link ClientAuthSession} reports a missing token or a missing auth server URL with
+     * {@code IllegalStateException}, and a blank token from the auth server with
+     * {@code IllegalArgumentException}. Left unclassified, those reached callers as bare runtime
+     * exceptions that no caller could distinguish from a bug — and the desktop clients dropped the
+     * clipboard entry they were holding instead of writing it to the offline log.
+     */
+    private static HttpAuthenticationException asAuthenticationFailure(
+            String message, RuntimeException exception) {
+        return exception instanceof HttpAuthenticationException authenticationFailure
+                ? authenticationFailure
+                : new HttpAuthenticationException(message, exception);
     }
 
     private HttpResponse<String> send(HttpRequest request) throws IOException, InterruptedException {
