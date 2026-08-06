@@ -85,42 +85,55 @@ public final class ClipboardApiClient {
             return response;
         }
 
-        refreshListener.beforeRefresh();
+        notifyListener(refreshListener::beforeRefresh);
         try {
             authSession.refresh();
-            refreshListener.afterRefresh();
-        } catch (RuntimeException exception) {
-            refreshListener.refreshFailed(exception);
-            throw asAuthenticationFailure("Could not refresh the bearer token after HTTP 401.", exception);
+        } catch (HttpAuthenticationException exception) {
+            notifyListener(() -> refreshListener.refreshFailed(exception));
+            throw exception;
+        } catch (IllegalStateException | IllegalArgumentException exception) {
+            notifyListener(() -> refreshListener.refreshFailed(exception));
+            throw new HttpAuthenticationException("Could not refresh the bearer token after HTTP 401.", exception);
         }
+        notifyListener(refreshListener::afterRefresh);
         return send(requestFactory.create(currentToken()));
     }
 
     /**
      * Reads the bearer token for a request. {@link ClientAuthSession#token()} logs in lazily when it
      * holds no token yet, so this is an auth boundary and not a plain getter.
+     *
+     * <p>Only the credential failures {@link ClientAuthSession} actually raises are reclassified: a
+     * missing token or a missing auth server URL ({@code IllegalStateException}) and a blank token
+     * from the auth server ({@code IllegalArgumentException}). Left unclassified, those reached
+     * callers as bare runtime exceptions no caller could distinguish from a bug, and the desktop
+     * clients dropped the clipboard entry they were holding instead of writing it to the offline
+     * log. The catch stays deliberately narrow for the same reason
+     * {@code AuthenticationStrategyConfiguration}'s does: any OTHER runtime exception here is a
+     * genuine bug and must stay loud rather than masquerade as an endless auth outage that quietly
+     * diverts every entry offline.
      */
     private String currentToken() {
         try {
             return authSession.token();
-        } catch (RuntimeException exception) {
-            throw asAuthenticationFailure("Could not obtain a bearer token for the request.", exception);
+        } catch (HttpAuthenticationException exception) {
+            throw exception;
+        } catch (IllegalStateException | IllegalArgumentException exception) {
+            throw new HttpAuthenticationException("Could not obtain a bearer token for the request.", exception);
         }
     }
 
     /**
-     * Presents every failure raised at the auth boundary as an {@link HttpAuthenticationException}.
-     * {@link ClientAuthSession} reports a missing token or a missing auth server URL with
-     * {@code IllegalStateException}, and a blank token from the auth server with
-     * {@code IllegalArgumentException}. Left unclassified, those reached callers as bare runtime
-     * exceptions that no caller could distinguish from a bug — and the desktop clients dropped the
-     * clipboard entry they were holding instead of writing it to the offline log.
+     * Runs an {@link AuthRefreshListener} callback. The listener is an audit side-channel — on Linux
+     * it writes to the offline log and the console — so a failure there must not decide the outcome
+     * of the request, and above all must not cost the caller the clipboard entry it is holding.
      */
-    private static HttpAuthenticationException asAuthenticationFailure(
-            String message, RuntimeException exception) {
-        return exception instanceof HttpAuthenticationException authenticationFailure
-                ? authenticationFailure
-                : new HttpAuthenticationException(message, exception);
+    private static void notifyListener(Runnable notification) {
+        try {
+            notification.run();
+        } catch (RuntimeException ignored) {
+            // The audit sink is broken; dropping its record beats losing the caller's entry.
+        }
     }
 
     private HttpResponse<String> send(HttpRequest request) throws IOException, InterruptedException {

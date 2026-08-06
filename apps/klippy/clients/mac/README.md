@@ -72,10 +72,15 @@ If a remote write fails, the client asks the file-locker to append the payload
 to `klippy-offline-clipboard.json`. The client exits at startup when the
 file-locker is unavailable, preventing uncoordinated file writes.
 
-Authentication failures count as a failed write: an expired token, an
-unreachable auth server, a missing `CLIENT_TOKEN`/`CLIENT_SECRET`, or a rejected
-refresh all send the entry to the offline log rather than dropping it. The sync
-client replays it once auth works again.
+Authentication failures *after startup* count as a failed write: a token that
+expires, an auth server that goes down while the client runs, or a refresh the
+auth server rejects all send the entry to the offline log rather than dropping
+it. The sync client replays it once auth works again.
+
+Bad credentials at startup behave differently. A missing `CLIENT_TOKEN` and
+`CLIENT_SECRET`, or an auth server that is already unreachable when
+`CLIENT_SECRET` is set, make the client fail fast and exit before the poll loop
+starts — so there is no clipboard entry to preserve.
 
 ## Test
 

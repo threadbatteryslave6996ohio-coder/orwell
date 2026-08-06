@@ -64,6 +64,57 @@ class ClipboardApiClientTest {
     }
 
     @Test
+    void completesTheRefreshRetryWhenTheAuditListenerThrows() throws Exception {
+        AtomicInteger clipboardRequests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/login", exchange -> {
+            byte[] response = "{\"clientId\":\"client-a\",\"token\":\"fresh-token\"}"
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.createContext("/clipboard", exchange -> {
+            clipboardRequests.incrementAndGet();
+            boolean refreshed = "Bearer fresh-token".equals(
+                    exchange.getRequestHeaders().getFirst("Authorization"));
+            exchange.getRequestBody().readAllBytes();
+            exchange.sendResponseHeaders(refreshed ? 201 : 401, -1);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+            // Stands in for AuthAuditLogger with a broken sink: every callback fails.
+            ClipboardApiClient client = new ClipboardApiClient(
+                    java.net.http.HttpClient.newHttpClient(),
+                    URI.create(baseUrl + "/clipboard"),
+                    new ClientAuthSession(baseUrl, "client-a", "secret-value", "expired-token"),
+                    Duration.ofSeconds(2),
+                    new ClipboardApiClient.AuthRefreshListener() {
+                        @Override
+                        public void beforeRefresh() {
+                            throw new IllegalStateException("audit sink is down");
+                        }
+
+                        @Override
+                        public void afterRefresh() {
+                            throw new IllegalStateException("audit sink is down");
+                        }
+                    });
+
+            var response = client.create(new ClipboardEntry("client-a", "content", Instant.EPOCH));
+
+            assertEquals(201, response.statusCode());
+            assertEquals(2, clipboardRequests.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void refreshesOnceAndRetriesAfterUnauthorizedResponse() throws Exception {
         AtomicInteger clipboardRequests = new AtomicInteger();
         AtomicInteger refreshes = new AtomicInteger();
