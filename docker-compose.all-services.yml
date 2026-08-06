@@ -122,6 +122,11 @@ services:
       AUTH_BASE_URL: http://auth-server/auth
       PROXY_SERVER_URL: http://localhost:${ORWELL_HTTP_PORT:-8080}/jarvis
       PROXY_LOGGING_AUDIT_FILE: /app/logs/audit.log
+    # Without this the audit log lives in the container's writable layer and is lost on every
+    # recreate. The volume was declared but mounted by nothing after the standalone per-app compose
+    # stack (which did mount it) was removed.
+    volumes:
+      - all-services-proxy-audit-logs:/app/logs
     depends_on:
       auth-server:
         condition: service_started

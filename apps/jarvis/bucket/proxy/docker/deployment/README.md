@@ -53,8 +53,12 @@ is persisted in the `all-services-proxy-audit-logs` Docker volume:
 
 ```bash
 docker compose -f docker-compose.all-services.yml exec jarvis-proxy tail -f /app/logs/audit.log
-docker volume inspect all-services-proxy-audit-logs
+docker volume inspect orwell_all-services-proxy-audit-logs
 ```
+
+Compose prefixes volume names with the project name, which defaults to the
+repository directory (`orwell`); use your own prefix if you run the stack with
+`-p`.
 
 The audit file currently records calls to the external auth server (login,
 token validation, and identity creation). It is not an HTTP access log and
