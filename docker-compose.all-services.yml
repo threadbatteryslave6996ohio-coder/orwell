@@ -104,8 +104,13 @@ services:
     build:
       context: .
       dockerfile: apps/jarvis/bucket/proxy/docker/deployment/Dockerfile
+    # .env.example holds the committed non-secret defaults; the gitignored .env beside it
+    # overrides them and is where real credentials belong. Later files win, and the override
+    # is optional so the stack still comes up before anyone has created one.
     env_file:
       - ./apps/jarvis/bucket/proxy/docker/deployment/.env.example
+      - path: ./apps/jarvis/bucket/proxy/docker/deployment/.env
+        required: false
     mem_limit: 512m
     environment:
       LOKI_URL: "${LOKI_URL:-}"
@@ -117,6 +122,11 @@ services:
       AUTH_BASE_URL: http://auth-server/auth
       PROXY_SERVER_URL: http://localhost:${ORWELL_HTTP_PORT:-8080}/jarvis
       PROXY_LOGGING_AUDIT_FILE: /app/logs/audit.log
+    # Without this the audit log lives in the container's writable layer and is lost on every
+    # recreate. The volume was declared but mounted by nothing after the standalone per-app compose
+    # stack (which did mount it) was removed.
+    volumes:
+      - all-services-proxy-audit-logs:/app/logs
     depends_on:
       auth-server:
         condition: service_started
@@ -135,8 +145,11 @@ services:
       dockerfile: apps/log-analyzer/Dockerfile
     command: ["java", "-jar", "/app/alerting.jar"]
     mem_limit: 256m
+    # See the jarvis-proxy env_file note: committed defaults, optional gitignored override.
     env_file:
       - ./apps/alerting/.env.example
+      - path: ./apps/alerting/.env
+        required: false
     environment:
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
@@ -152,8 +165,11 @@ services:
       dockerfile: apps/log-analyzer/Dockerfile
     command: ["java", "-jar", "/app/log-analyzer.jar"]
     mem_limit: 256m
+    # See the jarvis-proxy env_file note: committed defaults, optional gitignored override.
     env_file:
       - ./apps/log-analyzer/.env.example
+      - path: ./apps/log-analyzer/.env
+        required: false
     environment:
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
@@ -183,8 +199,11 @@ services:
     build:
       context: .
       dockerfile: apps/keeboarder/server/Dockerfile
+    # See the jarvis-proxy env_file note: committed defaults, optional gitignored override.
     env_file:
       - ./apps/keeboarder/server/.env.example
+      - path: ./apps/keeboarder/server/.env
+        required: false
     mem_limit: 256m
     environment:
       LOKI_URL: "${LOKI_URL:-}"

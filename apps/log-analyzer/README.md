@@ -101,9 +101,18 @@ docker compose -f docker-compose.all-services.yml up --build
 ```
 
 Set `GRAFANA_URL`, `GRAFANA_API_TOKEN`, `GRAFANA_LOKI_DATASOURCE_UID`, and `AI_API_KEY` before
-starting. Edit them in **`.env.example`**, not `.env` — this is deliberate, not a typo:
-`docker-compose.all-services.yml` genuinely lists the `.example` files in its `env_file`, so a
-value you put in `.env` is not read.
+starting. `.env.example` holds the committed non-secret defaults; the secrets among those
+(`GRAFANA_API_TOKEN`, `AI_API_KEY`) belong in a gitignored `.env` beside it.
+`docker-compose.all-services.yml` reads both and lets `.env` win, so copy the example once and
+edit the copy:
+
+```bash
+cp apps/log-analyzer/.env.example apps/log-analyzer/.env
+```
+
+Never put a real secret in `.env.example` itself: `.gitignore` deliberately un-ignores it, so
+anything you write there is committed. The `.env` override is optional — the stack starts on the
+example defaults without one.
 
 The two services are reachable through the shared Nginx entrypoint (port 8080 by default,
 overridable with `ORWELL_HTTP_PORT`):

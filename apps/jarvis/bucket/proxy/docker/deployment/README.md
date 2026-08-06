@@ -1,52 +1,64 @@
 # Proxy Docker deployment
 
-This deployment builds only the bucket proxy and its required Maven modules
-from the monorepo root. It does not deploy the external auth server or an
-object-storage service.
-
-Initialize the repository submodules before building:
-
-```bash
-git submodule update --init --recursive
-```
+This directory holds the bucket proxy's `Dockerfile` and its `.env.example`. The
+proxy is built and run as part of the whole-stack compose file at the repository
+root (service `jarvis-proxy`), which also runs the auth server the proxy depends
+on and the shared Nginx entrypoint. There is no longer a standalone compose stack
+for this app.
 
 ## Configure and run
 
-From this directory:
+`.env.example` holds the committed non-secret defaults. Real credentials —
+`AWS_SECRET_ACCESS_KEY`, `AZURE_CLIENT_SECRET`, `PROXY_MANAGEMENT_PASSWORD`,
+`PROXY_MANAGEMENT_SESSION_SECRET` — belong in a `.env` beside it, which is
+gitignored. `docker-compose.all-services.yml` reads both and lets `.env` win, so
+copy the example once and edit the copy:
 
 ```bash
-cp .env.example .env
-# Fill in the storage, auth, and management settings in .env.
-docker compose up --build -d
-docker compose ps
-curl http://localhost:5000/jarvis/health
+cp apps/jarvis/bucket/proxy/docker/deployment/.env.example \
+   apps/jarvis/bucket/proxy/docker/deployment/.env
 ```
 
-For an auth server running on the Docker host, keep
-`AUTH_BASE_URL=http://host.docker.internal:8081`. If the auth server is on a
-shared Docker network, use its service name instead, for example
-`AUTH_BASE_URL=http://auth-server/auth`.
+Never put a real secret in `.env.example` itself: `.gitignore` deliberately
+un-ignores it, so anything you write there is committed. The `.env` override is
+optional — the stack starts on the example defaults without one. Then, from the
+repository root:
+
+```bash
+docker compose -f docker-compose.all-services.yml up --build -d jarvis-proxy nginx
+docker compose -f docker-compose.all-services.yml ps
+curl http://localhost:8080/jarvis/health
+```
+
+`nginx` has to be named explicitly. It is what publishes port 8080, and the
+dependency runs from `nginx` to `jarvis-proxy` rather than the other way, so
+starting the proxy alone leaves nothing listening on 8080 and the `curl` above
+fails with connection refused.
+
+The proxy is reachable through the shared Nginx entrypoint (port 8080 by default,
+overridable with `ORWELL_HTTP_PORT`) under the `/jarvis` route prefix. The compose
+file wires `AUTH_BASE_URL` to the in-stack `auth-server` service, so no host-side
+auth configuration is needed.
 
 ## Logs
 
 Spring Boot application output is written to the container's stdout/stderr:
 
 ```bash
-docker compose logs -f proxy
-docker inspect --format '{{.LogPath}}' "$(docker compose ps -q proxy)"
+docker compose -f docker-compose.all-services.yml logs -f jarvis-proxy
 ```
-
-The host-side application-log location is controlled by Docker's configured
-logging driver; the inspect command shows the path when that driver exposes
-one.
 
 Auth-server audit events are JSON Lines in `/app/logs/audit.log`. The directory
-is persisted in the `jarvis-proxy-audit-logs` Docker volume:
+is persisted in the `all-services-proxy-audit-logs` Docker volume:
 
 ```bash
-docker compose exec proxy tail -f /app/logs/audit.log
-docker volume inspect jarvis-proxy-audit-logs
+docker compose -f docker-compose.all-services.yml exec jarvis-proxy tail -f /app/logs/audit.log
+docker volume inspect orwell_all-services-proxy-audit-logs
 ```
+
+Compose prefixes volume names with the project name, which defaults to the
+repository directory (`orwell`); use your own prefix if you run the stack with
+`-p`.
 
 The audit file currently records calls to the external auth server (login,
 token validation, and identity creation). It is not an HTTP access log and
@@ -55,7 +67,7 @@ does not record successful upload, list, metadata, or delete operations.
 ## Stop
 
 ```bash
-docker compose down
+docker compose -f docker-compose.all-services.yml down
 ```
 
 Add `--volumes` only when the persisted audit log should also be deleted.

@@ -1,6 +1,7 @@
 package dev.orwell.clients.core;
 
 import dev.orwell.auth.http.client.ClientAuthSession;
+import dev.orwell.auth.http.client.HttpAuthenticationException;
 
 import java.io.IOException;
 import java.net.URI;
@@ -79,20 +80,72 @@ public final class ClipboardApiClient {
 
     private HttpResponse<String> sendWithAuthRetry(RequestFactory requestFactory)
             throws IOException, InterruptedException {
-        HttpResponse<String> response = send(requestFactory.create(authSession.token()));
+        HttpResponse<String> response = send(requestFactory.create(currentToken()));
         if (response.statusCode() != 401 || !authSession.canRefresh()) {
             return response;
         }
 
-        refreshListener.beforeRefresh();
+        notifyListener(refreshListener::beforeRefresh);
         try {
             authSession.refresh();
-            refreshListener.afterRefresh();
         } catch (RuntimeException exception) {
-            refreshListener.refreshFailed(exception);
-            throw exception;
+            // Every failure is reported to the listener, including the ones not reclassified below:
+            // beforeRefresh has already written a "started" audit record, and leaving it without a
+            // matching outcome would silently lose the end of the auth trail.
+            notifyListener(() -> refreshListener.refreshFailed(exception));
+            throw refreshFailure(exception);
         }
-        return send(requestFactory.create(authSession.token()));
+        notifyListener(refreshListener::afterRefresh);
+        return send(requestFactory.create(currentToken()));
+    }
+
+    /**
+     * Reads the bearer token for a request. {@link ClientAuthSession#token()} logs in lazily when it
+     * holds no token yet, so this is an auth boundary and not a plain getter.
+     *
+     * <p>Only the credential failures {@link ClientAuthSession} actually raises are reclassified: a
+     * missing token or a missing auth server URL ({@code IllegalStateException}) and a blank token
+     * from the auth server ({@code IllegalArgumentException}). Left unclassified, those reached
+     * callers as bare runtime exceptions no caller could distinguish from a bug, and the desktop
+     * clients dropped the clipboard entry they were holding instead of writing it to the offline
+     * log. The catch stays deliberately narrow for the same reason
+     * {@code AuthenticationStrategyConfiguration}'s does: any OTHER runtime exception here is a
+     * genuine bug and must stay loud rather than masquerade as an endless auth outage that quietly
+     * diverts every entry offline.
+     */
+    private String currentToken() {
+        try {
+            return authSession.token();
+        } catch (HttpAuthenticationException exception) {
+            throw exception;
+        } catch (IllegalStateException | IllegalArgumentException exception) {
+            throw new HttpAuthenticationException("Could not obtain a bearer token for the request.", exception);
+        }
+    }
+
+    /**
+     * Classifies a failed token refresh. Mirrors {@link #currentToken()}: only the credential
+     * failures {@link ClientAuthSession} raises become an {@link HttpAuthenticationException}, and
+     * anything else is rethrown untouched so a genuine bug stays loud instead of masquerading as an
+     * auth outage that quietly diverts every entry offline.
+     */
+    private static RuntimeException refreshFailure(RuntimeException exception) {
+        return exception instanceof IllegalStateException || exception instanceof IllegalArgumentException
+                ? new HttpAuthenticationException("Could not refresh the bearer token after HTTP 401.", exception)
+                : exception;
+    }
+
+    /**
+     * Runs an {@link AuthRefreshListener} callback. The listener is an audit side-channel — on Linux
+     * it writes to the offline log and the console — so a failure there must not decide the outcome
+     * of the request, and above all must not cost the caller the clipboard entry it is holding.
+     */
+    private static void notifyListener(Runnable notification) {
+        try {
+            notification.run();
+        } catch (RuntimeException ignored) {
+            // The audit sink is broken; dropping its record beats losing the caller's entry.
+        }
     }
 
     private HttpResponse<String> send(HttpRequest request) throws IOException, InterruptedException {

@@ -56,6 +56,32 @@ class ClientAuthSessionTest {
     }
 
     @Test
+    void reportsALoginResponseWithoutATokenAsAnAuthenticationFailure() throws IOException {
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        // A 200 that omits "token" entirely. LoginHttpResponse.token is a nullable record
+        // component, so this parses cleanly and only fails when the value is used.
+        server.createContext("/login", exchange -> respond(exchange, 200, """
+                {"clientId":"client-a"}
+                """));
+        server.start();
+
+        ClientAuthSession session = new ClientAuthSession(baseUrl(), "client-a", "super-secret", null);
+
+        assertThrows(HttpAuthenticationException.class, session::refresh);
+    }
+
+    @Test
+    void reportsAnEmptyLoginResponseBodyAsAnAuthenticationFailure() throws IOException {
+        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server.createContext("/login", exchange -> respond(exchange, 200, ""));
+        server.start();
+
+        ClientAuthSession session = new ClientAuthSession(baseUrl(), "client-a", "super-secret", null);
+
+        assertThrows(HttpAuthenticationException.class, session::refresh);
+    }
+
+    @Test
     void rejectsMissingTokenWhenRefreshIsImpossible() {
         ClientAuthSession session = new ClientAuthSession(null, "client-a", null, null);
 

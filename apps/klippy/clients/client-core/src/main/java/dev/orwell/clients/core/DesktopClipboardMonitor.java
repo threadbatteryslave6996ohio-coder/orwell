@@ -172,17 +172,51 @@ public final class DesktopClipboardMonitor {
             fileLocker.append(offlineLogPath, ClipboardJson.write(entry));
             lastSentContent = entry.content();
             pendingOfflineEntry = null;
-            logger.warn("Logged clipboard message offline.", Map.of(
-                    "offlineLog", String.valueOf(offlineLogPath.toAbsolutePath()),
-                    "clientId", clientId,
-                    "chars", entry.content().length()));
-            return true;
         } catch (IOException exception) {
-            Map<String, Object> metadata = new LinkedHashMap<>();
-            metadata.put("clientId", clientId);
-            metadata.put("error", exception.getMessage());
-            logger.error("Clipboard send failed and local JSON log failed.", metadata);
+            // Retryable: the file-locker is unreachable or the write failed. Keep the entry queued
+            // so the next poll tries it again.
+            reportOfflineLogFailure(exception);
             return false;
+        } catch (RuntimeException exception) {
+            // OfflineFileLockerClient rethrows a RuntimeException raised on its request thread, so
+            // this is a path the IPC client already anticipates rather than a theoretical one.
+            // Keeping the entry queued would cost far more than the entry itself: on Linux every
+            // later poll flushes before reading, would fail here again, and the clipboard would
+            // never be read again — a live client that has silently stopped syncing. Drop this one
+            // entry so the client keeps running. Cleared before reporting, so a broken logging sink
+            // cannot leave it queued either.
+            pendingOfflineEntry = null;
+            reportOfflineLogFailure(exception);
+            return false;
+        }
+        reportOfflineLogged(entry);
+        return true;
+    }
+
+    private void reportOfflineLogged(ClipboardEntry entry) {
+        report(() -> logger.warn("Logged clipboard message offline.", Map.of(
+                "offlineLog", String.valueOf(offlineLogPath.toAbsolutePath()),
+                "clientId", clientId,
+                "chars", entry.content().length())));
+    }
+
+    private void reportOfflineLogFailure(Exception exception) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("clientId", clientId);
+        metadata.put("error", ExceptionMessages.message(exception));
+        report(() -> logger.error("Clipboard send failed and local JSON log failed.", metadata));
+    }
+
+    /**
+     * Reports the outcome of an offline-log write. The offline log is the last place a clipboard
+     * entry can be saved, so a failure in the logging sink here must not be what stops the client
+     * from getting there next time.
+     */
+    private static void report(Runnable entry) {
+        try {
+            entry.run();
+        } catch (RuntimeException ignored) {
+            // The sink itself is broken; dropping this report beats wedging the poll loop.
         }
     }
 
