@@ -86,6 +86,42 @@ class DesktopClipboardMonitorTest {
         }
     }
 
+    @Test
+    void recordsTheEntryOfflineWhenTheAuthServerReturnsALoginResponseWithoutAToken() throws Exception {
+        Path socket = tempDir.resolve("locker.sock");
+        Path offlineLog = tempDir.resolve("offline.json");
+        OfflineFileLockerClient fileLocker = new OfflineFileLockerClient(socket);
+        // A 200 login response that omits "token" parses cleanly and only fails where the value is
+        // used. It used to surface as a NullPointerException, escape poll(), and cost the entry.
+        com.sun.net.httpserver.HttpServer authServer =
+                com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(0), 0);
+        authServer.createContext("/login", exchange -> {
+            byte[] body = "{\"clientId\":\"client-a\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        authServer.start();
+
+        try (RunningFileLocker ignored = startFileLocker(socket)) {
+            ClientAuthSession auth = new ClientAuthSession(
+                    "http://127.0.0.1:" + authServer.getAddress().getPort(), "client-a", "secret-value", null);
+            ClipboardApiClient apiClient = new ClipboardApiClient(
+                    URI.create("http://127.0.0.1:1/clipboard"), auth, Duration.ofMillis(100));
+            DesktopClipboardMonitor monitor = new DesktopClipboardMonitor(
+                    () -> "text worth keeping", apiClient, null, "client-a", fileLocker,
+                    offlineLog, new LinuxClipboardPolicy(), NO_OP_LOGGER);
+
+            monitor.poll();
+
+            assertEquals("text worth keeping", ClipboardJson.mapper()
+                    .readTree(fileLocker.read(offlineLog)).get(0).get("content").textValue());
+        } finally {
+            authServer.stop(0);
+        }
+    }
+
     private static DesktopClipboardMonitor monitor(
             ClipboardReader reader, OfflineFileLockerClient fileLocker, Path offlineLog) {
         ClientAuthSession auth = new ClientAuthSession(null, "client-a", null, "token-a");

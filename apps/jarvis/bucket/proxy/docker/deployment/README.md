@@ -25,10 +25,15 @@ optional — the stack starts on the example defaults without one. Then, from th
 repository root:
 
 ```bash
-docker compose -f docker-compose.all-services.yml up --build -d jarvis-proxy
+docker compose -f docker-compose.all-services.yml up --build -d jarvis-proxy nginx
 docker compose -f docker-compose.all-services.yml ps
 curl http://localhost:8080/jarvis/health
 ```
+
+`nginx` has to be named explicitly. It is what publishes port 8080, and the
+dependency runs from `nginx` to `jarvis-proxy` rather than the other way, so
+starting the proxy alone leaves nothing listening on 8080 and the `curl` above
+fails with connection refused.
 
 The proxy is reachable through the shared Nginx entrypoint (port 8080 by default,
 overridable with `ORWELL_HTTP_PORT`) under the `/jarvis` route prefix. The compose

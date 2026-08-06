@@ -56,8 +56,27 @@ public final class ClientAuthSession {
 
         HttpAuthenticationStrategy authClient = new HttpAuthenticationStrategy(authServerUrl);
         LoginHttpResponse response = authClient.login(clientId, clientSecret);
-        clientToken = normalized(response.token(), "token");
+        clientToken = tokenFrom(response);
         return clientToken;
+    }
+
+    /**
+     * Reads the bearer token out of a successful login response.
+     *
+     * <p>An auth server that answers 200 with an empty body, or with a body that omits
+     * {@code token}, is breaking its own contract rather than reporting a caller mistake — and
+     * {@link LoginHttpResponse#token()} is a nullable record component, so such a response parses
+     * cleanly and only fails where the value is used. That used to surface as a
+     * {@code NullPointerException} indistinguishable from a bug: callers that already handle a
+     * failed login dropped the work they were holding instead of retrying it. Report it as an
+     * authentication failure so it travels the same path as every other login failure.
+     */
+    private static String tokenFrom(LoginHttpResponse response) {
+        String token = response == null ? null : response.token();
+        if (token == null || token.trim().isEmpty()) {
+            throw new HttpAuthenticationException("Auth server returned a login response with no token.");
+        }
+        return token.trim();
     }
 
     public synchronized boolean refreshIfUnauthorized(int statusCode) {

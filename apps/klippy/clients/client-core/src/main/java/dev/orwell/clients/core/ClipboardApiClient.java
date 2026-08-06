@@ -88,12 +88,12 @@ public final class ClipboardApiClient {
         notifyListener(refreshListener::beforeRefresh);
         try {
             authSession.refresh();
-        } catch (HttpAuthenticationException exception) {
+        } catch (RuntimeException exception) {
+            // Every failure is reported to the listener, including the ones not reclassified below:
+            // beforeRefresh has already written a "started" audit record, and leaving it without a
+            // matching outcome would silently lose the end of the auth trail.
             notifyListener(() -> refreshListener.refreshFailed(exception));
-            throw exception;
-        } catch (IllegalStateException | IllegalArgumentException exception) {
-            notifyListener(() -> refreshListener.refreshFailed(exception));
-            throw new HttpAuthenticationException("Could not refresh the bearer token after HTTP 401.", exception);
+            throw refreshFailure(exception);
         }
         notifyListener(refreshListener::afterRefresh);
         return send(requestFactory.create(currentToken()));
@@ -121,6 +121,18 @@ public final class ClipboardApiClient {
         } catch (IllegalStateException | IllegalArgumentException exception) {
             throw new HttpAuthenticationException("Could not obtain a bearer token for the request.", exception);
         }
+    }
+
+    /**
+     * Classifies a failed token refresh. Mirrors {@link #currentToken()}: only the credential
+     * failures {@link ClientAuthSession} raises become an {@link HttpAuthenticationException}, and
+     * anything else is rethrown untouched so a genuine bug stays loud instead of masquerading as an
+     * auth outage that quietly diverts every entry offline.
+     */
+    private static RuntimeException refreshFailure(RuntimeException exception) {
+        return exception instanceof IllegalStateException || exception instanceof IllegalArgumentException
+                ? new HttpAuthenticationException("Could not refresh the bearer token after HTTP 401.", exception)
+                : exception;
     }
 
     /**
