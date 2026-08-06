@@ -1,11 +1,9 @@
 package dev.orwell.secrets.service;
 
-import dev.orwell.secrets.model.AdminIdentity;
 import dev.orwell.secrets.model.SecretBundle;
 import dev.orwell.secrets.model.SecretBundleEntry;
 import dev.orwell.secrets.model.SecretEnvironment;
 import dev.orwell.secrets.model.SecretGroup;
-import dev.orwell.secrets.repository.AdminIdentityRepository;
 import dev.orwell.secrets.repository.SecretBundleEntryRepository;
 import dev.orwell.secrets.repository.SecretBundleRepository;
 import dev.orwell.secrets.repository.SecretEnvironmentRepository;
@@ -22,40 +20,21 @@ import java.util.List;
 @Service
 @Transactional
 public class SecretsService {
-    private final AdminIdentityRepository adminRepo;
     private final SecretGroupRepository groupRepo;
     private final SecretEnvironmentRepository envRepo;
     private final SecretBundleRepository bundleRepo;
     private final SecretBundleEntryRepository bundleEntryRepo;
 
     public SecretsService(
-            AdminIdentityRepository adminRepo,
             SecretGroupRepository groupRepo,
             SecretEnvironmentRepository envRepo,
             SecretBundleRepository bundleRepo,
             SecretBundleEntryRepository bundleEntryRepo
     ) {
-        this.adminRepo = adminRepo;
         this.groupRepo = groupRepo;
         this.envRepo = envRepo;
         this.bundleRepo = bundleRepo;
         this.bundleEntryRepo = bundleEntryRepo;
-    }
-
-    public AdminIdentity addAdmin(String name) {
-        if (adminRepo.existsByName(name)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Admin already exists.");
-        }
-        try {
-            return adminRepo.save(new AdminIdentity(name, Instant.now()));
-        } catch (DataIntegrityViolationException e) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Admin already exists.", e);
-        }
-    }
-
-    @Transactional(readOnly = true)
-    public List<AdminIdentity> listAdmins() {
-        return adminRepo.findAll();
     }
 
     public SecretGroup createGroup(String name, String description, String createdBy) {

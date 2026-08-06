@@ -1,10 +1,9 @@
 package dev.orwell.secrets.controller.accessor;
 
-import dev.orwell.auth.AuthenticationContext;
 import dev.orwell.secrets.model.SecretBundleEntry;
 import dev.orwell.secrets.service.AuthValidator;
 import dev.orwell.secrets.service.SecretsService;
-import org.springframework.beans.factory.ObjectProvider;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,18 +16,26 @@ import java.util.List;
 public class SecretsAccessorController {
     private final AuthValidator authValidator;
     private final SecretsService secretsService;
-    private final ObjectProvider<AuthenticationContext> authenticationContextProvider;
+    private final HttpServletRequest request;
 
-    public SecretsAccessorController(AuthValidator authValidator, SecretsService secretsService, ObjectProvider<AuthenticationContext> authenticationContextProvider) {
+    public SecretsAccessorController(AuthValidator authValidator, SecretsService secretsService, HttpServletRequest request) {
         this.authValidator = authValidator;
         this.secretsService = secretsService;
-        this.authenticationContextProvider = authenticationContextProvider;
+        this.request = request;
+    }
+
+    /**
+     * Reads the credentials off the request rather than the shared {@code AuthenticationContext}
+     * bean, so both roles resolve through {@link AuthValidator} against their own deployment.
+     */
+    private void requireAccessor() {
+        authValidator.requireAccessor(
+                request.getHeader("Authorization"), request.getHeader("X-Client-Id"));
     }
 
     @GetMapping("/groups")
     public List<AccessorGroupResponse> listGroups() {
-        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
-        authValidator.requireAccessor(authenticationContext);
+        requireAccessor();
         return secretsService.listGroups().stream()
                 .map(g -> new AccessorGroupResponse(g.getId(), g.getName(), g.getDescription(),
                         g.getCreatedAt()))
@@ -37,8 +44,7 @@ public class SecretsAccessorController {
 
     @GetMapping("/groups/{groupId}/envs")
     public List<AccessorEnvironmentResponse> listEnvironments(@PathVariable("groupId") Long groupId) {
-        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
-        authValidator.requireAccessor(authenticationContext);
+        requireAccessor();
         return secretsService.listEnvironments(groupId).stream()
                 .map(e -> new AccessorEnvironmentResponse(e.getId(), e.getName(), e.getValue(),
                         e.getCreatedAt(), e.getUpdatedAt()))
@@ -47,8 +53,7 @@ public class SecretsAccessorController {
 
     @GetMapping("/groups/{groupId}/envs/{envId}")
     public AccessorEnvironmentResponse getEnvironment(@PathVariable("groupId") Long groupId, @PathVariable("envId") Long envId) {
-        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
-        authValidator.requireAccessor(authenticationContext);
+        requireAccessor();
         var env = secretsService.getEnvironment(envId);
         return new AccessorEnvironmentResponse(env.getId(), env.getName(), env.getValue(),
                 env.getCreatedAt(), env.getUpdatedAt());
@@ -56,8 +61,7 @@ public class SecretsAccessorController {
 
     @GetMapping("/groups/{groupId}/envs/by-name/{envName}")
     public AccessorEnvironmentResponse getEnvironmentByName(@PathVariable("groupId") Long groupId, @PathVariable("envName") String envName) {
-        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
-        authValidator.requireAccessor(authenticationContext);
+        requireAccessor();
         var env = secretsService.getEnvironmentByGroupAndName(groupId, envName);
         return new AccessorEnvironmentResponse(env.getId(), env.getName(), env.getValue(),
                 env.getCreatedAt(), env.getUpdatedAt());
@@ -65,8 +69,7 @@ public class SecretsAccessorController {
 
     @GetMapping("/bundles")
     public List<AccessorBundleResponse> listBundles() {
-        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
-        authValidator.requireAccessor(authenticationContext);
+        requireAccessor();
         return secretsService.listBundles().stream()
                 .map(b -> new AccessorBundleResponse(b.getId(), b.getName(), b.getDescription(),
                         b.getCreatedAt()))
@@ -75,8 +78,7 @@ public class SecretsAccessorController {
 
     @GetMapping("/bundles/{id}")
     public AccessorBundleDetailResponse getBundle(@PathVariable("id") Long id) {
-        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
-        authValidator.requireAccessor(authenticationContext);
+        requireAccessor();
         var bundle = secretsService.getBundle(id);
         var envs = secretsService.getBundleEntries(id).stream()
                 .map(SecretBundleEntry::getEnvironment)

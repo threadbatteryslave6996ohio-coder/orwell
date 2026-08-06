@@ -46,6 +46,13 @@ re-parented to the root.
 
 ## 2. Smaller cleanups
 
+- **secrets-manager deletes ignore their own foreign keys**: `SecretsService.deleteGroup`,
+  `deleteEnvironment`, and `deleteBundle` each call `repo.delete(entity)` with no cascade in the
+  entities and no `ON DELETE` action in the generated DDL, so deleting a group that still has
+  environments (or an env still referenced by a bundle entry) hits the FK and surfaces as a 500.
+  `server/README.md` claims a group delete cascades; it does not. `setBundleEnvironmentReferences`
+  is the only path that clears dependents first. No test covers any of the three. Also note
+  `secret_bundle_entries(env_id)` has no index, so the FK check scans.
 - **`sha256Hex` residual**: `packages/primitives` `Sha256` now exists and both `DetectionService`
   and `AnalysisWorker` use `Sha256.hex`. Only `LogAnalyzerService.fingerprint`
   (`LogAnalyzerService:315-317`) still builds its own `MessageDigest` — that one is a private

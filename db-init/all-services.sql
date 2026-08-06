@@ -12,6 +12,11 @@ CREATE DATABASE klippy  OWNER klippy;
 CREATE ROLE auth    LOGIN PASSWORD 'auth';
 CREATE DATABASE auth    OWNER auth;
 
+-- The secrets manager resolves roles by *which* auth deployment accepts a token,
+-- so admin identities live in their own auth server, separate from client ones.
+CREATE ROLE authadmin LOGIN PASSWORD 'authadmin';
+CREATE DATABASE authadmin OWNER authadmin;
+
 CREATE ROLE secrets LOGIN PASSWORD 'secrets';
 CREATE DATABASE secrets OWNER secrets;
 

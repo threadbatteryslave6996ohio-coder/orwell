@@ -45,6 +45,34 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Holds the admin identities the secrets manager checks /admin routes against.
+  # Separate deployment, separate database — the client auth-server above never
+  # grants admin.
+  admin-auth-server:
+    image: klippy-app:local
+    build:
+      context: .
+      dockerfile: apps/klippy/Dockerfile
+    command: ["java", "-jar", "/app/auth-server.jar"]
+    mem_limit: 384m
+    environment:
+      LOKI_URL: "${LOKI_URL:-}"
+      LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
+      JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
+      AUTH_DATASOURCE_URL: jdbc:postgresql://db/authadmin
+      AUTH_DATASOURCE_USERNAME: authadmin
+      AUTH_DATASOURCE_PASSWORD: authadmin
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "80"
+      AUTH_ROUTE_PREFIX: /auth
+      LOGGING_FILE_NAME: logs/admin-auth-server.log
+      AUTH_JPA_HIBERNATE_DDL_AUTO: update
+      AUTH_JPA_JDBC_TIME_ZONE: UTC
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
   clipboard-server:
     image: klippy-app:local
     build:
@@ -91,11 +119,14 @@ services:
       SERVER_PORT: "8085"
       SECRETS_ROUTE_PREFIX: /secrets
       AUTH_BASE_URL: http://auth-server/auth
+      SECRETS_ADMIN_AUTH_BASE_URL: http://admin-auth-server/auth
       LOGGING_FILE_NAME: logs/secrets-server.log
     depends_on:
       db:
         condition: service_healthy
       auth-server:
+        condition: service_started
+      admin-auth-server:
         condition: service_started
     restart: unless-stopped
 

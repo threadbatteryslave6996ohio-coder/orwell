@@ -1,79 +1,61 @@
 package dev.orwell.secrets.service;
 
 import dev.orwell.auth.AuthenticationContext;
-import dev.orwell.auth.AuthenticationStrategy;
 import dev.orwell.auth.BearerToken;
-import dev.orwell.secrets.repository.AccessorIdentityRepository;
-import dev.orwell.secrets.repository.AdminIdentityRepository;
+import dev.orwell.secrets.auth.AdminAuth;
+import dev.orwell.secrets.auth.ClientAuth;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Resolves the caller's role from <em>which</em> auth deployment accepts their token: the admin
+ * server grants admin, the client server grants accessor. This service stores no identities of its
+ * own.
+ */
 @Component
 public class AuthValidator {
-    private final AuthenticationStrategy authenticationStrategy;
-    private final AdminIdentityRepository adminRepo;
-    private final AccessorIdentityRepository accessorRepo;
+    private final AdminAuth adminAuth;
+    private final ClientAuth clientAuth;
 
-    public AuthValidator(
-            AuthenticationStrategy authenticationStrategy,
-            AdminIdentityRepository adminRepo,
-            AccessorIdentityRepository accessorRepo
-    ) {
-        this.authenticationStrategy = authenticationStrategy;
-        this.adminRepo = adminRepo;
-        this.accessorRepo = accessorRepo;
+    public AuthValidator(AdminAuth adminAuth, ClientAuth clientAuth) {
+        this.adminAuth = adminAuth;
+        this.clientAuth = clientAuth;
     }
 
-    public void requireAdmin(String authorization, String clientId) {
-        validateClientId(clientId);
-        validateToken(authorization, clientId);
-        if (!adminRepo.existsByName(clientId)) {
+    public AuthenticationContext requireAdmin(String authorization, String clientId) {
+        String token = requireCredentials(authorization, clientId);
+        if (adminAuth.accepts(clientId, token)) {
+            return AuthenticationContext.authenticated(clientId, null);
+        }
+        // A token the *client* server accepts is a real identity that simply is not an admin, and
+        // that stays a 403 the way it did when roles were rows in a table. Only a token neither
+        // deployment knows is a 401.
+        if (clientAuth.accepts(clientId, token)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access required.");
         }
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
     }
 
-    public void requireAdmin(AuthenticationContext authenticationContext) {
-        validateContext(authenticationContext);
-        if (!adminRepo.existsByName(authenticationContext.clientId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access required.");
+    public AuthenticationContext requireAccessor(String authorization, String clientId) {
+        String token = requireCredentials(authorization, clientId);
+        if (clientAuth.accepts(clientId, token)) {
+            return AuthenticationContext.authenticated(clientId, null);
         }
-    }
-
-    public void requireAccessor(String authorization, String clientId) {
-        validateClientId(clientId);
-        validateToken(authorization, clientId);
-        if (!accessorRepo.existsByName(clientId)) {
+        if (adminAuth.accepts(clientId, token)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accessor access required.");
         }
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
     }
 
-    public void requireAccessor(AuthenticationContext authenticationContext) {
-        validateContext(authenticationContext);
-        if (!accessorRepo.existsByName(authenticationContext.clientId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accessor access required.");
-        }
-    }
-
-    private static void validateClientId(String clientId) {
+    private static String requireCredentials(String authorization, String clientId) {
         if (clientId == null || clientId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing client id.");
         }
-    }
-
-    private void validateToken(String authorization, String clientId) {
         String token = BearerToken.extract(authorization);
         if (token == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token.");
         }
-        if (!authenticationStrategy.isTokenValidForClient(clientId, token)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
-        }
-    }
-
-    private static void validateContext(AuthenticationContext authenticationContext) {
-        if (authenticationContext == null || !authenticationContext.authenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing client identity.");
-        }
+        return token;
     }
 }
