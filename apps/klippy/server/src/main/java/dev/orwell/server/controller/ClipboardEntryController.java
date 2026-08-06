@@ -1,6 +1,7 @@
 package dev.orwell.server.controller;
 
 import dev.orwell.auth.AuthenticationContext;
+import dev.orwell.bootstrap.auth.RequireAuthentication;
 import dev.orwell.logging.Logger;
 import dev.orwell.server.dto.ClipboardEntryDetailsResponse;
 import dev.orwell.server.dto.ClipboardEntryRequest;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 
 @RestController
+@RequireAuthentication
 public class ClipboardEntryController {
     private final ClipboardEntryRepository repository;
     private final ObjectProvider<AuthenticationContext> authenticationContextProvider;
@@ -47,13 +49,10 @@ public class ClipboardEntryController {
     public synchronized ClipboardEntryResponse create(
             @Valid @RequestBody ClipboardEntryRequest request
     ) {
-        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
-        if (!authenticationContext.authenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing client identity.");
-        }
-        if (!Objects.equals(request.clientId(), authenticationContext.clientId())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
-        }
+        // The @RequireAuthentication gate runs in the shared interceptor before body parsing, so an
+        // unauthenticated request is rejected with 401 before @Valid can turn it into a 400. Here we
+        // only enforce that the authenticated caller owns the clientId they are acting on.
+        requireOwnership(request.clientId());
 
         Instant timestamp = (request.timestamp() == null ? Instant.now() : request.timestamp())
                 .truncatedTo(ChronoUnit.MICROS);
@@ -91,13 +90,7 @@ public class ClipboardEntryController {
             @RequestParam(value = "afterTimestamp", required = false) Instant afterTimestamp,
             @RequestParam(value = "afterId", required = false) Long afterId
     ) {
-        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
-        if (!authenticationContext.authenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing client identity.");
-        }
-        if (!Objects.equals(clientId, authenticationContext.clientId())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
-        }
+        requireOwnership(clientId);
         if (from.isAfter(to)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be before or equal to to.");
         }
@@ -124,6 +117,15 @@ public class ClipboardEntryController {
                 .stream()
                 .map(ClipboardEntryDetailsResponse::from)
                 .toList();
+    }
+
+    // The caller is already authenticated (see @RequireAuthentication); ensure the clientId they
+    // are acting on is their own, so a valid token can't read or write another client's clipboard.
+    private void requireOwnership(String clientId) {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!Objects.equals(clientId, authenticationContext.clientId())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid client token.");
+        }
     }
 
     private static ClipboardEntryResponse response(ClipboardEntry entry) {
