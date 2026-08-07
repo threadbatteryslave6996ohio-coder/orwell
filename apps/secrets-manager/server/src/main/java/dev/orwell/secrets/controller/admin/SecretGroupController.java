@@ -5,8 +5,8 @@ import dev.orwell.secrets.model.SecretEnvironment;
 import dev.orwell.secrets.model.SecretGroup;
 import dev.orwell.secrets.service.AuthValidator;
 import dev.orwell.secrets.service.SecretsService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,8 +27,8 @@ public class SecretGroupController extends AbstractSecretsAdminController {
     public SecretGroupController(
             AuthValidator authValidator,
             SecretsService secretsService,
-            ObjectProvider<AuthenticationContext> authenticationContextProvider) {
-        super(authValidator, secretsService, authenticationContextProvider);
+            HttpServletRequest request) {
+        super(authValidator, secretsService, request);
     }
 
     @PostMapping

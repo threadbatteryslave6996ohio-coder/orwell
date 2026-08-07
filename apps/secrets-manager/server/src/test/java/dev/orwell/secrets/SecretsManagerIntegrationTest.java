@@ -2,20 +2,14 @@ package dev.orwell.secrets;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.orwell.auth.AuthenticationStrategy;
-import dev.orwell.secrets.model.AdminIdentity;
-import dev.orwell.secrets.model.AccessorIdentity;
-import dev.orwell.secrets.repository.AdminIdentityRepository;
-import dev.orwell.secrets.repository.AccessorIdentityRepository;
+import dev.orwell.secrets.auth.AdminAuth;
+import dev.orwell.secrets.auth.ClientAuth;
 import dev.orwell.testing.PostgresIntegrationTest;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -24,27 +18,24 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// TestConfig replaces both auth beans by name rather than reaching the configured URLs.
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "spring.main.allow-bean-definition-overriding=true")
 class SecretsManagerIntegrationTest extends PostgresIntegrationTest {
 
     @DynamicPropertySource
     static void secretsProperties(DynamicPropertyRegistry registry) {
         registry.add("orwell.auth.base-url", () -> "http://localhost:1");
+        registry.add("secrets.admin-auth-base-url", () -> "http://localhost:2");
     }
 
     @LocalServerPort
     private int port;
-
-    @Autowired
-    private AdminIdentityRepository adminRepo;
-
-    @Autowired
-    private AccessorIdentityRepository accessorRepo;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -53,14 +44,6 @@ class SecretsManagerIntegrationTest extends PostgresIntegrationTest {
     private static final String ACCESSOR_CLIENT = "accessor-user";
     private static final String UNAUTHORIZED_CLIENT = "unknown-user";
     private static final String VALID_TOKEN = "valid-token";
-
-    @BeforeEach
-    void setUp() {
-        adminRepo.deleteAll();
-        accessorRepo.deleteAll();
-        adminRepo.save(new AdminIdentity(ADMIN_CLIENT, Instant.now()));
-        accessorRepo.save(new AccessorIdentity(ACCESSOR_CLIENT, Instant.now()));
-    }
 
     @Test
     void fullWorkflowAdminAndAccessor() throws Exception {
@@ -78,6 +61,7 @@ class SecretsManagerIntegrationTest extends PostgresIntegrationTest {
         unauthorizedUserIsRejected();
         unauthorizedUserCannotCreateGroup();
         accessorCannotCreateGroup();
+        adminCannotReadAsAccessor();
     }
 
     private String adminCreatesGroup() throws Exception {
@@ -156,7 +140,7 @@ class SecretsManagerIntegrationTest extends PostgresIntegrationTest {
 
     private void unauthorizedUserIsRejected() throws Exception {
         HttpResponse<String> response = sendGet("/groups", UNAUTHORIZED_CLIENT, VALID_TOKEN);
-        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(response.statusCode()).isEqualTo(401);
     }
 
     private void unauthorizedUserCannotCreateGroup() throws Exception {
@@ -164,6 +148,11 @@ class SecretsManagerIntegrationTest extends PostgresIntegrationTest {
                 "/admin/groups", UNAUTHORIZED_CLIENT, VALID_TOKEN, """
                         {"name": "should-fail", "description": ""}
                         """);
+        assertThat(response.statusCode()).isEqualTo(401);
+    }
+
+    private void adminCannotReadAsAccessor() throws Exception {
+        HttpResponse<String> response = sendGet("/groups", ADMIN_CLIENT, VALID_TOKEN);
         assertThat(response.statusCode()).isEqualTo(403);
     }
 
@@ -207,12 +196,19 @@ class SecretsManagerIntegrationTest extends PostgresIntegrationTest {
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
+    /** Stands in for the two auth deployments: each knows only its own client. */
     @TestConfiguration
     static class TestConfig {
         @Bean
-        @Primary
-        AuthenticationStrategy authenticationStrategy() {
-            return (clientId, token) -> "valid-token".equals(token);
+        AdminAuth adminAuth() {
+            return new AdminAuth((clientId, token) ->
+                    ADMIN_CLIENT.equals(clientId) && VALID_TOKEN.equals(token));
+        }
+
+        @Bean
+        ClientAuth clientAuth() {
+            return new ClientAuth((clientId, token) ->
+                    ACCESSOR_CLIENT.equals(clientId) && VALID_TOKEN.equals(token));
         }
     }
 }

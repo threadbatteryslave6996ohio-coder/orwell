@@ -12,6 +12,8 @@ public final class SecretsManagerEnvs {
     public static final EnvOption<String> SECRETS_JPA_HIBERNATE_DDL_AUTO;
     public static final EnvOption<String> SECRETS_JPA_JDBC_TIME_ZONE;
     public static final EnvOption<String> SECRETS_ROUTE_PREFIX;
+    /** Admin identities live here; ordinary clients live at the shared {@code AUTH_BASE_URL}. */
+    public static final EnvOption<String> SECRETS_ADMIN_AUTH_BASE_URL;
 
     static {
         SECRETS_DATASOURCE_URL = ENV.required("SECRETS_DATASOURCE_URL", EnvType.string());
@@ -20,12 +22,14 @@ public final class SecretsManagerEnvs {
         SECRETS_JPA_HIBERNATE_DDL_AUTO = ENV.required("SECRETS_JPA_HIBERNATE_DDL_AUTO", EnvType.string());
         SECRETS_JPA_JDBC_TIME_ZONE = ENV.required("SECRETS_JPA_JDBC_TIME_ZONE", EnvType.string());
         SECRETS_ROUTE_PREFIX = ENV.optional("SECRETS_ROUTE_PREFIX", EnvType.string(), "");
+        SECRETS_ADMIN_AUTH_BASE_URL = ENV.required("SECRETS_ADMIN_AUTH_BASE_URL", EnvType.string());
         ENV.property("spring.datasource.url", SECRETS_DATASOURCE_URL);
         ENV.property("spring.datasource.username", SECRETS_DATASOURCE_USERNAME);
         ENV.property("spring.datasource.password", SECRETS_DATASOURCE_PASSWORD);
         ENV.property("spring.jpa.hibernate.ddl-auto", SECRETS_JPA_HIBERNATE_DDL_AUTO);
         ENV.property("spring.jpa.properties.hibernate.jdbc.time_zone", SECRETS_JPA_JDBC_TIME_ZONE);
         ENV.property("secrets.route-prefix", SECRETS_ROUTE_PREFIX);
+        ENV.property("secrets.admin-auth-base-url", SECRETS_ADMIN_AUTH_BASE_URL);
     }
 
     private SecretsManagerEnvs() {
