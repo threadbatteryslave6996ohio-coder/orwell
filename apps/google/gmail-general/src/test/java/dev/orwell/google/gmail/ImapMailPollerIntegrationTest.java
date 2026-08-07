@@ -82,6 +82,11 @@ class ImapMailPollerIntegrationTest extends PostgresIntegrationTest {
         JsonNode latest = awaitLatestContaining("Meeting notes", 20_000);
         assertThat(latest.get("subject").asText()).isEqualTo("Meeting notes");
         assertThat(latest.get("body").asText()).contains("The plain body.");
+        // subject/from/to are adjacent Strings through the entity constructor and MailResponse,
+        // so a positional slip would compile and still serve the right subject; pin all three.
+        assertThat(latest.get("from").asText()).contains("alice@example.com");
+        assertThat(latest.get("to").asText()).contains("bob@example.com");
+        assertThat(latest.has("threadId")).isFalse();
 
         long checkpoint = latest.get("id").asLong() - 1;
         JsonNode sinceCheckpoint = objectMapper.readTree(

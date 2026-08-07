@@ -13,8 +13,8 @@ import java.time.Instant;
 /**
  * A stored mailbox message. {@code id} is an auto-increment surrogate key assigned in insertion
  * (i.e. consumption) order, which doubles as the cursor consumers pass back as
- * {@code ?checkpoint=} to resume where they left off — it is not derived from anything IMAP or
- * Gmail expose. {@code messageId} (the RFC 822 {@code Message-ID} header, or a
+ * {@code ?checkpoint=} to resume where they left off — it is not derived from anything IMAP
+ * exposes. {@code messageId} (the RFC 822 {@code Message-ID} header, or a
  * {@code uid-<uid>} fallback when a message lacks one) is the dedup key the poller checks before
  * inserting.
  */
@@ -32,9 +32,6 @@ public class EmailMessageEntity {
 
     @Column(name = "imap_uid", nullable = false)
     private long imapUid;
-
-    @Column(name = "thread_id", nullable = false, length = 255)
-    private String threadId;
 
     @Column(name = "subject", nullable = false, columnDefinition = "text")
     private String subject;
@@ -57,11 +54,10 @@ public class EmailMessageEntity {
     protected EmailMessageEntity() {
     }
 
-    public EmailMessageEntity(String messageId, long imapUid, String threadId, String subject,
+    public EmailMessageEntity(String messageId, long imapUid, String subject,
             String fromAddress, String toAddress, Instant receivedAt, String body, Instant createdAt) {
         this.messageId = messageId;
         this.imapUid = imapUid;
-        this.threadId = threadId;
         this.subject = subject;
         this.fromAddress = fromAddress;
         this.toAddress = toAddress;
@@ -80,10 +76,6 @@ public class EmailMessageEntity {
 
     public long getImapUid() {
         return imapUid;
-    }
-
-    public String getThreadId() {
-        return threadId;
     }
 
     public String getSubject() {

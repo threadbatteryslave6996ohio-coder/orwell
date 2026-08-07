@@ -205,7 +205,7 @@ public class ImapMailPoller {
         String to = addresses(message.getRecipients(Message.RecipientType.TO));
         var received = message.getReceivedDate() != null ? message.getReceivedDate() : message.getSentDate();
         long receivedAt = received != null ? received.getTime() : System.currentTimeMillis();
-        return new GmailMessage(id, "", subject, from, to, receivedAt, extractText(message));
+        return new GmailMessage(id, subject, from, to, receivedAt, extractText(message));
     }
 
     private static String firstHeader(Message message, String name) throws MessagingException {

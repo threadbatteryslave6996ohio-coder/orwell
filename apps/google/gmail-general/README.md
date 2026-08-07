@@ -75,6 +75,33 @@ Uses the shared Postgres instance defined in `docker-compose.all-services.yml`
   restart resumes from where the poller left off instead of re-delivering the whole mailbox. This
   replaces the old `.imap-uid` checkpoint file.
 
+### Dropping `thread_id` on an existing database
+
+`thread_id` was a Gmail API field that IMAP has no equivalent for; it was always stored empty and
+has been removed. `ddl-auto=update` only adds columns, never drops them, so a database created
+before this change still has a `thread_id NOT NULL` column that nothing populates. **Run this
+before deploying:**
+
+```sql
+ALTER TABLE email_messages DROP COLUMN thread_id;
+```
+
+A database created fresh after this change never has the column and needs nothing.
+
+Deploying without dropping the column first *loses mail*, quietly. Every insert fails the
+not-null constraint, and the poller deliberately advances its UID cursor past a message it could
+not process (so one bad message can't wedge the mailbox) — so each failed message is skipped
+permanently, recorded only as a `Failed to process IMAP message.` error log. Restarting does not
+re-fetch it, because the checkpoint has already moved past it. To recover, drop the column, then
+rewind the checkpoint to the last UID that stored successfully:
+
+```sql
+UPDATE imap_checkpoints SET last_uid = <last good uid> WHERE folder = 'INBOX';
+```
+
+Re-fetched messages are deduped on `message_id`, so rewinding too far is safe — already-stored
+mail is skipped rather than duplicated.
+
 ## API
 
 All endpoints return JSON and are served under `GMAIL_ROUTE_PREFIX` (empty by default). Mail
@@ -114,7 +141,6 @@ Each message object:
 {
   "id": 42,
   "messageId": "<abc@example.com>",
-  "threadId": "",
   "subject": "Hello there",
   "from": "Alice <alice@example.com>",
   "to": "bob@example.com",
