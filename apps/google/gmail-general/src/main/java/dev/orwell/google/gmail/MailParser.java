@@ -63,6 +63,11 @@ public final class MailParser {
             // The server already told us it is too big; never ask for the body at all.
             truncated = true;
         } else {
+            // MUST be the first thing to touch this message's body. IMAPMessage.writeTo copies the
+            // server's bytes verbatim only while its body is not yet loaded; once anything has
+            // called getContent() on it, writeTo falls through to re-serializing the parsed object
+            // instead, and the archive silently stops being the message that arrived. Everything
+            // below therefore reads headers only, or reads the re-parsed copy.
             raw = readRaw(live);
             if (raw.length > maxBytes) {
                 // Only reachable when the server reported no size: we had to fetch to find out.
@@ -87,11 +92,17 @@ public final class MailParser {
         Collector collected = new Collector(raw != null, maxBytes);
         collected.collect(source, ROOT_PATH);
 
+        // Prefer what we actually hold over what the server claimed. The two can disagree: a server
+        // may compute RFC822.SIZE over an LF-normalised copy while serving CRLF on the wire, which
+        // understates it by about one byte per line. The server's figure is only the best available
+        // answer for a message we deliberately did not download.
+        long sizeBytes = raw != null ? raw.length : Math.max(reportedSize, 0L);
+
         return new ParsedMail(id.trim(), subject, from, to, receivedAt,
                 collected.text == null ? "" : collected.text,
                 collected.html == null ? "" : collected.html,
                 headersOf(source), List.copyOf(collected.attachments),
-                raw, reportedSize >= 0 ? reportedSize : (raw == null ? 0L : raw.length), truncated);
+                raw, sizeBytes, truncated);
     }
 
     /**

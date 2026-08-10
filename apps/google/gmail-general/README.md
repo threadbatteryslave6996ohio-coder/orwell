@@ -409,7 +409,9 @@ Each message object:
 ```
 
 `sizeBytes` is the size of the whole original message, which is *not* the sum of the attachment
-sizes — it includes headers, MIME framing and transfer encoding.
+sizes — it includes headers, MIME framing and transfer encoding. It is measured from the stored
+source, so it matches the archive exactly; only for a `truncated` message, where there is no
+archive to measure, is it the size the IMAP server reported.
 
 ### One message by id
 
