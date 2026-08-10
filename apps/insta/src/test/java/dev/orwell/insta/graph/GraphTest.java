@@ -39,9 +39,12 @@ abstract class GraphTest {
     void openSchema() throws SQLException {
         connection = DriverManager.getConnection(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        // Every table the schema creates, or rows leak between tests through the shared container.
+        // Adding a table to schema.sql means adding it here too.
         try (PreparedStatement drop = connection.prepareStatement(
-                "DROP TABLE IF EXISTS follow_edge, account_profile_picture, account_bio,"
-                        + " account_username, account CASCADE")) {
+                "DROP TABLE IF EXISTS post_media, post_metric, post_caption, post, follow_edge,"
+                        + " account_profile_picture, account_bio, account_username, account"
+                        + " CASCADE")) {
             drop.execute();
         }
         GraphSchema.apply(connection);

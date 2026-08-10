@@ -202,11 +202,13 @@ class AccountWriterTest extends GraphTest {
     }
 
     private static InstagramProfile profile(String id, String username, String bio) {
-        return new InstagramProfile(id, username, null, bio, null, null, null, null, null, null);
+        return new InstagramProfile(
+                id, username, null, bio, null, null, null, null, null, null, List.of());
     }
 
     private static InstagramProfile profileWithPicture(String id, String username, String url) {
-        return new InstagramProfile(id, username, null, null, null, null, null, null, null, url);
+        return new InstagramProfile(
+                id, username, null, null, null, null, null, null, null, url, List.of());
     }
 
     /** A filesystem store that remembers which keys it actually wrote. */

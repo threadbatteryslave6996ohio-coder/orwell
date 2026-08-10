@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,6 +58,38 @@ class InstagramServiceTest {
         assertThat(profile.followingCount()).isEqualTo(78L);
         assertThat(profile.isVerified()).isTrue();
         assertThat(apify.runStart().path()).contains("apify~instagram-profile-scraper");
+    }
+
+    /**
+     * The profile actor bundles recent posts into the same dataset item as the counts. They cost
+     * nothing extra, so discarding them would be paying for data and throwing it away.
+     */
+    @Test
+    void readsTheRecentPostsBundledIntoTheProfileItem() {
+        apify.responds(200, """
+                [{"id":"1","username":"nasa","followersCount":5,"latestPosts":[
+                  {"id":"p1","shortCode":"abc","caption":"Launch","timestamp":1754870400,
+                   "type":"Image","likesCount":1200,"commentsCount":40,
+                   "displayUrl":"https://cdn/p1.jpg","url":"https://instagram.com/p/abc"},
+                  {"id":"p2","caption":"Orbit","likesCount":7}]}]""");
+
+        InstagramProfile profile = service().profile("nasa");
+
+        assertThat(profile.latestPosts()).extracting(InstagramPost::id).containsExactly("p1", "p2");
+        assertThat(profile.latestPosts().get(0).caption()).isEqualTo("Launch");
+        assertThat(profile.latestPosts().get(0).likesCount()).isEqualTo(1200L);
+        assertThat(profile.latestPosts().get(0).takenAt()).isEqualTo(Instant.ofEpochSecond(1754870400));
+    }
+
+    /** A post with no id cannot be keyed, and an actor that returns none is not an error. */
+    @Test
+    void toleratesMissingOrUnusablePosts() {
+        apify.responds(200, """
+                [{"id":"1","username":"nasa","latestPosts":[{"caption":"no id here"}]}]""");
+        assertThat(service().profile("nasa").latestPosts()).isEmpty();
+
+        apify.responds(200, "[{\"id\":\"1\",\"username\":\"nasa\"}]");
+        assertThat(service().profile("nasa").latestPosts()).isEmpty();
     }
 
     /** A count the actor could not read is absent, not zero — a caller must be able to tell. */

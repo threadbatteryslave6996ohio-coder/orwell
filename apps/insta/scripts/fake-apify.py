@@ -31,6 +31,17 @@ PROFILE = [{
     "followersCount": 97000000, "followsCount": 78, "postsCount": 3900,
     "verified": True, "private": False,
     "profilePicUrl": "https://example.invalid/nasa.jpg",
+    # The profile actor bundles recent posts into this same item — free to read.
+    "latestPosts": [
+        {"id": "p1", "shortCode": "AAA", "caption": "Launch day", "timestamp": 1754870400,
+         "type": "Image", "likesCount": 1200, "commentsCount": 40,
+         "displayUrl": "https://example.invalid/p1.jpg",
+         "url": "https://instagram.com/p/AAA"},
+        {"id": "p2", "shortCode": "BBB", "caption": "Orbit", "timestamp": 1754956800,
+         "type": "Video", "likesCount": 800, "commentsCount": 12,
+         "videoViewCount": 9000, "displayUrl": "https://example.invalid/p2.jpg",
+         "url": "https://instagram.com/p/BBB"},
+    ],
 }]
 
 FOLLOWERS = [

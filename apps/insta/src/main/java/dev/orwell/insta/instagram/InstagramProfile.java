@@ -2,6 +2,9 @@ package dev.orwell.insta.instagram;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static dev.orwell.insta.instagram.DatasetFields.flag;
 import static dev.orwell.insta.instagram.DatasetFields.number;
 import static dev.orwell.insta.instagram.DatasetFields.text;
@@ -24,7 +27,31 @@ public record InstagramProfile(
         Long postsCount,
         Boolean isPrivate,
         Boolean isVerified,
-        String profilePicUrl) {
+        String profilePicUrl,
+        /**
+         * Up to twelve recent posts, included in the same dataset item the counts came from.
+         * Never null; empty when the actor returned none.
+         */
+        List<InstagramPost> latestPosts) {
+
+    /**
+     * The posts the profile actor bundles into its one dataset item. Reading them is free — the
+     * alternative is paying the post actor for the same twelve.
+     */
+    private static List<InstagramPost> latestPosts(JsonNode item) {
+        JsonNode posts = item == null ? null : item.get("latestPosts");
+        if (posts == null || !posts.isArray()) {
+            return List.of();
+        }
+        List<InstagramPost> mapped = new ArrayList<>(posts.size());
+        for (JsonNode post : posts) {
+            InstagramPost parsed = InstagramPost.from(post);
+            if (parsed != null) {
+                mapped.add(parsed);
+            }
+        }
+        return List.copyOf(mapped);
+    }
 
     static InstagramProfile from(JsonNode item, String requestedUsername) {
         String username = text(item, "username", "userName");
@@ -39,6 +66,7 @@ public record InstagramProfile(
                 number(item, "postsCount", "posts_count"),
                 flag(item, "private", "isPrivate", "is_private"),
                 flag(item, "verified", "isVerified", "is_verified"),
-                text(item, "profilePicUrl", "profile_pic_url"));
+                text(item, "profilePicUrl", "profile_pic_url"),
+                latestPosts(item));
     }
 }
