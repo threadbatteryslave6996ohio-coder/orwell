@@ -297,6 +297,20 @@ class MailParserTest {
         return new MimeMessage(SESSION, new ByteArrayInputStream(buffer.toByteArray()));
     }
 
+    /**
+     * {@code sizeBytes} must describe the archive we hold, not the size the server claimed. Servers
+     * disagree with themselves here — GreenMail computes {@code RFC822.SIZE} over an LF-normalised
+     * copy while serving CRLF — and a consumer comparing this against a download would find it off
+     * by a byte per line.
+     */
+    @Test
+    void reportsTheSizeOfTheStoredSourceRatherThanTheServersClaim() throws Exception {
+        ParsedMail result = MailParser.parse(withAttachment("x.bin", "application/octet-stream",
+                new byte[] {1, 2, 3}, Part.ATTACHMENT, null), 11L, NO_CAP);
+
+        assertThat(result.rawSizeBytes()).isEqualTo(result.rawSource().length);
+    }
+
     /** Guards the assumption the multipart tests rest on: paths are 1-based under a "0" root. */
     @Test
     void numbersTopLevelPartsFromOneUnderTheRoot() throws Exception {
