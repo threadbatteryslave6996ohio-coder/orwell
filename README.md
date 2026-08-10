@@ -11,6 +11,7 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 | Auth | `apps/auth` | Client identity and token management |
 | Backup | `apps/backup` | Postgres backup runner |
 | Google | `apps/google` | Gmail integration service |
+| Insta | `apps/insta` | CLI for public Instagram follower/following lookups via the Apify marketplace |
 | Jarvis | `apps/jarvis` | Surveillance (bucket proxy, streaming, detection) |
 | Keeboarder | `apps/keeboarder` | Keyboard/message relay |
 | Klippy | `apps/klippy` | Clipboard history sync |
@@ -25,6 +26,7 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 | Env | `packages/env` | Typed environment variable framework |
 | Logger | `packages/logger` | Pluggable logging |
 | Primitives | `packages/primitives` | Shared value types |
+| Redis client | `packages/redis-client` | Pooled, prefix-namespaced handle on the shared Redis |
 | Server bootstrap | `packages/server-bootstrap` | Shared Spring Boot wiring |
 | Undertow bootstrap | `packages/undertow-bootstrap` | Shared lightweight HTTP runtime |
 | Server parent | `packages/server-parent` | Parent POM for server modules |

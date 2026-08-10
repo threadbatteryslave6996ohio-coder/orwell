@@ -14,7 +14,9 @@ login tokens against the auth server before registration succeeds.
 1. **KeeboarderServerApplication** - Spring Boot entry point for the server
 2. **KeeboarderWebSocketRuntime** - Starts the WebSocket endpoint and owns the Redis client cache
 3. **ChatEndpoint** - WebSocket endpoint handler that manages client connections and message routing
-4. **RedisClientCache** - Redis client wrapper for managing connected client metadata
+4. **RedisClientCache** - The shape of the connected-client data (a hash per client, a set of live
+   ids) on top of `dev.orwell.redis.RedisClient` (`packages/redis-client`), which owns the pool and
+   prefixes every key with `ws:`
 5. **Message** - Data class representing client messages
 
 ### Message Flow

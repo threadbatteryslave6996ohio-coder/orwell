@@ -214,6 +214,12 @@ services:
 
   redis:
     image: redis:7-alpine
+    # Persistence is explicit rather than inherited from the image defaults, which snapshot at
+    # best every 60s. insta caches paid Apify results here for 24h, so losing them on a restart
+    # costs real money; AOF bounds that loss to a second. Note the one-time cost of turning this
+    # on: Redis prefers the AOF on startup, so the first restart after this change begins with an
+    # empty store and both caches (keeboarder's `ws:`, insta's `insta:`) refill from cold.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     ports:
       - "6379:6379"
     volumes:

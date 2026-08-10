@@ -26,6 +26,13 @@ in-file dedups landed — `BucketProxyClient`'s six copy-pasted try/catch blocks
 `call(...)`/`rejected(...)` pair, and `SecretsManagerClient`'s two `execute` overloads merged into one
 deserializer-parameterized method.
 
+Also done since: the two hand-rolled Redis wrappers are one shared module. `dev.orwell.redis.RedisClient`
+(`packages/redis-client`) owns the `JedisPool`, the connect timeout, the key prefix its constructor is
+given, and the translation of a driver failure into an unchecked `RedisOperationException`;
+keeboarder's `RedisClientCache` and insta's `RedisScrapeCache` keep only their data shape and their
+(deliberately different) failure policies. Jedis is no longer pinned per app — keeboarder's local
+`4.4.3` management is gone, so the whole repo takes the version from the Spring Boot BOM.
+
 ## 0. Operational notes from the naming pass
 
 Not backlog items, but worth knowing:

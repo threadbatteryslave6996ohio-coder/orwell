@@ -14,6 +14,7 @@
         <module>packages/server-bootstrap</module>
         <module>packages/undertow-bootstrap</module>
         <module>packages/primitives</module>
+        <module>packages/redis-client</module>
         <module>packages/server-parent</module>
         <module>packages/server-test-support</module>
         <module>apps/auth</module>
@@ -26,6 +27,7 @@
         <module>apps/secrets-manager</module>
         <module>apps/backup</module>
         <module>apps/google</module>
+        <module>apps/insta</module>
         <module>apps/analyzer</module>
     </modules>
 
@@ -116,6 +118,11 @@
             <dependency>
                 <groupId>dev.orwell</groupId>
                 <artifactId>primitives</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.orwell</groupId>
+                <artifactId>redis-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
