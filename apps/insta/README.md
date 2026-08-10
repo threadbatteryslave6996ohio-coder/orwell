@@ -175,9 +175,51 @@ required one, and a missing one fails before anything can be spent.
 | `INSTA_CACHE_ENABLED` | `true` | whether to consult Redis at all |
 | `INSTA_CACHE_TTL_HOURS` | `24` | how long a cached answer stays good |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | the shared Redis |
+| `INSTA_LOG_CONSOLE` | `true` | whether log records go to the console (on stderr) |
+| `LOKI_URL` / `LOKI_TENANT_ID` | *(empty)* | ship records to Loki as well |
+| `LOGGING_FILE_NAME` | *(empty)* | append records as JSON lines to this file |
 
 Run it against the stack's Redis with `REDIS_HOST=localhost`, which is where
 `docker-compose.all-services.yml` publishes 6379.
+
+## Logging
+
+Everything inside the program logs through `dev.orwell.logging.Logger` and is handed one at
+construction — `ApifyClient`, `InstagramService` and the cache all take it as a parameter and know
+nothing about where records end up. `InstaLogger` is the single place a concrete sink is named, so
+changing production is configuration, not code.
+
+| Set | Adds |
+|---|---|
+| *(nothing)* | human-readable console |
+| `LOKI_URL` (+ `LOKI_TENANT_ID`) | async batched push to Loki |
+| `LOGGING_FILE_NAME` | JSON lines appended to that file |
+| `INSTA_LOG_CONSOLE=false` | drops the console sink |
+
+They compose, so a cron job can ship structured records and leave the terminal clean:
+
+```bash
+INSTA_LOG_CONSOLE=false LOGGING_FILE_NAME=/var/log/insta.log insta profile nasa
+# stdout: the result. stderr: nothing. the file: {"timestamp":…,"level":"INFO",…}
+```
+
+Two things differ from the Spring services here, both because this is a program a person runs
+rather than a server that boots once:
+
+- **The console sink writes to stderr, not stdout.** Results are stdout and nothing else is, so
+  `insta followers nasa --json | jq` stays parseable however chatty logging gets.
+- **An unset `LOKI_URL` is not warned about.** The Spring bean complains, because a server with no
+  log shipping is usually a misconfigured deployment; for a hand-run command it is the normal case,
+  and the warning would fire on every invocation.
+
+A sink that cannot be opened is skipped with a warning rather than being fatal — an unwritable log
+file should not be the reason a lookup does not happen — and the whole chain is wrapped in
+`FailSafeLogger` so a sink failing mid-run cannot take a lookup down.
+
+The Loki sink batches on a **daemon** thread and flushes every couple of seconds. A program that
+exits in under a second would take its unsent records with it, so `InstaLogger` is `AutoCloseable`
+and `InstaCli` closes it in a try-with-resources; that drains the queue. This is the one part of
+logging a CLI has to get right that a long-lived server does not.
 
 ## What this costs
 
@@ -203,7 +245,7 @@ outlives its budget is aborted rather than abandoned, because an orphaned run ke
 ### Layout
 
 ```
-dev.orwell.insta            InstaCli, InstaEnvs, InstaJson — the program, its settings, its mapper
+dev.orwell.insta            InstaCli, InstaEnvs, InstaJson, InstaLogger — the program and its wiring
 dev.orwell.insta.apify      ApifyClient, ApifyException, ActorRun — everything that speaks to Apify
 dev.orwell.insta.cache      ScrapeCache + Redis and disabled implementations
 dev.orwell.insta.instagram  InstagramService and the value types it produces
