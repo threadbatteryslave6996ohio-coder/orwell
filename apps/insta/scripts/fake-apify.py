@@ -17,6 +17,8 @@ Options:
   --port N        listen on N (default 9401)
   --pages N       hand out a continuation token for the first N-1 list pages, so `--all` has
                   something to walk (default 1, meaning a single page and no cursor)
+  --followers N   serve only the first N canned followers, so running twice with different
+                  values demonstrates an unfollow being detected (default: all of them)
 """
 
 import argparse
@@ -73,7 +75,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         if path.endswith("/items"):
-            self._reply(200, FOLLOWERS)
+            self._reply(200, FOLLOWERS[:self.server.followers])
         elif path.endswith("/records/OUTPUT"):
             # A token only while pages remain; its absence is how the walk ends.
             if Handler.pages_served < self.server.pages:
@@ -90,10 +92,12 @@ def main():
     parser = argparse.ArgumentParser(description="Fake Apify API for running insta without a key.")
     parser.add_argument("--port", type=int, default=9401)
     parser.add_argument("--pages", type=int, default=1)
+    parser.add_argument("--followers", type=int, default=len(FOLLOWERS))
     options = parser.parse_args()
 
     server = HTTPServer(("127.0.0.1", options.port), Handler)
     server.pages = options.pages
+    server.followers = max(0, min(options.followers, len(FOLLOWERS)))
     print(f"fake Apify on http://127.0.0.1:{options.port} "
           f"({options.pages} page(s) of list results)", flush=True)
     server.serve_forever()

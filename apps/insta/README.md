@@ -18,6 +18,7 @@ java -jar apps/insta/target/insta-0.1.0-SNAPSHOT-exec.jar profile nasa
 insta profile   <username>
 insta followers <username> [--limit N] [--all] [--cursor C] [--json]
 insta following <username> [--limit N] [--all] [--cursor C] [--json]
+insta sync      <username> [--limit N]
 ```
 
 | Option | Meaning |
@@ -90,6 +91,78 @@ the account up. A nightly job can alert on the bill without alerting on every fa
 
 An **empty** follower/following list is a success, not an error: from here a private account and an
 account with no followers look identical. Run `profile` and read `private` to tell them apart.
+
+## The follow graph — `insta sync`
+
+`sync` walks an account's followers and records them in Postgres, so you can ask what changed
+since last time.
+
+```console
+$ insta sync nasa
+nasa: 500 followers seen, 3 new, 1 unfollowed
+```
+
+Five tables, created automatically on first run (`CREATE … IF NOT EXISTS`, so there is no
+migration tool to keep in step):
+
+| Table | Holds |
+|---|---|
+| `account` | one row per account ever seen, keyed by **Instagram's own id** |
+| `account_username` | every handle an account has used, with the window it was seen in |
+| `account_bio` | every distinct bio, keyed by a digest so an oversized one cannot break the index |
+| `account_profile_picture` | every distinct image, keyed by the **hash of the bytes** |
+| `follow_edge` | who follows whom, with `first_seen_at`, `last_seen_at`, `lost_at` |
+
+Identity is Instagram's id rather than a handle because handles change — and it is `TEXT`, not
+`INT`, since real ids already exceed `INT` (`4014759590`).
+
+### How an unfollow is detected
+
+**Nobody ever observes an unfollow.** Instagram does not report one; you infer it from an account
+being absent from a walk that saw *everything*. So `follow_edge.last_seen_at` is a watermark: a
+complete walk refreshes everyone it sees, then retires whoever it didn't.
+
+That inference is only safe when the walk is trustworthy, and three things make it not:
+
+- **It stopped early.** Lookups cap at 500 per page and a walk can also end on a timeout, an
+  expired cursor or an exhausted Apify balance. 500 of 40,000 followers would otherwise retire
+  39,500. `sync` therefore always walks the whole list — `--all` and `--cursor` are rejected.
+- **Rows had no id.** A row that can't be keyed can't be stored, and an unstorable row looks
+  exactly like an absent one. Any of them blocks retirement for that walk.
+- **It would retire implausibly much.** A private or deleted account returns an empty list, a
+  perfect impression of everyone leaving at once. Above `INSTA_MAX_RETIRE_PERCENT` the walk refuses
+  and says so. (`sync` also checks `private` on the profile first and skips the walk entirely.)
+
+When retirement is skipped, the command says why rather than printing "0 unfollowed" — a silently
+suppressed diff must not look like good news.
+
+The whole write is one transaction: a sync that dies halfway leaves the graph as it was, because a
+half-refreshed graph looks like unfollows to the next run.
+
+### Profile pictures
+
+Off by default (`INSTA_PICTURE_STORE=none`) — and with it off, no image is even downloaded.
+Turn it on with `filesystem` (`INSTA_PICTURE_DIR`) or `http` (`INSTA_BUCKET_URL`, optional
+`INSTA_BUCKET_TOKEN`), which PUTs to an S3-compatible endpoint or this repo's
+`jarvis-bucket-proxy`.
+
+Images are keyed by the **SHA-256 of their bytes**, never by URL. Instagram signs its CDN links, so
+the same picture arrives at a different address on every scrape — keyed on the URL you would record
+a "new picture" daily and re-upload identical bytes forever. Hashing also means the default avatar,
+which a large share of accounts share, is one object rather than thousands.
+
+A picture that can't be fetched or stored is logged and skipped. An expired CDN link is not a
+reason to lose the follow data collected in the same sync.
+
+### What it costs, and what isn't built yet
+
+Each walk is billed per follower returned (from $0.60/1,000), so a daily sync of a 500-follower
+account is roughly $9/month. Crawling *followers of followers* is a different order of magnitude —
+about $150 per full pass at depth 2 and $75,000 at depth 3 — so there is deliberately no recursive
+crawl here.
+
+Not built yet: the alert dispatcher (`unfollow_notified_at` is written and indexed for it, but
+nothing sends mail), and any scheduler — run `sync` from cron.
 
 ## Caching
 
@@ -175,6 +248,11 @@ required one, and a missing one fails before anything can be spent.
 | `INSTA_CACHE_ENABLED` | `true` | whether to consult Redis at all |
 | `INSTA_CACHE_TTL_HOURS` | `24` | how long a cached answer stays good |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | the shared Redis |
+| `INSTA_DATABASE_URL` / `_USERNAME` / `_PASSWORD` | *(empty)* | Postgres for `sync` |
+| `INSTA_PICTURE_STORE` | `none` | `none`, `filesystem` or `http` |
+| `INSTA_PICTURE_DIR` | *(empty)* | directory for `filesystem` |
+| `INSTA_BUCKET_URL` / `INSTA_BUCKET_TOKEN` | *(empty)* | bucket endpoint for `http` |
+| `INSTA_MAX_RETIRE_PERCENT` | `20` | fuse on how much one walk may retire |
 | `INSTA_LOG_CONSOLE` | `true` | whether log records go to the console (on stderr) |
 | `LOKI_URL` / `LOKI_TENANT_ID` | *(empty)* | ship records to Loki as well |
 | `LOGGING_FILE_NAME` | *(empty)* | append records as JSON lines to this file |
@@ -249,6 +327,7 @@ dev.orwell.insta            InstaCli, InstaEnvs, InstaJson, InstaLogger — the 
 dev.orwell.insta.apify      ApifyClient, ApifyException, ActorRun — everything that speaks to Apify
 dev.orwell.insta.cache      ScrapeCache + Redis and disabled implementations
 dev.orwell.insta.instagram  InstagramService and the value types it produces
+dev.orwell.insta.graph      Postgres schema, writers, and the sync command
 ```
 
 The dependency arrows all point one way: `instagram` uses `apify` and `cache`, both of which know
