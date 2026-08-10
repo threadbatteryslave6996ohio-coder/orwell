@@ -176,7 +176,8 @@ class WebhookDeliveryJobTest {
         WebhookSender sender = new WebhookSender(
                 "http://127.0.0.1:" + authServer.getAddress().getPort(),
                 "gmail-general", "gmail-secret", NO_OP_LOGGER);
-        return new WebhookDeliveryJob(subscriptions, mails, users, sender, NO_OP_LOGGER);
+        return new WebhookDeliveryJob(subscriptions, mails, users, sender,
+                GmailTestFixtures.payloads(), NO_OP_LOGGER);
     }
 
     /** Stubs one subscription and the mail waiting beyond its cursor. */

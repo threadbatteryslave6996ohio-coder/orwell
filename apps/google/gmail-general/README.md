@@ -6,6 +6,15 @@ database owned by the mailbox it came from, and POSTs each newly-stored message 
 subscribers of that mailbox. Stored mail is readable back over HTTP via `GET /mails` and
 `GET /mails/latest`; see [API](#api) below. There is no inbound HTTP trigger for ingestion.
 
+**Messages are stored whole.** Both body renderings (`text/plain` and `text/html`), every header
+including the repeated ones, an index of every attachment and inline image, and the complete RFC 822
+source the message arrived as. The parsed columns are an index *over* that source rather than a
+replacement for it, so a part this service's MIME parser mishandles is still recoverable, and
+attachment bytes are served by reading them back out of it — stored once, not twice. The one
+exception is size: a message above `GMAIL_MAX_MESSAGE_BYTES` (25 MB by default) is stored with its
+headers, text bodies and attachment index but **without** its source, and is flagged `truncated`.
+See [What is and is not stored](#what-is-and-is-not-stored).
+
 Mailboxes are **rows, not configuration**. Each one is a `users` row holding the mailbox address
 and the client id allowed to read it, with its IMAP app password in a one-to-one `secrets` row.
 Register them with `POST /users` and `PUT /users/{id}/secret`; there is no `IMAP_USERNAME` any
@@ -42,6 +51,8 @@ auth server. Webhook forwarding is otherwise optional: with no subscriptions and
 | `GMAIL_POLL_INTERVAL_SECONDS` | `60` | How often to poll each mailbox. Optional, defaults to `60`. |
 | `GMAIL_POLL_CONCURRENCY` | `4` | How many mailboxes may be polled at once. Optional, defaults to `4`. Mailboxes are polled on a bounded pool so one slow or hanging mailbox does not delay the rest; raise it if you have many mailboxes and polls overlap. |
 | `GMAIL_DELIVERY_INTERVAL_SECONDS` | `5` | How often the webhook delivery job walks each subscription's cursor forward. Optional, defaults to `5`. This is the upper bound on webhook latency. |
+| `GMAIL_MAX_MESSAGE_BYTES` | `26214400` | Largest message to archive in full. Optional, defaults to `26214400` (25 MiB, Gmail's own attachment ceiling). Above it a message is still stored — headers, both text bodies, attachment index — but its raw source is not, so its attachment bytes cannot be downloaded and it is flagged `truncated`. Raise it to archive bigger mail, lower it to cap what one message can cost the shared database. Never causes a message to be skipped. |
+| `GMAIL_PUBLIC_BASE_URL` | `https://gmail.internal.example.com` | Base URL this service is reachable at from outside, used to make attachment URLs absolute in webhook payloads and API responses. Optional; when unset, those URLs are emitted as paths (`/mails/42/attachments/0`) and the receiver resolves them itself. Set it if your webhook receivers should be able to follow the URL as given. |
 | `GMAIL_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/gmail` | PostgreSQL JDBC URL. **Required.** |
 | `GMAIL_DATASOURCE_USERNAME` | `gmail` | Database username. **Required.** |
 | `GMAIL_DATASOURCE_PASSWORD` | `gmail` | Database password. **Required.** |
@@ -64,6 +75,38 @@ IMAP with a password requires an **app password**, not the account login passwor
    *Forwarding and POP/IMAP*.
 
 No Google Cloud project, OAuth client, or Pub/Sub topic is required.
+
+## What is and is not stored
+
+Stored, per message:
+
+- Both body renderings — the `text/plain` and `text/html` parts, as `body` and `bodyHtml`. A
+  message with only one of them has the other as an empty string.
+- **Every header**, in the order the message carried them, repeats included. `Received` lines stay
+  in order because they are a delivery path read bottom-up; a map-shaped store would have kept only
+  the last hop.
+- **Every attachment and inline image**, indexed with filename, MIME type, decoded size, `Content-ID`
+  and whether it is inline. Bytes are downloadable — see [Attachments](#attachments).
+- **The complete RFC 822 source**, byte for byte. This is what makes the above an index rather than
+  a lossy summary.
+
+Not stored, and not obtainable over IMAP with a password:
+
+- **Gmail labels, stars, and read/unread state.** IMAP exposes labels as folders and this service
+  polls one folder; the rest are Gmail API concepts.
+- **Threading.** `thread_id` was a Gmail API field with no IMAP equivalent and was removed.
+- **Anything outside `IMAP_FOLDER`** (default `INBOX`) — no Sent, Drafts, Spam or Archive.
+- **Mail that arrived before the mailbox was registered.** The first poll starts from the current
+  head; history is not backfilled.
+
+Also worth knowing:
+
+- The mailbox is opened **read-only**. This service never writes to your Gmail — it does not mark
+  mail read, move it, or delete it.
+- Nothing propagates back. Deleting or re-labelling a message in Gmail does not change the stored
+  copy; divergence after ingestion is expected, not a bug.
+- Attachment bytes for a `truncated` message are gone: the source was never downloaded. Everything
+  else about that message is complete.
 
 ## Checking credentials without starting the service
 
@@ -96,7 +139,18 @@ Uses the shared Postgres instance defined in `docker-compose.all-services.yml`
   user's ids increase but are not contiguous. `message_id` (the `Message-ID` header, or a
   `uid-<uid>` fallback for messages that lack one) is unique **per user** and is the dedup key —
   one mail addressed to two registered mailboxes is stored once for each, which a global
-  constraint would have silently prevented.
+  constraint would have silently prevented. Holds both body renderings and `truncated`; the rest of
+  the message hangs off it in the three tables below, so that listing mail stays cheap.
+- `email_headers` — one row per header *occurrence*, ordered by `ordinal`. Not a map column: names
+  repeat and their order is meaningful.
+- `email_attachments` — the attachment index. **No bytes**: `part_path` is the position of the part
+  within the MIME tree (`0` is the message, `0.2.1` the first child of its second child) and the
+  content is read back out of `email_raw_sources` on download. `part_index` is the stable 0-based
+  number the URL uses.
+- `email_raw_sources` — the complete message source as `bytea`, one row per message, absent for a
+  `truncated` one. A table of its own rather than a column, so that a query returning 500 messages
+  does not load 500 whole messages to render a list of subjects. **This is the table that grows**:
+  see the sizing note in [`migrations/002-full-content.sql`](migrations/002-full-content.sql).
 - `imap_checkpoints` — one row per `(user, folder)`, tracking `uid_validity` and `last_uid` so a
   restart resumes from where the poller left off instead of re-delivering the whole mailbox.
   Keyed per user because UIDs are only meaningful within one account.
@@ -107,6 +161,21 @@ Uses the shared Postgres instance defined in `docker-compose.all-services.yml`
   that receiver has acknowledged — so a subscriber that was down catches up instead of losing mail.
   `active` allows pausing a subscription without losing the row; nothing sets
   it to `false` today.
+
+### Upgrading to full-content storage
+
+[`migrations/002-full-content.sql`](migrations/002-full-content.sql) adds the columns and tables
+above. **Unlike 001 it is optional** — it drops nothing, and `ddl-auto=update` creates all of it on
+startup; the new `email_messages` columns are nullable precisely so that it can. Run it if you want
+the cosmetic backfill or the schema created deliberately.
+
+What no migration can do is **backfill existing mail**. Rows stored before this change keep the
+plain-text body they were stored with and gain no headers, attachments or source, because that
+content was discarded at ingestion and is not in the database to recover. Re-reading a mailbox means
+rewinding its IMAP checkpoint *and* deleting that user's stored rows first — dedup on
+`(user_id, message_id)` otherwise makes the poller skip every message it already has. That is
+destructive and re-delivers everything to that user's subscribers under new ids; the migration file
+spells out the statements and the consequences.
 
 ### Upgrading an existing database
 
@@ -225,7 +294,28 @@ obtained from the auth server:
   "from": "Alice <alice@example.com>",
   "to": "you@gmail.com",
   "receivedAt": 1753178400000,
-  "body": "Body text here."
+  "body": "Body text here.",
+  "bodyHtml": "<p>Body <b>text</b> here.</p>",
+  "headers": {
+    "Received": ["from mx2.example.com …", "from mx1.example.com …"],
+    "Message-ID": ["<abc@example.com>"],
+    "Cc": ["carol@example.com"],
+    "Reply-To": ["noreply@example.com"],
+    "X-Campaign-Id": ["spring-2026"]
+  },
+  "attachments": [
+    {
+      "n": 0,
+      "filename": "invoice.pdf",
+      "mimeType": "application/pdf",
+      "sizeBytes": 51234,
+      "contentId": null,
+      "inline": false,
+      "available": true,
+      "url": "/mails/42/attachments/0"
+    }
+  ],
+  "truncated": false
 }
 ```
 
@@ -233,6 +323,19 @@ obtained from the auth server:
 header, since mail can arrive by Bcc, alias, or forwarding and `to` is then not the owner. A
 per-mailbox subscriber always sees the same value; a `GMAIL_WEBHOOK_CLIENTS` broadcast receiver
 uses it to tell mailboxes apart.
+
+`headers` carries **every** header the message had. Values are lists because names repeat, and the
+order within a list is the order the message carried them. Lookup is case-insensitive: the key is
+the first spelling seen, so a sender writing `CC` is still found under the name you ask for.
+
+`attachments` is metadata plus a URL, never bytes — see [Attachments](#attachments) for why, and for
+what `available: false` means. `truncated` says the message was above `GMAIL_MAX_MESSAGE_BYTES`; its
+headers and text bodies are still complete.
+
+> **Payloads are larger than they were.** A message that used to deliver as seven small fields now
+> carries its HTML body and its full header block. If a receiver has a request size limit, check it
+> before deploying: a rejected delivery leaves the subscription's cursor where it is and is retried
+> forever, which stalls that receiver rather than losing the mail.
 
 **Delivery is cursor-tracked, and catches up.** Each subscription carries a `lastDeliveredId` — the
 highest mail `id` that receiver has acknowledged with a 2xx. Every `GMAIL_DELIVERY_INTERVAL_SECONDS`
@@ -293,9 +396,57 @@ Each message object:
   "from": "Alice <alice@example.com>",
   "to": "bob@example.com",
   "receivedAt": "2026-07-22T10:00:00Z",
-  "body": "Body text here."
+  "body": "Body text here.",
+  "bodyHtml": "<p>Body <b>text</b> here.</p>",
+  "headers": {"Cc": ["carol@example.com"], "X-Campaign-Id": ["spring-2026"]},
+  "attachments": [
+    {"n": 0, "filename": "invoice.pdf", "mimeType": "application/pdf", "sizeBytes": 51234,
+     "contentId": null, "inline": false, "available": true, "url": "/mails/42/attachments/0"}
+  ],
+  "sizeBytes": 68219,
+  "truncated": false
 }
 ```
+
+`sizeBytes` is the size of the whole original message, which is *not* the sum of the attachment
+sizes — it includes headers, MIME framing and transfer encoding.
+
+### One message by id
+
+```http
+GET /mails/{id}
+```
+
+The same object as above. `404` both for an id that does not exist and for one belonging to another
+mailbox, so the route cannot be used to discover which ids are taken.
+
+### Attachments
+
+```http
+GET /mails/{id}/attachments/{n}
+```
+
+The decoded bytes of one part, with its own `Content-Type` and a `Content-Disposition` filename.
+`n` is the `n` from the message's `attachments` array, and the URL is given to you in `url` — follow
+that rather than constructing it. Set `GMAIL_PUBLIC_BASE_URL` to have it emitted as an absolute URL;
+without it, `url` is a path relative to this service's root.
+
+Attachments are served **by reference, not inline**, in both the delivery payload and the read API.
+Base64 inflates content by a third, and a single 25 MB attachment inlined into a webhook POST would
+block that subscription's cursor behind one enormous request for as long as the receiver took to
+accept it.
+
+Statuses:
+
+- `200` with the bytes.
+- `404` — no such message for this caller, or no such `n` on it.
+- `409` — the message is `truncated`: the part is real and described in the index, but its bytes
+  were never stored. `available` is `false` on those refs, so a client can tell before asking. Raise
+  `GMAIL_MAX_MESSAGE_BYTES` if this happens more than you expect — but note it applies only to mail
+  polled after the change, since the source of an already-stored message is not recoverable.
+
+Inline images (`inline: true`) are the parts an HTML body references as `src="cid:..."`; match the
+`cid` against `contentId`, which is stored without its angle brackets.
 
 ## Build and run
 
@@ -311,3 +462,8 @@ existing mailbox history is not backfilled. Every `GMAIL_POLL_INTERVAL_SECONDS` 
 fetches anything newer than its checkpoint, stores it, and advances the checkpoint. Messages that
 land while the service is down are picked up on the next poll (progress is tracked by IMAP UID,
 keyed on `UIDVALIDITY`).
+
+Each message is downloaded once, in full, and everything stored is parsed from those bytes. A
+message the server reports as larger than `GMAIL_MAX_MESSAGE_BYTES` is never downloaded at all: its
+structure is read from the IMAP `BODYSTRUCTURE` the server already reports and its text bodies are
+fetched as individual sections, so the cap bounds bandwidth as well as storage.

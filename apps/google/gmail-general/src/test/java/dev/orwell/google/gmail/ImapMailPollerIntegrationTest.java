@@ -10,7 +10,11 @@ import dev.orwell.testing.PostgresIntegrationTest;
 import jakarta.mail.Message;
 import jakarta.mail.Session;
 import jakarta.mail.internet.InternetAddress;
+import jakarta.activation.DataHandler;
+import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
+import jakarta.mail.util.ByteArrayDataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -27,6 +31,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +50,8 @@ class ImapMailPollerIntegrationTest extends PostgresIntegrationTest {
     private static GreenMailUser carol;
     private static GreenMailUser erin;
     private static GreenMailUser heidi;
+    private static GreenMailUser ivan;
+    private static GreenMailUser judy;
 
     @BeforeAll
     static void startGreenMail() {
@@ -53,6 +60,9 @@ class ImapMailPollerIntegrationTest extends PostgresIntegrationTest {
         carol = GREEN_MAIL.setUser("carol@example.com", "carol@example.com", "carol-secret");
         erin = GREEN_MAIL.setUser("erin@example.com", "erin@example.com", "erin-secret");
         heidi = GREEN_MAIL.setUser("heidi@example.com", "heidi@example.com", "heidi-secret");
+        ivan = GREEN_MAIL.setUser("ivan@example.com", "ivan@example.com", "ivan-secret");
+        judy = GREEN_MAIL.setUser("judy@example.com", "judy@example.com", "judy-secret");
+        GREEN_MAIL.setUser("mallory@example.com", "mallory@example.com", "mallory-secret");
         GREEN_MAIL.setUser("dave@example.com", "dave@example.com", "dave-real-secret");
     }
 
@@ -70,6 +80,8 @@ class ImapMailPollerIntegrationTest extends PostgresIntegrationTest {
         registry.add("gmail.route-prefix", () -> "");
         registry.add("gmail.poll-interval-seconds", () -> 1);
         registry.add("gmail.poll-concurrency", () -> 4);
+        registry.add("gmail.max-message-bytes", () -> 26_214_400L);
+        registry.add("gmail.public-base-url", () -> "");
         registry.add("gmail.delivery-interval-seconds", () -> 1);
         registry.add("gmail.imap.host", () -> "127.0.0.1");
         registry.add("gmail.imap.port", () -> GREEN_MAIL.getImap().getPort());
@@ -127,6 +139,71 @@ class ImapMailPollerIntegrationTest extends PostgresIntegrationTest {
     @Test
     void rejectsAnAuthenticatedClientThatOwnsNoMailbox() throws Exception {
         assertThat(httpGet("/mails", "client-with-no-mailbox").statusCode()).isEqualTo(403);
+    }
+
+    /**
+     * The whole of a message survives the round trip, not the four fields and the plain body that
+     * used to. Everything asserted here was previously discarded at ingestion: the HTML rendering,
+     * the headers past To/From/Subject, and the attachment itself.
+     */
+    @Test
+    void storesAndServesTheHtmlBodyEveryHeaderAndTheAttachmentBytes() throws Exception {
+        register("ivan@example.com", "ivan-client", "ivan-secret");
+        awaitFirstPollOf("ivan-client");
+
+        byte[] pdf = "%PDF-1.4 pretend invoice".getBytes(StandardCharsets.UTF_8);
+        ivan.deliver(richMessage("ivan@example.com", "Ivan full message", pdf));
+
+        JsonNode latest = awaitLatestContaining("ivan-client", "Ivan full message", 30_000);
+
+        assertThat(latest.get("body").asText()).contains("the plain rendering");
+        assertThat(latest.get("bodyHtml").asText()).contains("<b>the html rendering</b>");
+        assertThat(latest.get("truncated").asBoolean()).isFalse();
+
+        // Headers the old shape had no room for at all.
+        JsonNode headers = latest.get("headers");
+        assertThat(headers.get("Cc").get(0).asText()).contains("carol@example.com");
+        assertThat(headers.get("Reply-To").get(0).asText()).contains("noreply@example.com");
+        assertThat(headers.get("X-Campaign-Id").get(0).asText()).isEqualTo("spring-2026");
+
+        JsonNode attachments = latest.get("attachments");
+        assertThat(attachments).hasSize(1);
+        JsonNode attachment = attachments.get(0);
+        assertThat(attachment.get("filename").asText()).isEqualTo("invoice.pdf");
+        assertThat(attachment.get("mimeType").asText()).isEqualTo("application/pdf");
+        assertThat(attachment.get("sizeBytes").asLong()).isEqualTo(pdf.length);
+        assertThat(attachment.get("available").asBoolean()).isTrue();
+
+        // The URL in the payload is the one that serves the bytes — a receiver follows it as given.
+        HttpResponse<byte[]> download = httpClient.send(
+                HttpRequest.newBuilder(URI.create(
+                                "http://localhost:%d%s".formatted(port, attachment.get("url").asText())))
+                        .header("X-Client-Id", "ivan-client")
+                        .header("Authorization", "Bearer valid-token").GET().build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+
+        assertThat(download.statusCode()).isEqualTo(200);
+        assertThat(download.body()).isEqualTo(pdf);
+        assertThat(download.headers().firstValue("Content-Type").orElseThrow())
+                .startsWith("application/pdf");
+    }
+
+    /** An attachment is as scoped as the mail it belongs to; an id from another mailbox is a 404. */
+    @Test
+    void refusesToServeAnotherMailboxesAttachment() throws Exception {
+        register("judy@example.com", "judy-client", "judy-secret");
+        register("mallory@example.com", "mallory-client", "mallory-secret");
+        awaitFirstPollOf("judy-client", "mallory-client");
+
+        judy.deliver(richMessage("judy@example.com", "Judy private",
+                "secret".getBytes(StandardCharsets.UTF_8)));
+        JsonNode judysMail = awaitLatestContaining("judy-client", "Judy private", 30_000);
+        String url = judysMail.get("attachments").get(0).get("url").asText();
+
+        HttpResponse<String> asMallory = httpGet(url, "mallory-client");
+
+        assertThat(asMallory.statusCode()).isEqualTo(404);
+        assertThat(httpGet(url, "judy-client").statusCode()).isEqualTo(200);
     }
 
     /**
@@ -246,6 +323,42 @@ class ImapMailPollerIntegrationTest extends PostgresIntegrationTest {
         assertThat(array.isArray()).isTrue();
         return java.util.stream.StreamSupport.stream(array.spliterator(), false)
                 .map(node -> node.get("subject").asText()).toList();
+    }
+
+    /**
+     * A message shaped like real mail rather than like a test fixture: a plain and an HTML
+     * rendering side by side, headers beyond the envelope, and a file attached.
+     */
+    private MimeMessage richMessage(String to, String subject, byte[] attachment) throws Exception {
+        MimeMessage message = new MimeMessage(Session.getInstance(new Properties()));
+        message.setFrom(new InternetAddress("alice@example.com"));
+        message.setRecipient(Message.RecipientType.TO, new InternetAddress(to));
+        message.setRecipient(Message.RecipientType.CC, new InternetAddress("carol@example.com"));
+        message.setReplyTo(new jakarta.mail.Address[] {new InternetAddress("noreply@example.com")});
+        message.setHeader("X-Campaign-Id", "spring-2026");
+        message.setSubject(subject);
+
+        MimeMultipart mixed = new MimeMultipart("mixed");
+        MimeBodyPart alternativePart = new MimeBodyPart();
+        MimeMultipart alternative = new MimeMultipart("alternative");
+        MimeBodyPart text = new MimeBodyPart();
+        text.setText("the plain rendering", "utf-8");
+        MimeBodyPart html = new MimeBodyPart();
+        html.setContent("<p><b>the html rendering</b></p>", "text/html; charset=utf-8");
+        alternative.addBodyPart(text);
+        alternative.addBodyPart(html);
+        alternativePart.setContent(alternative);
+        mixed.addBodyPart(alternativePart);
+
+        MimeBodyPart file = new MimeBodyPart();
+        file.setDataHandler(new DataHandler(new ByteArrayDataSource(attachment, "application/pdf")));
+        file.setFileName("invoice.pdf");
+        file.setDisposition(jakarta.mail.Part.ATTACHMENT);
+        mixed.addBodyPart(file);
+
+        message.setContent(mixed);
+        message.saveChanges();
+        return message;
     }
 
     private MimeMessage newMessage(String to, String subject, String body) throws Exception {

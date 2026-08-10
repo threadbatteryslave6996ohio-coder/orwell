@@ -18,6 +18,8 @@ public interface EmailMessageRepository extends JpaRepository<EmailMessageEntity
 
     Optional<EmailMessageEntity> findTopByUserIdOrderByIdDesc(Long userId);
 
+    Optional<EmailMessageEntity> findByIdAndUserId(Long id, Long userId);
+
     Page<EmailMessageEntity> findAllByUserIdOrderByIdDesc(Long userId, Pageable pageable);
 
     List<EmailMessageEntity> findByUserIdAndIdGreaterThanOrderByIdAsc(

@@ -51,6 +51,7 @@ public class WebhookDeliveryJob {
     private final EmailMessageRepository mails;
     private final UserRepository users;
     private final WebhookSender sender;
+    private final MailPayloads payloads;
     private final Logger logger;
     // Rounds must not overlap: two rounds walking the same cursor would double-deliver.
     private final AtomicBoolean delivering = new AtomicBoolean(false);
@@ -60,11 +61,13 @@ public class WebhookDeliveryJob {
             EmailMessageRepository mails,
             UserRepository users,
             WebhookSender sender,
+            MailPayloads payloads,
             Logger logger) {
         this.subscriptions = Objects.requireNonNull(subscriptions, "subscriptions");
         this.mails = Objects.requireNonNull(mails, "mails");
         this.users = Objects.requireNonNull(users, "users");
         this.sender = Objects.requireNonNull(sender, "sender");
+        this.payloads = Objects.requireNonNull(payloads, "payloads");
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -110,20 +113,17 @@ public class WebhookDeliveryJob {
         String account = owner.get().getEmail();
         List<EmailMessageEntity> pending = mails.findByUserIdAndIdGreaterThanOrderByIdAsc(
                 userId, subscription.getLastDeliveredId(), PageRequest.of(0, BATCH));
-        for (EmailMessageEntity mail : pending) {
-            if (!sender.send(subscription.getUrl(), payload(mail, account))) {
+        // Headers and attachment indexes for the whole batch in one query each, rather than per
+        // message: a batch of 100 would otherwise cost 200 extra round trips before the first POST.
+        List<GmailMessage> batch = payloads.payloads(pending, account);
+        for (int i = 0; i < pending.size(); i++) {
+            if (!sender.send(subscription.getUrl(), batch.get(i))) {
                 // Leave the cursor where it is: this message is retried next round, and the
                 // messages after it stay behind it so the subscriber never sees them out of order.
                 return;
             }
-            subscription.advanceTo(mail.getId());
+            subscription.advanceTo(pending.get(i).getId());
             subscriptions.save(subscription);
         }
-    }
-
-    private static GmailMessage payload(EmailMessageEntity mail, String account) {
-        return new GmailMessage(mail.getMessageId(), account, mail.getSubject(),
-                mail.getFromAddress(), mail.getToAddress(),
-                mail.getReceivedAt().toEpochMilli(), mail.getBody());
     }
 }

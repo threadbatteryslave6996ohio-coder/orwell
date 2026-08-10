@@ -44,6 +44,8 @@ class UserApiIntegrationTest extends PostgresIntegrationTest {
         registry.add("gmail.route-prefix", () -> "");
         registry.add("gmail.poll-interval-seconds", () -> 3600);
         registry.add("gmail.poll-concurrency", () -> 4);
+        registry.add("gmail.max-message-bytes", () -> 26_214_400L);
+        registry.add("gmail.public-base-url", () -> "");
         registry.add("gmail.delivery-interval-seconds", () -> 3600);
         registry.add("gmail.imap.host", () -> "127.0.0.1");
         registry.add("gmail.imap.port", () -> 1);
