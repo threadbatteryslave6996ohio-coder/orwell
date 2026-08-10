@@ -14,8 +14,8 @@ docker compose -f docker-compose.all-services.yml up -d    # the whole local sta
 ```
 
 Executable server jars are built as `<artifactId>-<version>-exec.jar` (Spring Boot `exec`
-classifier). Client jars are `<artifactId>-<version>.jar`, except `klippy-file-locker`, whose
-runnable jar is the shaded `<artifactId>-<version>-exec.jar`.
+classifier). Client jars are `<artifactId>-<version>.jar`, except `klippy-file-locker` and `insta`,
+whose runnable jars are the shaded `<artifactId>-<version>-exec.jar`.
 
 ## Module map
 
@@ -30,6 +30,7 @@ Java packages predate the renames and do NOT always match — use this table, do
 | `apps/auth/*` | `auth`, `auth-core`, `auth-http-{api,client,server}`, `auth-in-memory` | `dev.orwell.auth.*` |
 | `apps/backup` | `backup` | `dev.orwell.backup` |
 | `apps/google/gmail-general` | `gmail-general` | `dev.orwell.google.gmail` |
+| `apps/insta` | `insta` | `dev.orwell.insta` (CLI, not a server) |
 | `apps/jarvis` | `jarvis` (aggregator) | — |
 | `apps/jarvis/bucket/proxy` | `jarvis-bucket-proxy` | `dev.orwell.bucket.proxy` |
 | `apps/jarvis/detection` | `jarvis-detection` | `dev.orwell.bucket.detection` |
@@ -44,6 +45,7 @@ Java packages predate the renames and do NOT always match — use this table, do
 | `packages/env/{core,http}` | `env-core`, `env-http` | `dev.orwell.env`, `dev.orwell.env.http` |
 | `packages/logger` | `logger` | `dev.orwell.logging` |
 | `packages/primitives` | `primitives` | `dev.orwell.primitives` |
+| `packages/redis-client` | `redis-client` | `dev.orwell.redis` |
 | `packages/server-bootstrap` | `server-bootstrap` | `dev.orwell.bootstrap.{launch,auth,health,web,logging}` |
 | `packages/undertow-bootstrap` | `undertow-bootstrap` | `dev.orwell.undertow` |
 | `packages/server-parent` | `server-parent` (parent POM) | — |
@@ -72,6 +74,19 @@ Java packages predate the renames and do NOT always match — use this table, do
   the single source of the `klippy`/`auth`/`secrets` roles and databases. Ephemeral Testcontainers
   in tests are the one exception — they bind no fixed port. If you find another Postgres or Redis
   being created, it is a straggler to remove, not a setup to preserve.
+- Because that Redis is shared, **every app namespaces its keys with a prefix** rather than taking
+  a numbered database: `ws:` for keeboarder-server, `insta:` for insta. Redis databases look like
+  workspaces but share one memory pool, one AOF/RDB file and one eviction policy, `FLUSHALL`
+  crosses all of them, and Redis Cluster supports only database 0 — so a new app gets a prefix,
+  not a database. It runs with `--appendonly yes` so a restart does not drop paid-for cache
+  entries.
+- **Redis is reached through `dev.orwell.redis.RedisClient`** (`packages/redis-client`), which owns
+  the `JedisPool` and applies the prefix its constructor is given to every key — so the namespacing
+  rule above holds by construction. It turns a driver failure into an unchecked
+  `RedisOperationException` and deliberately does not decide whether that is fatal: insta's cache
+  catches it and answers a miss, keeboarder lets it propagate so a client learns its registration
+  failed. A new call site takes a `RedisClient` with its own prefix rather than a `JedisPool`; add
+  commands to that class as needed. See `packages/redis-client/README.md`.
 
 ## Repo conventions
 

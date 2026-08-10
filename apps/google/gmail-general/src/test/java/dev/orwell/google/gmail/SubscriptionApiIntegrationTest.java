@@ -51,6 +51,8 @@ class SubscriptionApiIntegrationTest extends PostgresIntegrationTest {
         registry.add("gmail.route-prefix", () -> "");
         registry.add("gmail.poll-interval-seconds", () -> 3600);
         registry.add("gmail.poll-concurrency", () -> 4);
+        registry.add("gmail.max-message-bytes", () -> 26_214_400L);
+        registry.add("gmail.public-base-url", () -> "");
         registry.add("gmail.delivery-interval-seconds", () -> 3600);
         registry.add("gmail.imap.host", () -> "127.0.0.1");
         registry.add("gmail.imap.port", () -> 1);
@@ -160,7 +162,7 @@ class SubscriptionApiIntegrationTest extends PostgresIntegrationTest {
     void startsTheDeliveryCursorAtTheMailboxHead() throws Exception {
         EmailMessageEntity stored = mails.save(new EmailMessageEntity(
                 bob, "<seed@example.com>", 1L, "Already stored", "alice@example.com",
-                bob.getEmail(), Instant.now(), "body", Instant.now()));
+                bob.getEmail(), Instant.now(), "body", "", 0L, false, Instant.now()));
 
         JsonNode body = objectMapper.readTree(
                 post(bobClient, "https://receiver.example.com/bob").body());

@@ -1,75 +1,81 @@
 package dev.orwell.keeboarder.server.websocket;
 
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import dev.orwell.redis.RedisClient;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * Who is connected, kept in the shared Redis so the answer survives a restart and is the same for
+ * every server instance.
+ *
+ * <p>The Redis mechanics — pooling, key namespacing, turning a driver failure into one exception
+ * type — live in {@link RedisClient}. What is left here is the shape of the data: a hash per client
+ * under {@code client:<id>}, and a set of live ids under {@code clients}, both inside keeboarder's
+ * {@value #KEY_PREFIX} namespace.
+ *
+ * <p>Failures propagate as {@link dev.orwell.redis.RedisOperationException}, which is a
+ * {@link RuntimeException} — {@code ChatEndpoint} catches it and tells the client its registration
+ * did not happen, rather than reporting a success Redis never recorded.
+ */
 public class RedisClientCache {
-    private static final String CLIENT_SET_KEY = "ws:clients";
-    private final JedisPool jedisPool;
+    /** Owned by keeboarder-server. Anything else in the shared Redis stays out of it. */
+    static final String KEY_PREFIX = "ws:";
+
+    private static final String CLIENT_SET_KEY = "clients";
+
+    private final RedisClient redis;
 
     public RedisClientCache(String host, int port) {
-        this.jedisPool = new JedisPool(host, port);
+        this(new RedisClient(host, port, KEY_PREFIX));
+    }
+
+    public RedisClientCache(RedisClient redis) {
+        this.redis = redis;
     }
 
     public void registerClient(String clientId, String name, String connectedAt) {
-        try (Jedis jedis = jedisPool.getResource()) {
-            String clientKey = getClientKey(clientId);
-            Map<String, String> metadata = new HashMap<>();
-            metadata.put("name", name);
-            metadata.put("connectedAt", connectedAt);
-            jedis.hset(clientKey, metadata);
-            jedis.sadd(CLIENT_SET_KEY, clientId);
-        }
+        Map<String, String> metadata = new HashMap<>();
+        metadata.put("name", name);
+        metadata.put("connectedAt", connectedAt);
+        redis.putHash(getClientKey(clientId), metadata);
+        redis.addToSet(CLIENT_SET_KEY, clientId);
     }
 
     public void unregisterClient(String clientId) {
-        try (Jedis jedis = jedisPool.getResource()) {
-            jedis.srem(CLIENT_SET_KEY, clientId);
-            jedis.del(getClientKey(clientId));
-        }
+        redis.removeFromSet(CLIENT_SET_KEY, clientId);
+        redis.delete(getClientKey(clientId));
     }
 
     public Optional<ClientInfo> getClientInfo(String clientId) {
-        try (Jedis jedis = jedisPool.getResource()) {
-            Map<String, String> metadata = jedis.hgetAll(getClientKey(clientId));
-            if (metadata == null || metadata.isEmpty()) {
-                return Optional.empty();
-            }
-            return Optional.of(new ClientInfo(clientId, metadata.get("name"), metadata.get("connectedAt")));
+        Map<String, String> metadata = redis.getHash(getClientKey(clientId));
+        if (metadata.isEmpty()) {
+            return Optional.empty();
         }
+        return Optional.of(new ClientInfo(clientId, metadata.get("name"), metadata.get("connectedAt")));
     }
 
     public Set<String> getAllClientIds() {
-        try (Jedis jedis = jedisPool.getResource()) {
-            return jedis.smembers(CLIENT_SET_KEY);
-        }
+        return redis.getSetMembers(CLIENT_SET_KEY);
     }
 
     public Optional<String> findClientIdByName(String name) {
-        try (Jedis jedis = jedisPool.getResource()) {
-            Set<String> clientIds = jedis.smembers(CLIENT_SET_KEY);
-            for (String clientId : clientIds) {
-                String storedName = jedis.hget(getClientKey(clientId), "name");
-                if (name.equals(storedName)) {
-                    return Optional.of(clientId);
-                }
+        for (String clientId : redis.getSetMembers(CLIENT_SET_KEY)) {
+            if (redis.getHashField(getClientKey(clientId), "name").filter(name::equals).isPresent()) {
+                return Optional.of(clientId);
             }
-            return Optional.empty();
         }
+        return Optional.empty();
     }
 
     public void close() {
-        jedisPool.close();
+        redis.close();
     }
 
     private static String getClientKey(String clientId) {
-        return "ws:client:" + clientId;
+        return "client:" + clientId;
     }
 
     public static class ClientInfo {

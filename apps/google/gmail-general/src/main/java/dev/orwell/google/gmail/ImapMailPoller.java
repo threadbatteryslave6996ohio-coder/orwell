@@ -8,12 +8,9 @@ import dev.orwell.google.gmail.repository.UserRepository;
 import dev.orwell.google.gmail.repository.UserSecretRepository;
 import dev.orwell.logging.Logger;
 import jakarta.annotation.PreDestroy;
-import jakarta.mail.Address;
 import jakarta.mail.Folder;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
-import jakarta.mail.Multipart;
-import jakarta.mail.Part;
 import jakarta.mail.Session;
 import jakarta.mail.UIDFolder;
 import org.eclipse.angus.mail.imap.IMAPFolder;
@@ -22,9 +19,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +51,11 @@ import java.util.stream.Collectors;
  * combination is what keeps one slow or hanging mailbox from delaying the rest: a single shared
  * flag would make every other mailbox wait for the slow one's round to finish, and IMAP polling is
  * network-bound, so the threads are almost always idle rather than busy.
+ *
+ * <p>What a message yields is {@link MailParser}'s business: this class decides <em>which</em>
+ * messages to fetch and where the cursor goes, and hands each one over whole. The only knob it
+ * carries on the parser's behalf is {@code GMAIL_MAX_MESSAGE_BYTES}, because the decision it
+ * controls — download this message's body or only its structure — is a network decision made here.
  */
 @Component
 public class ImapMailPoller {
@@ -63,6 +63,7 @@ public class ImapMailPoller {
     private final int port;
     private final boolean ssl;
     private final String folderName;
+    private final long maxMessageBytes;
     private final GmailService delivery;
     private final UserRepository users;
     private final UserSecretRepository secrets;
@@ -79,6 +80,7 @@ public class ImapMailPoller {
             @Value("${gmail.imap.ssl}") boolean ssl,
             @Value("${gmail.imap.folder}") String folderName,
             @Value("${gmail.poll-concurrency}") int pollConcurrency,
+            @Value("${gmail.max-message-bytes}") long maxMessageBytes,
             GmailService delivery,
             UserRepository users,
             UserSecretRepository secrets,
@@ -88,6 +90,7 @@ public class ImapMailPoller {
         this.port = port;
         this.ssl = ssl;
         this.folderName = folderName;
+        this.maxMessageBytes = maxMessageBytes;
         this.delivery = delivery;
         this.users = users;
         this.secrets = secrets;
@@ -253,7 +256,17 @@ public class ImapMailPoller {
                 continue;
             }
             try {
-                delivery.deliver(user, toGmailMessage(user.getEmail(), message, uid), uid);
+                ParsedMail parsed = MailParser.parse(message, uid, maxMessageBytes);
+                if (parsed.truncated()) {
+                    // Not an error: the message is stored, and only its attachment bytes are
+                    // missing. Logged because that is invisible from the row itself.
+                    logger.warn("Message exceeded GMAIL_MAX_MESSAGE_BYTES; storing it without its "
+                                    + "raw source, so its attachments cannot be downloaded.",
+                            Map.of("userId", user.getId(), "uid", uid,
+                                    "sizeBytes", parsed.rawSizeBytes(),
+                                    "maxMessageBytes", maxMessageBytes));
+                }
+                delivery.deliver(user, parsed, uid);
             } catch (Exception exception) {
                 Map<String, Object> metadata = new LinkedHashMap<>();
                 metadata.put("userId", user.getId());
@@ -284,54 +297,4 @@ public class ImapMailPoller {
         }
     }
 
-    /**
-     * Maps a Jakarta Mail message to the storage/webhook DTO. Package-visible for unit testing.
-     *
-     * <p>{@code account} comes from the user being polled rather than from any header: the
-     * {@code To} address is not it — a mail can reach a mailbox by Bcc, alias, or forwarding, and
-     * that address is what a subscriber would otherwise have to guess the owner from.
-     */
-    static GmailMessage toGmailMessage(String account, Message message, long uid)
-            throws MessagingException, IOException {
-        String id = firstHeader(message, "Message-ID");
-        if (id == null || id.isBlank()) {
-            id = "uid-" + uid;
-        }
-        String subject = message.getSubject() == null ? "" : message.getSubject();
-        String from = addresses(message.getFrom());
-        String to = addresses(message.getRecipients(Message.RecipientType.TO));
-        var received = message.getReceivedDate() != null ? message.getReceivedDate() : message.getSentDate();
-        long receivedAt = received != null ? received.getTime() : System.currentTimeMillis();
-        return new GmailMessage(id, account, subject, from, to, receivedAt, extractText(message));
-    }
-
-    private static String firstHeader(Message message, String name) throws MessagingException {
-        String[] values = message.getHeader(name);
-        return (values != null && values.length > 0) ? values[0] : null;
-    }
-
-    private static String addresses(Address[] addresses) {
-        if (addresses == null || addresses.length == 0) {
-            return "";
-        }
-        return Arrays.stream(addresses).map(Address::toString).collect(Collectors.joining(", "));
-    }
-
-    /** Returns the first {@code text/plain} part, walking multipart bodies; empty if none. */
-    static String extractText(Part part) throws MessagingException, IOException {
-        if (part.isMimeType("text/plain")) {
-            Object content = part.getContent();
-            return content == null ? "" : content.toString();
-        }
-        if (part.isMimeType("multipart/*")) {
-            Multipart multipart = (Multipart) part.getContent();
-            for (int i = 0; i < multipart.getCount(); i++) {
-                String text = extractText(multipart.getBodyPart(i));
-                if (!text.isBlank()) {
-                    return text;
-                }
-            }
-        }
-        return "";
-    }
 }

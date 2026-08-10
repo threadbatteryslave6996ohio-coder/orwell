@@ -5,7 +5,10 @@ import com.sun.net.httpserver.HttpServer;
 import dev.orwell.google.gmail.entity.EmailMessageEntity;
 import dev.orwell.google.gmail.entity.UserEntity;
 import dev.orwell.google.gmail.entity.WebhookSubscriptionEntity;
+import dev.orwell.google.gmail.repository.EmailAttachmentRepository;
+import dev.orwell.google.gmail.repository.EmailHeaderRepository;
 import dev.orwell.google.gmail.repository.EmailMessageRepository;
+import dev.orwell.google.gmail.repository.EmailRawSourceRepository;
 import dev.orwell.google.gmail.repository.WebhookSubscriptionRepository;
 import dev.orwell.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
@@ -51,6 +54,9 @@ class GmailServiceWebhookTest {
     private final Map<String, List<String>> authorizations = new ConcurrentHashMap<>();
 
     private EmailMessageRepository repository;
+    private EmailHeaderRepository headers;
+    private EmailAttachmentRepository attachments;
+    private EmailRawSourceRepository rawSources;
     private WebhookSubscriptionRepository subscriptions;
     private UserEntity user;
 
@@ -58,6 +64,9 @@ class GmailServiceWebhookTest {
     void startServers() throws IOException {
         repository = mock(EmailMessageRepository.class);
         when(repository.save(any(EmailMessageEntity.class))).thenAnswer(call -> call.getArgument(0));
+        headers = mock(EmailHeaderRepository.class);
+        attachments = mock(EmailAttachmentRepository.class);
+        rawSources = mock(EmailRawSourceRepository.class);
         subscriptions = mock(WebhookSubscriptionRepository.class);
         when(subscriptions.findByUserIdAndActiveTrueOrderByIdAsc(any())).thenReturn(List.of());
         user = user(1L, "owner@example.com", "owner-client");
@@ -180,16 +189,20 @@ class GmailServiceWebhookTest {
         WebhookSender sender = new WebhookSender(
                 "http://127.0.0.1:" + authServer.getAddress().getPort(),
                 "gmail-general", "gmail-secret", NO_OP_LOGGER);
-        return new GmailService(broadcastClients, repository, subscriptions, sender, NO_OP_LOGGER);
+        return new GmailService(broadcastClients, repository, headers, attachments, rawSources,
+                subscriptions, sender, GmailTestFixtures.payloads(),
+                GmailTestFixtures.noOpTransactions(), NO_OP_LOGGER);
     }
 
-    private static GmailMessage message(String id, String subject) {
+    private static ParsedMail message(String id, String subject) {
         return message(id, subject, "owner@example.com");
     }
 
-    private static GmailMessage message(String id, String subject, String account) {
-        return new GmailMessage(id, account, subject, "alice@example.com", account,
-                Instant.parse("2026-06-27T15:30:45Z").toEpochMilli(), "body");
+    private static ParsedMail message(String id, String subject, String account) {
+        return new ParsedMail(id, subject, "alice@example.com", account,
+                Instant.parse("2026-06-27T15:30:45Z").toEpochMilli(), "body", "",
+                List.of(new ParsedMail.ParsedHeader("Subject", subject)), List.of(),
+                new byte[0], 0L, false);
     }
 
     private void webhook(String path, StatusDecider status) {

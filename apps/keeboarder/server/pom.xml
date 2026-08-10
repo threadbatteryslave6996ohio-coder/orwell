@@ -31,8 +31,8 @@
             <artifactId>jakarta.websocket-api</artifactId>
         </dependency>
         <dependency>
-            <groupId>redis.clients</groupId>
-            <artifactId>jedis</artifactId>
+            <groupId>dev.orwell</groupId>
+            <artifactId>redis-client</artifactId>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>

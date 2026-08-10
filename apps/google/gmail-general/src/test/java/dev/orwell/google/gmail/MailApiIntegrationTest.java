@@ -50,6 +50,8 @@ class MailApiIntegrationTest extends PostgresIntegrationTest {
         registry.add("gmail.route-prefix", () -> "");
         registry.add("gmail.poll-interval-seconds", () -> 3600);
         registry.add("gmail.poll-concurrency", () -> 4);
+        registry.add("gmail.max-message-bytes", () -> 26_214_400L);
+        registry.add("gmail.public-base-url", () -> "");
         registry.add("gmail.delivery-interval-seconds", () -> 3600);
         registry.add("gmail.imap.host", () -> "127.0.0.1");
         registry.add("gmail.imap.port", () -> 1);
@@ -159,7 +161,7 @@ class MailApiIntegrationTest extends PostgresIntegrationTest {
             batch.add(new EmailMessageEntity(
                     owner, "<%s-%d@example.com>".formatted(clientId, i), i,
                     "Subject " + i, "alice@example.com", owner.getEmail(),
-                    Instant.now(), "body " + i, Instant.now()));
+                    Instant.now(), "body " + i, "", 0L, false, Instant.now()));
         }
         return mails.saveAll(batch).stream().map(EmailMessageEntity::getId).toList();
     }

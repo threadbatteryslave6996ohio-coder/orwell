@@ -28,6 +28,13 @@ import java.time.Instant;
  * when a message lacks one) is the dedup key. It is unique <em>per user</em> rather than globally:
  * two users who are both recipients of the same mail each receive their own copy, and a global
  * constraint would silently drop the second one.
+ *
+ * <p>This row holds what every read needs. The rest of the message hangs off it in three tables —
+ * {@link EmailHeaderEntity}, {@link EmailAttachmentEntity} and {@link EmailRawSourceEntity} — and
+ * the split is what keeps reads cheap. The raw source in particular is up to
+ * {@code GMAIL_MAX_MESSAGE_BYTES} per message, so keeping it in a column here would drag every
+ * message's full source through {@code GET /mails?limit=500}; in its own table it is read only by
+ * the one endpoint that serves attachment bytes.
  */
 @Entity
 @Table(
@@ -69,6 +76,28 @@ public class EmailMessageEntity {
     @Column(name = "body", nullable = false, columnDefinition = "text")
     private String body;
 
+    /**
+     * The {@code text/html} body, or empty when the sender sent none. Nullable in the database
+     * purely so {@code ddl-auto=update} can add the column to a table that already has rows —
+     * a {@code NOT NULL} column with no default cannot be added to a populated table, and Hibernate
+     * logs that failure rather than refusing to start. Code always writes non-null; readers
+     * coalesce, which is what makes an un-migrated old row behave like one with no HTML part.
+     */
+    @Column(name = "body_html", columnDefinition = "text")
+    private String bodyHtml;
+
+    /** The server-reported RFC822 size, recorded even when the source itself was not stored. */
+    @Column(name = "raw_size_bytes")
+    private Long rawSizeBytes;
+
+    /**
+     * True when the message exceeded {@code GMAIL_MAX_MESSAGE_BYTES}: headers, text bodies and
+     * attachment metadata are stored, the raw source is not, and attachment bytes are therefore
+     * unavailable. Null on rows written before this column existed, which were never truncated.
+     */
+    @Column(name = "truncated")
+    private Boolean truncated;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -76,7 +105,8 @@ public class EmailMessageEntity {
     }
 
     public EmailMessageEntity(UserEntity user, String messageId, long imapUid, String subject,
-            String fromAddress, String toAddress, Instant receivedAt, String body, Instant createdAt) {
+            String fromAddress, String toAddress, Instant receivedAt, String body, String bodyHtml,
+            long rawSizeBytes, boolean truncated, Instant createdAt) {
         this.user = user;
         this.messageId = messageId;
         this.imapUid = imapUid;
@@ -85,6 +115,9 @@ public class EmailMessageEntity {
         this.toAddress = toAddress;
         this.receivedAt = receivedAt;
         this.body = body;
+        this.bodyHtml = bodyHtml;
+        this.rawSizeBytes = rawSizeBytes;
+        this.truncated = truncated;
         this.createdAt = createdAt;
     }
 
@@ -122,6 +155,19 @@ public class EmailMessageEntity {
 
     public String getBody() {
         return body;
+    }
+
+    /** Empty rather than null when the message had no HTML part, or predates the column. */
+    public String getBodyHtml() {
+        return bodyHtml == null ? "" : bodyHtml;
+    }
+
+    public long getRawSizeBytes() {
+        return rawSizeBytes == null ? 0L : rawSizeBytes;
+    }
+
+    public boolean isTruncated() {
+        return Boolean.TRUE.equals(truncated);
     }
 
     public Instant getCreatedAt() {

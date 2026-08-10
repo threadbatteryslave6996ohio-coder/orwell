@@ -14,6 +14,8 @@ public final class GmailEnvs {
     public static final EnvOption<Integer> GMAIL_POLL_INTERVAL_SECONDS;
     public static final EnvOption<Integer> GMAIL_POLL_CONCURRENCY;
     public static final EnvOption<Integer> GMAIL_DELIVERY_INTERVAL_SECONDS;
+    public static final EnvOption<Long> GMAIL_MAX_MESSAGE_BYTES;
+    public static final EnvOption<String> GMAIL_PUBLIC_BASE_URL;
     public static final EnvOption<String> GMAIL_DATASOURCE_URL;
     public static final EnvOption<String> GMAIL_DATASOURCE_USERNAME;
     public static final EnvOption<String> GMAIL_DATASOURCE_PASSWORD;
@@ -33,6 +35,13 @@ public final class GmailEnvs {
         GMAIL_POLL_CONCURRENCY = ENV.optional("GMAIL_POLL_CONCURRENCY", EnvType.integer(), 4);
         GMAIL_DELIVERY_INTERVAL_SECONDS =
                 ENV.optional("GMAIL_DELIVERY_INTERVAL_SECONDS", EnvType.integer(), 5);
+        // 25 MiB, which is Gmail's own attachment ceiling: below this the whole message is
+        // archived, above it only its headers, text bodies and attachment index are.
+        GMAIL_MAX_MESSAGE_BYTES =
+                ENV.optional("GMAIL_MAX_MESSAGE_BYTES", EnvType.longInteger(), 26_214_400L);
+        // Empty means attachment URLs are emitted as paths: a service cannot know the address it is
+        // reachable at from outside unless it is told, and guessing one would be worse than a path.
+        GMAIL_PUBLIC_BASE_URL = ENV.optional("GMAIL_PUBLIC_BASE_URL", EnvType.string(), "");
         GMAIL_DATASOURCE_URL = ENV.required("GMAIL_DATASOURCE_URL", EnvType.string());
         GMAIL_DATASOURCE_USERNAME = ENV.required("GMAIL_DATASOURCE_USERNAME", EnvType.string());
         GMAIL_DATASOURCE_PASSWORD = ENV.required("GMAIL_DATASOURCE_PASSWORD", EnvType.string());
@@ -50,6 +59,8 @@ public final class GmailEnvs {
         ENV.property("gmail.poll-interval-seconds", GMAIL_POLL_INTERVAL_SECONDS);
         ENV.property("gmail.poll-concurrency", GMAIL_POLL_CONCURRENCY);
         ENV.property("gmail.delivery-interval-seconds", GMAIL_DELIVERY_INTERVAL_SECONDS);
+        ENV.property("gmail.max-message-bytes", GMAIL_MAX_MESSAGE_BYTES);
+        ENV.property("gmail.public-base-url", GMAIL_PUBLIC_BASE_URL);
         ENV.property("spring.datasource.url", GMAIL_DATASOURCE_URL);
         ENV.property("spring.datasource.username", GMAIL_DATASOURCE_USERNAME);
         ENV.property("spring.datasource.password", GMAIL_DATASOURCE_PASSWORD);
