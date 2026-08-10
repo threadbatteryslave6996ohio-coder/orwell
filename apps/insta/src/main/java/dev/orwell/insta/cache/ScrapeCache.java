@@ -19,7 +19,7 @@ public interface ScrapeCache extends AutoCloseable {
     /** @return the stored JSON, or empty on a miss — including when the store is unreachable. */
     Optional<String> find(String key);
 
-    /** Stores {@code json} under {@code key} with the configured time to live. Never throws. */
+    /** Stores {@code json} under {@code key}. Entries do not expire. Never throws. */
     void store(String key, String json);
 
     /**

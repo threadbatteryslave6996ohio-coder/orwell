@@ -33,7 +33,6 @@ public final class InstaEnvs {
     public static final EnvOption<Integer> INSTA_DEFAULT_LIMIT;
     public static final EnvOption<Integer> INSTA_MAX_LIMIT;
     public static final EnvOption<Boolean> INSTA_CACHE_ENABLED;
-    public static final EnvOption<Integer> INSTA_CACHE_TTL_HOURS;
     public static final EnvOption<String> REDIS_HOST;
     public static final EnvOption<Integer> REDIS_PORT;
     public static final EnvOption<Boolean> INSTA_LOG_CONSOLE;
@@ -75,7 +74,6 @@ public final class InstaEnvs {
         // 500 is what this deployment needs; a larger list also risks outrunning the run timeout.
         INSTA_MAX_LIMIT = BUILDER.optional("INSTA_MAX_LIMIT", EnvType.integer(), 500);
         INSTA_CACHE_ENABLED = BUILDER.optional("INSTA_CACHE_ENABLED", EnvType.bool(), true);
-        INSTA_CACHE_TTL_HOURS = BUILDER.optional("INSTA_CACHE_TTL_HOURS", EnvType.integer(), 24);
         // Same keys keeboarder-server uses, pointing at the one Redis in the stack.
         REDIS_HOST = BUILDER.optional("REDIS_HOST", EnvType.string(), "localhost");
         REDIS_PORT = BUILDER.optional("REDIS_PORT", EnvType.integer(), 6379);

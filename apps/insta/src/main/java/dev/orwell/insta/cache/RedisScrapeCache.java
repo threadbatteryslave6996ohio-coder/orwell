@@ -3,7 +3,6 @@ package dev.orwell.insta.cache;
 import dev.orwell.logging.Logger;
 import dev.orwell.redis.RedisClient;
 
-import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -21,6 +20,11 @@ import java.util.Optional;
  * front of every key. Everything lives in database 0; there is no knob for another one, because
  * the prefix is the separation.
  *
+ * <p><b>Entries do not expire.</b> There is no time to live at all: the point of one was that
+ * Instagram data goes stale, but actor quotas turned out to bind long before freshness does, so a
+ * cached answer stays authoritative until a later walk overwrites it. Re-add expiry by giving
+ * {@link RedisClient#set(String, String, java.time.Duration)} a duration here.
+ *
  * <p><b>Failure.</b> {@link RedisClient} reports a failure and leaves the policy here, which is
  * the point: a miss and an unreachable Redis are the same answer to a caller — one Apify run —
  * which is the right trade, because a cache outage should cost money, not availability.
@@ -30,16 +34,14 @@ public class RedisScrapeCache implements ScrapeCache, AutoCloseable {
     static final String KEY_PREFIX = "insta:";
 
     private final RedisClient redis;
-    private final Duration ttl;
     private final Logger logger;
 
-    public RedisScrapeCache(String host, int port, Duration ttl, Logger logger) {
-        this(new RedisClient(host, port, KEY_PREFIX), ttl, logger);
+    public RedisScrapeCache(String host, int port, Logger logger) {
+        this(new RedisClient(host, port, KEY_PREFIX), logger);
     }
 
-    public RedisScrapeCache(RedisClient redis, Duration ttl, Logger logger) {
+    public RedisScrapeCache(RedisClient redis, Logger logger) {
         this.redis = Objects.requireNonNull(redis, "redis");
-        this.ttl = Objects.requireNonNull(ttl, "ttl");
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -57,7 +59,7 @@ public class RedisScrapeCache implements ScrapeCache, AutoCloseable {
     @Override
     public void store(String key, String json) {
         try {
-            redis.set(key, json, ttl);
+            redis.set(key, json);
         } catch (Exception exception) {
             // The answer is already on its way to the caller; failing to remember it changes
             // nothing for this request and must not turn a success into a 500.

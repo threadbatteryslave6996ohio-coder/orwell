@@ -18,7 +18,6 @@ import dev.orwell.insta.instagram.ProfileNotFoundException;
 import dev.orwell.logging.Logger;
 
 import java.io.PrintStream;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -220,10 +219,7 @@ public final class InstaCli {
             return new DisabledScrapeCache();
         }
         return new RedisScrapeCache(
-                env.get(InstaEnvs.REDIS_HOST),
-                env.get(InstaEnvs.REDIS_PORT),
-                Duration.ofHours(Math.max(env.get(InstaEnvs.INSTA_CACHE_TTL_HOURS), 1)),
-                logger);
+                env.get(InstaEnvs.REDIS_HOST), env.get(InstaEnvs.REDIS_PORT), logger);
     }
 
     private static String count(Long value) {

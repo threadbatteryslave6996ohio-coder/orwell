@@ -22,4 +22,17 @@ public class DetectionController {
         EndpointResponse<Map<String, Object>> response = endpoint.detect(payload);
         return ResponseEntity.status(response.status()).body(response.body());
     }
+
+    @PostMapping("/motion")
+    public ResponseEntity<Map<String, Object>> motion(@RequestBody Map<String, Object> payload) {
+        EndpointResponse<Map<String, Object>> response = endpoint.motion(payload);
+        return ResponseEntity.status(response.status()).body(response.body());
+    }
+
+    /** Bastion ingest: store the frame and let the delivery job fan it out to subscribers. */
+    @PostMapping("/frames")
+    public ResponseEntity<Map<String, Object>> frames(@RequestBody Map<String, Object> payload) {
+        EndpointResponse<Map<String, Object>> response = endpoint.frames(payload);
+        return ResponseEntity.status(response.status()).body(response.body());
+    }
 }

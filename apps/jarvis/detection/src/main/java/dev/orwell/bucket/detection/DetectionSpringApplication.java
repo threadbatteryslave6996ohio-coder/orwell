@@ -5,9 +5,12 @@ import dev.orwell.bootstrap.launch.AppServer;
 import dev.orwell.env.Env;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.LinkedHashMap;
 
+// Scheduling drives the two fan-out jobs: FrameDeliveryJob and FrameRetentionJob.
+@EnableScheduling
 @SpringBootApplication(proxyBeanMethods = false)
 class DetectionSpringApplication {
     private static final AppServer SERVER =
@@ -21,8 +24,9 @@ class DetectionSpringApplication {
     }
 
     @Bean
-    DetectionEndpoint detectionEndpoint(DetectionService service) {
-        return new DetectionEndpoint(service);
+    DetectionEndpoint detectionEndpoint(DetectionService service, MotionService motionService,
+            FrameIngestService ingestService) {
+        return new DetectionEndpoint(service, motionService, ingestService);
     }
 
     @Bean

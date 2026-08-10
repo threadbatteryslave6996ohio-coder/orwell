@@ -255,8 +255,12 @@ database restart costs one failed refresh instead of a wedged server.
 ## Caching
 
 Every answer is cached in Redis under a key covering everything that changes it — username,
-direction, page size, cursor — so re-running a lookup, or re-walking a list, costs nothing for 24
-hours.
+direction, page size, cursor — so re-running a lookup, or re-walking a list, costs nothing.
+
+**Entries do not expire** (`INSTA_CACHE_TTL_HOURS=0`). The expiry existed because Instagram data
+goes stale, but actor quotas turned out to be the binding constraint rather than freshness: a
+cached follower list stays authoritative until a later walk overwrites it. Set a positive number of
+hours to put the expiry back.
 
 - **A cache failure is never a lookup failure.** If Redis is down, a miss is the answer and you pay
   for a scrape. A cache outage should cost money, not availability.
@@ -334,7 +338,7 @@ required one, and a missing one fails before anything can be spent.
 | `INSTA_DEFAULT_LIMIT` | `100` | accounts returned when `--limit` is omitted |
 | `INSTA_MAX_LIMIT` | `500` | ceiling on `--limit` — a spend guard |
 | `INSTA_CACHE_ENABLED` | `true` | whether to consult Redis at all |
-| `INSTA_CACHE_TTL_HOURS` | `24` | how long a cached answer stays good |
+| `INSTA_CACHE_TTL_HOURS` | `0` | how long a cached answer stays good; **0 = never expires** |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | the shared Redis |
 | `INSTA_DATABASE_URL` / `_USERNAME` / `_PASSWORD` | *(empty)* | Postgres for `sync` |
 | `INSTA_PICTURE_STORE` | `none` | `none`, `filesystem` or `http` |

@@ -8,7 +8,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import redis.clients.jedis.Jedis;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,7 +43,7 @@ class RedisScrapeCacheTest {
 
     @Test
     void storesAndReadsBackAValue() {
-        ScrapeCache cache = cache(Duration.ofHours(24));
+        ScrapeCache cache = cache();
 
         cache.store("v1:profile:nasa", "{\"username\":\"nasa\"}");
 
@@ -53,7 +52,7 @@ class RedisScrapeCacheTest {
 
     @Test
     void missesOnAKeyItNeverWrote() {
-        assertThat(cache(Duration.ofHours(24)).find("v1:profile:nobody")).isEmpty();
+        assertThat(cache().find("v1:profile:nobody")).isEmpty();
     }
 
     /**
@@ -62,7 +61,7 @@ class RedisScrapeCacheTest {
      */
     @Test
     void writesEveryKeyUnderItsOwnPrefix() {
-        cache(Duration.ofHours(24)).store("v1:profile:nasa", "{}");
+        cache().store("v1:profile:nasa", "{}");
 
         try (Jedis jedis = jedis()) {
             assertThat(jedis.keys("*")).containsExactly(RedisScrapeCache.KEY_PREFIX + "v1:profile:nasa");
@@ -70,32 +69,32 @@ class RedisScrapeCacheTest {
         }
     }
 
-    /** Instagram data goes stale, and an entry with no expiry would outlive its usefulness. */
+    /** Entries are kept indefinitely: a stale list beats paying a quota-limited actor again. */
     @Test
-    void expiresEntriesAfterTheConfiguredTimeToLive() {
-        cache(Duration.ofHours(24)).store("v1:profile:nasa", "{}");
+    void keepsEntriesForever() {
+        cache().store("v3:profile:nasa", "{}");
 
         try (Jedis jedis = jedis()) {
-            long ttl = jedis.ttl(RedisScrapeCache.KEY_PREFIX + "v1:profile:nasa");
-            assertThat(ttl).isPositive().isLessThanOrEqualTo(Duration.ofHours(24).toSeconds());
+            // -1 is Redis for "exists, no expiry"; -2 would mean the key is already gone.
+            assertThat(jedis.ttl(RedisScrapeCache.KEY_PREFIX + "v3:profile:nasa")).isEqualTo(-1);
         }
+        assertThat(cache().find("v3:profile:nasa")).isPresent();
     }
 
     /** A cache outage must cost an Apify run, never a request. */
     @Test
     void reportsAMissAndSwallowsWritesWhenRedisIsUnreachable() {
         // Port 1 is reserved and refuses connections, standing in for Redis being down.
-        RedisScrapeCache cache =
-                new RedisScrapeCache("127.0.0.1", 1, Duration.ofHours(24), NO_OP_LOGGER);
+        RedisScrapeCache cache = new RedisScrapeCache("127.0.0.1", 1, NO_OP_LOGGER);
         opened.add(cache);
 
         assertThatCode(() -> cache.store("v1:profile:nasa", "{}")).doesNotThrowAnyException();
         assertThat(cache.find("v1:profile:nasa")).isEmpty();
     }
 
-    private ScrapeCache cache(Duration ttl) {
+    private ScrapeCache cache() {
         RedisScrapeCache cache = new RedisScrapeCache(
-                REDIS.getHost(), REDIS.getMappedPort(6379), ttl, NO_OP_LOGGER);
+                REDIS.getHost(), REDIS.getMappedPort(6379), NO_OP_LOGGER);
         opened.add(cache);
         return cache;
     }

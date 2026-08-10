@@ -60,14 +60,14 @@ public class DetectionService {
     }
 
     /**
-     * Runs detection over the request payload. Throws {@link InvalidFrameException} for a bad
-     * frame (mapped to 400 by the controller); any other runtime failure surfaces as 500.
+     * Runs detection over the request payload. Throws {@link FramePayload.InvalidFrameException}
+     * for a bad frame (mapped to 400 by the controller); any other runtime failure surfaces as 500.
      */
     public Map<String, Object> detect(Map<String, Object> payload) {
-        byte[] frameBytes = decodeFrame(payload);
+        byte[] frameBytes = FramePayload.decode(payload);
         String frameSha = Sha256.hex(frameBytes);
 
-        String source = String.valueOf(payload.getOrDefault("source", payload.getOrDefault("streamId", "unknown")));
+        String source = FramePayload.source(payload);
         Object frameIndex = payload.get("frameIndex");
         Object timestamp = payload.get("timestamp");
 
@@ -112,31 +112,6 @@ public class DetectionService {
         response.put("alertError", alertError);
         response.put("boxes", detections);
         return response;
-    }
-
-    private byte[] decodeFrame(Map<String, Object> payload) {
-        Object encoded = payload.get("frameBase64");
-        if (encoded == null) {
-            throw new InvalidFrameException("frameBase64 missing");
-        }
-        byte[] frame;
-        try {
-            frame = Base64.getDecoder().decode(String.valueOf(encoded));
-        } catch (IllegalArgumentException exception) {
-            throw new InvalidFrameException("frameBase64 is not valid base64");
-        }
-        String expectedSha = String.valueOf(payload.getOrDefault("frameSha256", ""));
-        if (!expectedSha.isBlank() && !expectedSha.equals(Sha256.hex(frame))) {
-            throw new InvalidFrameException("frame hash mismatch");
-        }
-        return frame;
-    }
-
-    /** A malformed frame in the request (bad/missing base64 or hash mismatch): a client error (400). */
-    public static final class InvalidFrameException extends RuntimeException {
-        InvalidFrameException(String message) {
-            super(message);
-        }
     }
 
 }

@@ -25,3 +25,9 @@ CREATE DATABASE gmail   OWNER gmail;
 
 CREATE ROLE insta   LOGIN PASSWORD 'insta';
 CREATE DATABASE insta   OWNER insta;
+
+-- jarvis-detection's frame bastion: the frame_events log it fans out from and the
+-- per-subscriber cursors. frame_events holds JPEG bytes, so it is sized by
+-- DETECTION_FRAME_RETENTION_SECONDS rather than growing indefinitely.
+CREATE ROLE jarvis  LOGIN PASSWORD 'jarvis';
+CREATE DATABASE jarvis  OWNER jarvis;
