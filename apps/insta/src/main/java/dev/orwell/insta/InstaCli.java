@@ -4,6 +4,7 @@ import dev.orwell.env.Env;
 import dev.orwell.insta.apify.ApifyClient;
 import dev.orwell.insta.apify.ApifyException;
 import dev.orwell.insta.cache.DisabledScrapeCache;
+import dev.orwell.insta.graph.SyncCommand;
 import dev.orwell.insta.cache.RedisScrapeCache;
 import dev.orwell.insta.cache.ScrapeCache;
 import dev.orwell.insta.instagram.ConnectionType;
@@ -50,6 +51,7 @@ public final class InstaCli {
               profile   <username>            follower and following counts
               followers <username>            the accounts following them
               following <username>            the accounts they follow
+              sync      <username>            walk the followers and record them in Postgres
 
             options (list commands only):
               --limit N     accounts per lookup (default INSTA_DEFAULT_LIMIT, max INSTA_MAX_LIMIT)
@@ -58,6 +60,8 @@ public final class InstaCli {
               --json        print raw JSON instead of a readable list
 
             APIFY_TOKEN must be set, in the environment or a .env file.
+            `sync` also needs INSTA_DATABASE_URL. It always walks the whole list, because a
+            partial walk cannot tell an unfollow from a page it never reached.
             """;
 
     private InstaCli() {
@@ -106,6 +110,8 @@ public final class InstaCli {
                         instagram, arguments, ConnectionType.FOLLOWERS, out, err);
                 case FOLLOWING -> printConnections(
                         instagram, arguments, ConnectionType.FOLLOWING, out, err);
+                case SYNC -> new SyncCommand(env, instagram, logger)
+                        .run(arguments.username(), arguments.limit(), out, err);
             };
         } catch (IllegalArgumentException exception) {
             err.println(exception.getMessage());
@@ -223,7 +229,7 @@ public final class InstaCli {
     }
 
     enum Command {
-        PROFILE, FOLLOWERS, FOLLOWING
+        PROFILE, FOLLOWERS, FOLLOWING, SYNC
     }
 
     /**
@@ -242,6 +248,7 @@ public final class InstaCli {
                 case "profile" -> Command.PROFILE;
                 case "followers" -> Command.FOLLOWERS;
                 case "following" -> Command.FOLLOWING;
+                case "sync" -> Command.SYNC;
                 default -> throw new IllegalArgumentException("Unknown command: " + args[0]);
             };
             if (args.length < 2 || args[1].startsWith("-")) {
@@ -270,6 +277,12 @@ public final class InstaCli {
             if (command == Command.PROFILE && (limit != null || all || cursor != null)) {
                 throw new IllegalArgumentException(
                         "'profile' returns one account; --limit, --all and --cursor do not apply.");
+            }
+            if (command == Command.SYNC && (all || cursor != null)) {
+                // Resuming or half-walking would produce a diff that reports unfollows for pages
+                // it simply never read, so sync only ever walks the whole list.
+                throw new IllegalArgumentException(
+                        "'sync' always walks the whole list; --all and --cursor do not apply.");
             }
             return new Arguments(command, username, limit, all, cursor, json, false);
         }

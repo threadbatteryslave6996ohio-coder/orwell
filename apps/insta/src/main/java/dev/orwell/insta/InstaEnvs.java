@@ -39,6 +39,14 @@ public final class InstaEnvs {
     public static final EnvOption<String> LOKI_URL;
     public static final EnvOption<String> LOKI_TENANT_ID;
     public static final EnvOption<String> LOGGING_FILE_NAME;
+    public static final EnvOption<String> INSTA_DATABASE_URL;
+    public static final EnvOption<String> INSTA_DATABASE_USERNAME;
+    public static final EnvOption<String> INSTA_DATABASE_PASSWORD;
+    public static final EnvOption<String> INSTA_PICTURE_STORE;
+    public static final EnvOption<String> INSTA_PICTURE_DIR;
+    public static final EnvOption<String> INSTA_BUCKET_URL;
+    public static final EnvOption<String> INSTA_BUCKET_TOKEN;
+    public static final EnvOption<Integer> INSTA_MAX_RETIRE_PERCENT;
 
     private static final EnvSchema SCHEMA;
 
@@ -67,6 +75,20 @@ public final class InstaEnvs {
         LOKI_URL = BUILDER.optional("LOKI_URL", EnvType.string(), "");
         LOKI_TENANT_ID = BUILDER.optional("LOKI_TENANT_ID", EnvType.string(), "");
         LOGGING_FILE_NAME = BUILDER.optional("LOGGING_FILE_NAME", EnvType.string(), "");
+        // Only `sync` needs a database, so these stay optional and that command reports a missing
+        // one itself — requiring them here would break `profile` for anyone with no Postgres.
+        INSTA_DATABASE_URL = BUILDER.optional("INSTA_DATABASE_URL", EnvType.string(), "");
+        INSTA_DATABASE_USERNAME = BUILDER.optional("INSTA_DATABASE_USERNAME", EnvType.string(), "");
+        INSTA_DATABASE_PASSWORD = BUILDER.optional("INSTA_DATABASE_PASSWORD", EnvType.string(), "");
+        // Downloading someone's pictures should be something you asked for, so the default is off.
+        INSTA_PICTURE_STORE = BUILDER.optional("INSTA_PICTURE_STORE", EnvType.string(), "none");
+        INSTA_PICTURE_DIR = BUILDER.optional("INSTA_PICTURE_DIR", EnvType.string(), "");
+        INSTA_BUCKET_URL = BUILDER.optional("INSTA_BUCKET_URL", EnvType.string(), "");
+        INSTA_BUCKET_TOKEN = BUILDER.optional("INSTA_BUCKET_TOKEN", EnvType.string(), "");
+        // A fuse, as a percentage: a walk that would retire more of an account's edges than this
+        // is refusing to believe itself. A private account returns an empty list, and that is
+        // indistinguishable from everyone leaving at once.
+        INSTA_MAX_RETIRE_PERCENT = BUILDER.optional("INSTA_MAX_RETIRE_PERCENT", EnvType.integer(), 20);
 
         SCHEMA = BUILDER.build();
     }
