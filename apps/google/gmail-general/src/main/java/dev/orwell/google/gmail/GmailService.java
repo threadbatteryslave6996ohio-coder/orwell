@@ -1,114 +1,99 @@
 package dev.orwell.google.gmail;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.orwell.auth.http.client.ClientAuthSession;
-import dev.orwell.bootstrap.web.SharedJson;
 import dev.orwell.google.gmail.entity.EmailMessageEntity;
+import dev.orwell.google.gmail.entity.UserEntity;
+import dev.orwell.google.gmail.entity.WebhookSubscriptionEntity;
 import dev.orwell.google.gmail.repository.EmailMessageRepository;
+import dev.orwell.google.gmail.repository.WebhookSubscriptionRepository;
 import dev.orwell.logging.Logger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Persists each received mailbox message to the {@code gmail} database and fans it out to the
- * configured webhook clients, authenticating every delivery with a bearer token from the auth
- * server. The ingestion side (reading the mailbox) lives in {@link ImapMailPoller}; this service
- * owns only the store-and-forward half.
+ * Persists each received mailbox message to the {@code gmail} database. The ingestion side (reading
+ * the mailbox) lives in {@link ImapMailPoller}; this service owns storage.
+ *
+ * <p>Delivery to per-mailbox subscribers is <em>not</em> done here — it is driven from a cursor per
+ * subscription by {@link WebhookDeliveryJob}, so a receiver that was down catches up instead of
+ * losing mail. The only thing this class forwards is the legacy {@code GMAIL_WEBHOOK_CLIENTS}
+ * broadcast, which has no cursor and stays best-effort: one attempt, and a failure is logged and
+ * dropped. That difference is a further reason to migrate off it.
  */
 @Service
 public class GmailService {
-    private final ObjectMapper json = SharedJson.mapper();
-    private final HttpClient http = HttpClient.newHttpClient();
-    // One token is cached and reused across deliveries; a 401 refreshes it and the call is retried.
-    private final ClientAuthSession session;
     private final EmailMessageRepository repository;
-    private final List<String> clients;
-    private final Logger logger;
+    private final WebhookSubscriptionRepository subscriptions;
+    private final WebhookSender sender;
+    private final List<String> broadcastClients;
 
     public GmailService(
-            @Value("${orwell.auth.base-url}") String authBaseUrl,
-            @Value("${gmail.auth.client-id}") String authClientId,
-            @Value("${gmail.auth.client-secret}") String authClientSecret,
             @Value("${gmail.webhook-clients}") String webhookClients,
             EmailMessageRepository repository,
+            WebhookSubscriptionRepository subscriptions,
+            WebhookSender sender,
             Logger logger
     ) {
-        this.logger = Objects.requireNonNull(logger, "logger");
-        this.session = new ClientAuthSession(authBaseUrl, authClientId, authClientSecret, null);
         this.repository = Objects.requireNonNull(repository, "repository");
-        this.clients = Arrays.stream(webhookClients.split(","))
+        this.subscriptions = Objects.requireNonNull(subscriptions, "subscriptions");
+        this.sender = Objects.requireNonNull(sender, "sender");
+        this.broadcastClients = Arrays.stream(webhookClients.split(","))
                 .map(String::trim).filter(value -> !value.isBlank()).toList();
+        if (!this.broadcastClients.isEmpty()) {
+            logger.warn("GMAIL_WEBHOOK_CLIENTS is set: these URLs receive every user's mail, not "
+                            + "just one mailbox's, and delivery to them is best-effort with no "
+                            + "retry. Migrate them to per-mailbox subscriptions "
+                            + "(POST /subscriptions) and unset it.",
+                    Map.of("clientCount", this.broadcastClients.size()));
+        }
     }
 
     /**
-     * Saves the message row and, if it was not already stored, forwards it to every webhook
-     * client. A unique constraint on {@code message_id} is the dedup key, so a redelivered
-     * message (e.g. re-fetched after a checkpoint resync) is stored once and fanned out once.
+     * Saves the message row against {@code user}, unless that user already has it. The unique
+     * constraint on {@code (user_id, message_id)} is the dedup key, so a redelivered message (e.g.
+     * re-fetched after a checkpoint resync) is stored once per user — two users who both received
+     * the same mail each keep a copy.
+     *
+     * <p>Storing is what makes a message deliverable: {@link WebhookDeliveryJob} walks stored rows
+     * by id, so a subscriber receives everything committed here, in order, exactly once unless a
+     * retry duplicates it.
      */
-    public void deliver(GmailMessage message, long imapUid) {
-        if (repository.existsByMessageId(message.id())) {
+    public void deliver(UserEntity user, GmailMessage message, long imapUid) {
+        if (repository.existsByUserIdAndMessageId(user.getId(), message.id())) {
             return;
         }
         repository.save(new EmailMessageEntity(
-                message.id(), imapUid, message.subject(),
+                user, message.id(), imapUid, message.subject(),
                 message.from(), message.to(), Instant.ofEpochMilli(message.receivedAt()),
                 message.body(), Instant.now()));
-        forwardToWebhooks(message);
+        broadcast(user, message);
     }
 
-    private void forwardToWebhooks(GmailMessage message) {
-        if (clients.isEmpty()) {
+    /**
+     * Legacy fan-out: every mailbox to every configured URL, one attempt, failures dropped.
+     *
+     * <p>A URL that this user has also subscribed is skipped here, so it receives the message once
+     * — through the cursor-tracked path, which is the durable one. That is what makes migrating off
+     * the broadcast list safe to do gradually: subscribe the URL first, and this side goes quiet
+     * for it without a window of double delivery.
+     */
+    private void broadcast(UserEntity user, GmailMessage message) {
+        if (broadcastClients.isEmpty()) {
             return;
         }
-        String payload;
-        try {
-            payload = json.writeValueAsString(message);
-        } catch (Exception exception) {
-            logger.error("Could not serialize Gmail message for webhook delivery.",
-                    Map.of("messageId", message.id(), "error", String.valueOf(exception.getMessage())));
-            return;
-        }
-        for (String client : clients) {
-            try {
-                HttpResponse<Void> response = postWebhook(client, payload);
-                if (response.statusCode() == 401 && session.refreshIfUnauthorized(401)) {
-                    // The cached token may have expired: refresh once and retry.
-                    response = postWebhook(client, payload);
-                }
-                if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    logger.error("Webhook rejected Gmail message.", Map.of(
-                            "client", client,
-                            "messageId", message.id(),
-                            "statusCode", response.statusCode()));
-                }
-            } catch (Exception exception) {
-                // getMessage() is null for plenty of exception types, so this map must accept nulls.
-                Map<String, Object> metadata = new LinkedHashMap<>();
-                metadata.put("client", client);
-                metadata.put("messageId", message.id());
-                metadata.put("error", exception.getMessage());
-                logger.error("Could not notify webhook client of Gmail message.", metadata);
+        Set<String> subscribed = subscriptions.findByUserIdAndActiveTrueOrderByIdAsc(user.getId())
+                .stream().map(WebhookSubscriptionEntity::getUrl).collect(Collectors.toSet());
+        for (String client : broadcastClients) {
+            if (!subscribed.contains(client)) {
+                sender.send(client, message);
             }
         }
-    }
-
-    private HttpResponse<Void> postWebhook(String client, String payload) throws Exception {
-        return http.send(HttpRequest.newBuilder(URI.create(client))
-                        .header("Content-Type", "application/json")
-                        .header("X-Client-Id", session.clientId())
-                        .header("Authorization", "Bearer " + session.token())
-                        .POST(HttpRequest.BodyPublishers.ofString(payload)).build(),
-                HttpResponse.BodyHandlers.discarding());
     }
 }
