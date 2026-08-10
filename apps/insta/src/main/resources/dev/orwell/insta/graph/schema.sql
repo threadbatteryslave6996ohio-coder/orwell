@@ -73,8 +73,25 @@ CREATE TABLE IF NOT EXISTS follow_edge (
     last_seen_at  TIMESTAMPTZ NOT NULL,
     CONSTRAINT follow_edge_pair_key UNIQUE (followee_id, follower_id)
 );
-CREATE INDEX IF NOT EXISTS follow_edge_follower_idx ON follow_edge (follower_id);
-CREATE INDEX IF NOT EXISTS follow_edge_active_idx ON follow_edge (followee_id) WHERE active;
+
+-- Migration, part one: reshape follow_edge itself. This has to happen before `follows` and
+-- `unfollows` are created, because they carry a foreign key to follow_edge.id and on an older
+-- database that column does not exist yet. Guarded on lost_at, which part two drops, so a fresh
+-- database never enters either block.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'follow_edge' AND column_name = 'lost_at') THEN
+        ALTER TABLE follow_edge ADD COLUMN IF NOT EXISTS id BIGSERIAL;
+        ALTER TABLE follow_edge ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+        UPDATE follow_edge SET active = (lost_at IS NULL);
+
+        ALTER TABLE follow_edge DROP CONSTRAINT IF EXISTS follow_edge_pkey;
+        ALTER TABLE follow_edge ADD PRIMARY KEY (id);
+        ALTER TABLE follow_edge ADD CONSTRAINT follow_edge_pair_key
+            UNIQUE (followee_id, follower_id);
+    END IF;
+END $$;
 
 -- Every time a follow began. One row on the first sighting, another on each return.
 CREATE TABLE IF NOT EXISTS follows (
@@ -82,7 +99,6 @@ CREATE TABLE IF NOT EXISTS follows (
     edge_id BIGINT NOT NULL REFERENCES follow_edge(id) ON DELETE CASCADE,
     at      TIMESTAMPTZ NOT NULL
 );
-CREATE INDEX IF NOT EXISTS follows_edge_idx ON follows (edge_id, at);
 
 -- Every time one ended. notified_at lives here rather than on the edge because it belongs to a
 -- single departure: each unfollow is its own row with its own stamp, so a later return cannot make
@@ -93,29 +109,16 @@ CREATE TABLE IF NOT EXISTS unfollows (
     at          TIMESTAMPTZ NOT NULL,
     notified_at TIMESTAMPTZ
 );
-CREATE INDEX IF NOT EXISTS unfollows_edge_idx ON unfollows (edge_id, at);
--- The alert dispatcher's entire working set.
-CREATE INDEX IF NOT EXISTS unfollows_unnotified_idx ON unfollows (at) WHERE notified_at IS NULL;
 
--- Migration from the earlier shape, where follow_edge was keyed on the pair and carried lost_at
--- and unfollow_notified_at. Idempotent and self-skipping, so a fresh database never enters it.
+-- Migration, part two: move the history the old columns held into the new tables, then drop them.
+-- Dropping lost_at last is what makes the whole migration self-skipping on the next run.
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.columns
                WHERE table_name = 'follow_edge' AND column_name = 'lost_at') THEN
-
-        ALTER TABLE follow_edge ADD COLUMN IF NOT EXISTS id BIGSERIAL;
-        ALTER TABLE follow_edge ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
-        UPDATE follow_edge SET active = (lost_at IS NULL);
-
-        ALTER TABLE follow_edge DROP CONSTRAINT IF EXISTS follow_edge_pkey;
-        ALTER TABLE follow_edge ADD PRIMARY KEY (id);
-        ALTER TABLE follow_edge ADD CONSTRAINT follow_edge_pair_key
-            UNIQUE (followee_id, follower_id);
-
-        -- Backfill the history the old shape could hold: one follow at the first sighting, and an
-        -- unfollow for anyone currently departed. Earlier cycles are simply not recoverable — the
-        -- old schema overwrote them, which is the reason for this change.
+        -- One follow per edge at its first sighting, and an unfollow for anyone currently departed.
+        -- Earlier cycles are not recoverable: the old shape overwrote them, which is the reason
+        -- this change exists.
         INSERT INTO follows (edge_id, at) SELECT id, first_seen_at FROM follow_edge;
         INSERT INTO unfollows (edge_id, at, notified_at)
             SELECT id, lost_at, unfollow_notified_at FROM follow_edge WHERE lost_at IS NOT NULL;
@@ -124,6 +127,16 @@ BEGIN
         ALTER TABLE follow_edge DROP COLUMN unfollow_notified_at;
     END IF;
 END $$;
+
+-- After the migration, never before it: on a database still carrying the old shape the `active`
+-- column does not exist until the blocks above have run, and a partial index on a missing column
+-- is an error rather than a no-op.
+CREATE INDEX IF NOT EXISTS follow_edge_follower_idx ON follow_edge (follower_id);
+CREATE INDEX IF NOT EXISTS follow_edge_active_idx ON follow_edge (followee_id) WHERE active;
+CREATE INDEX IF NOT EXISTS follows_edge_idx ON follows (edge_id, at);
+CREATE INDEX IF NOT EXISTS unfollows_edge_idx ON unfollows (edge_id, at);
+-- The alert dispatcher's entire working set.
+CREATE INDEX IF NOT EXISTS unfollows_unnotified_idx ON unfollows (at) WHERE notified_at IS NULL;
 
 -- ─── posts ─────────────────────────────────────────────────────────────────────────────────────
 

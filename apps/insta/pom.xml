@@ -15,6 +15,9 @@
         <dependency><groupId>dev.orwell</groupId><artifactId>logger</artifactId></dependency>
         <!-- The shared Redis handle, same as keeboarder-server: one Redis client in the repo, not two. -->
         <dependency><groupId>dev.orwell</groupId><artifactId>redis-client</artifactId></dependency>
+        <!-- The graph viewer. The repo's lightweight HTTP runtime: three endpoints and a page do
+             not need a Spring container, and this app deliberately does not have one. -->
+        <dependency><groupId>dev.orwell</groupId><artifactId>undertow-bootstrap</artifactId><version>${project.version}</version></dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>primitives</artifactId></dependency>
         <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
         <!-- Posts carry an Instant, and the cache round-trips profiles through JSON. -->

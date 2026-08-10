@@ -30,7 +30,7 @@ Java packages predate the renames and do NOT always match — use this table, do
 | `apps/auth/*` | `auth`, `auth-core`, `auth-http-{api,client,server}`, `auth-in-memory` | `dev.orwell.auth.*` |
 | `apps/backup` | `backup` | `dev.orwell.backup` |
 | `apps/google/gmail-general` | `gmail-general` | `dev.orwell.google.gmail` |
-| `apps/insta` | `insta` | `dev.orwell.insta` (CLI, not a server) |
+| `apps/insta` | `insta` | `dev.orwell.insta` (CLI; `insta ui` serves a read-only viewer) |
 | `apps/jarvis` | `jarvis` (aggregator) | — |
 | `apps/jarvis/bucket/proxy` | `jarvis-bucket-proxy` | `dev.orwell.bucket.proxy` |
 | `apps/jarvis/detection` | `jarvis-detection` | `dev.orwell.bucket.detection` |

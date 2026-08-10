@@ -64,7 +64,7 @@ class FollowWriterTest extends GraphTest {
         assertThat(diff.retired()).isEqualTo(1);
         assertThat(diff.retirementRan()).isTrue();
         assertThat(liveFollowers()).containsExactly("1");
-        assertThat(instant("SELECT lost_at FROM follow_edge WHERE follower_id = '2'")).isNotNull();
+        assertThat(unfollowsOf("2")).hasSize(1);
     }
 
     /**
@@ -132,30 +132,61 @@ class FollowWriterTest extends GraphTest {
     void bringsBackAnEdgeWhenSomeoneFollowsAgain() throws Exception {
         walkAt(YESTERDAY, List.of(account("1", "alice"), account("2", "bob")), true);
         walkAt(YESTERDAY.plusSeconds(3600), List.of(account("1", "alice")), true);
-        assertThat(instant("SELECT lost_at FROM follow_edge WHERE follower_id = '2'")).isNotNull();
+        assertThat(unfollowsOf("2")).hasSize(1);
 
         walk(List.of(account("1", "alice"), account("2", "bob")), true);
 
-        assertThat(instant("SELECT lost_at FROM follow_edge WHERE follower_id = '2'")).isNull();
         assertThat(liveFollowers()).containsExactlyInAnyOrder("1", "2");
+        // The departure is still on the record — that is the whole point of the split.
+        assertThat(unfollowsOf("2")).hasSize(1);
+        assertThat(followsOf("2")).hasSize(2);
     }
 
     /**
-     * The subtle one: a resurrected edge that kept its notification stamp would look
-     * already-alerted, and the <em>next</em> unfollow would silently notify nobody.
+     * Each departure carries its own stamp, so an alert already sent for the first one cannot
+     * suppress the alert for the second. On the old shape this needed a reset that was easy to
+     * forget; here it falls out of the model.
      */
     @Test
-    void clearsTheNotificationStampWhenAnEdgeComesBack() throws Exception {
+    void keepsEachDeparturesNotificationStampSeparate() throws Exception {
         walkAt(YESTERDAY, List.of(account("1", "alice"), account("2", "bob")), true);
         walkAt(YESTERDAY.plusSeconds(3600), List.of(account("1", "alice")), true);
         markNotified("2");
-        assertThat(instant("SELECT unfollow_notified_at FROM follow_edge WHERE follower_id = '2'"))
-                .isNotNull();
+        walkAt(YESTERDAY.plusSeconds(7200), List.of(account("1", "alice"), account("2", "bob")), true);
 
-        walk(List.of(account("1", "alice"), account("2", "bob")), true);
+        walk(List.of(account("1", "alice")), true);
 
-        assertThat(instant("SELECT unfollow_notified_at FROM follow_edge WHERE follower_id = '2'"))
-                .isNull();
+        assertThat(unfollowsOf("2")).hasSize(2);
+        assertThat(strings("""
+                SELECT (u.notified_at IS NULL)::text FROM unfollows u
+                JOIN follow_edge e ON e.id = u.edge_id
+                WHERE e.follower_id = '2' ORDER BY u.at""")).containsExactly("false", "true");
+    }
+
+    /** The question the old shape could not answer at all. */
+    @Test
+    void countsHowManyTimesSomeoneHasLeft() throws Exception {
+        walkAt(YESTERDAY, List.of(account("1", "alice"), account("2", "bob")), true);
+        walkAt(YESTERDAY.plusSeconds(3600), List.of(account("1", "alice")), true);
+        walkAt(YESTERDAY.plusSeconds(7200), List.of(account("1", "alice"), account("2", "bob")), true);
+        walkAt(YESTERDAY.plusSeconds(10800), List.of(account("1", "alice")), true);
+
+        assertThat(unfollowsOf("2")).hasSize(2);
+        assertThat(followsOf("2")).hasSize(2);
+        // alice never left, so she has one follow and no unfollows.
+        assertThat(unfollowsOf("1")).isEmpty();
+        assertThat(followsOf("1")).hasSize(1);
+    }
+
+    /** One edge row per pair, however many times the relationship restarts. */
+    @Test
+    void keepsOneEdgePerPairAcrossCycles() throws Exception {
+        walkAt(YESTERDAY, List.of(account("2", "bob")), true);
+        walkAt(YESTERDAY.plusSeconds(3600), List.of(), true);
+        walkAt(YESTERDAY.plusSeconds(7200), List.of(account("2", "bob")), true);
+
+        assertThat(count("follow_edge")).isEqualTo(1);
+        assertThat(strings("SELECT active::text FROM follow_edge")).containsExactly("true");
     }
 
     // ─────────────────────────────────────────────────────────── direction
@@ -179,7 +210,8 @@ class FollowWriterTest extends GraphTest {
 
         walk(List.of(account("1", "alice")), true);
 
-        assertThat(instant("SELECT lost_at FROM follow_edge WHERE followee_id = '2'")).isNull();
+        assertThat(strings("SELECT active::text FROM follow_edge WHERE followee_id = '2'"))
+                .containsExactly("true");
     }
 
     // ─────────────────────────────────────────────────────────── helpers
@@ -217,11 +249,24 @@ class FollowWriterTest extends GraphTest {
     }
 
     private void markNotified(String followerId) throws SQLException {
-        try (var statement = connection.prepareStatement(
-                "UPDATE follow_edge SET unfollow_notified_at = now() WHERE follower_id = ?")) {
+        try (var statement = connection.prepareStatement("""
+                UPDATE unfollows SET notified_at = now() WHERE edge_id IN
+                    (SELECT id FROM follow_edge WHERE follower_id = ?)""")) {
             statement.setString(1, followerId);
             statement.executeUpdate();
         }
+    }
+
+    private List<String> unfollowsOf(String followerId) throws SQLException {
+        return strings("""
+                SELECT u.at::text FROM unfollows u JOIN follow_edge e ON e.id = u.edge_id
+                WHERE e.follower_id = ? ORDER BY u.at""", followerId);
+    }
+
+    private List<String> followsOf(String followerId) throws SQLException {
+        return strings("""
+                SELECT f.at::text FROM follows f JOIN follow_edge e ON e.id = f.edge_id
+                WHERE e.follower_id = ? ORDER BY f.at""", followerId);
     }
 
     private List<String> followers() throws SQLException {
@@ -230,7 +275,7 @@ class FollowWriterTest extends GraphTest {
 
     private List<String> liveFollowers() throws SQLException {
         return strings(
-                "SELECT follower_id FROM follow_edge WHERE followee_id = ? AND lost_at IS NULL", ME);
+                "SELECT follower_id FROM follow_edge WHERE followee_id = ? AND active", ME);
     }
 
     private static InstagramAccount account(String id, String username) {

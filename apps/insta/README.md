@@ -19,6 +19,7 @@ insta profile   <username>
 insta followers <username> [--limit N] [--all] [--cursor C] [--json]
 insta following <username> [--limit N] [--all] [--cursor C] [--json]
 insta sync      <username> [--limit N]
+insta ui
 ```
 
 | Option | Meaning |
@@ -111,7 +112,9 @@ migration tool to keep in step):
 | `account_username` | every handle an account has used, with the window it was seen in |
 | `account_bio` | every distinct bio, keyed by a digest so an oversized one cannot break the index |
 | `account_profile_picture` | every distinct image, keyed by the **hash of the bytes** |
-| `follow_edge` | who follows whom, with `first_seen_at`, `last_seen_at`, `lost_at` |
+| `follow_edge` | who follows whom right now: `active`, plus the `last_seen_at` watermark |
+| `follows` | one row every time a follow began — the first sighting and each return |
+| `unfollows` | one row every time one ended, each carrying its own `notified_at` |
 | `post` | identity and publication facts, one row per post |
 | `post_caption` | every distinct caption, digest-keyed like bios (captions are editable) |
 | `post_metric` | likes / comments / views over time — a row only when a number moves |
@@ -155,6 +158,37 @@ That inference is only safe when the walk is trustworthy, and three things make 
 When retirement is skipped, the command says why rather than printing "0 unfollowed" — a silently
 suppressed diff must not look like good news.
 
+### Repeat follows and unfollows
+
+State lives on the edge, history lives in `follows` and `unfollows`. Every departure and every
+return is its own row, so an account that has left three times has three `unfollows` rows:
+
+```sql
+-- serial offenders
+SELECT e.follower_id, count(*) AS times_left
+FROM unfollows u JOIN follow_edge e ON e.id = u.edge_id
+WHERE e.followee_id = $1
+GROUP BY e.follower_id HAVING count(*) > 1;
+
+-- one relationship's whole timeline
+SELECT 'follow' AS event, f.at FROM follows f JOIN follow_edge e ON e.id = f.edge_id
+WHERE e.followee_id = $1 AND e.follower_id = $2
+UNION ALL
+SELECT 'unfollow', u.at FROM unfollows u JOIN follow_edge e ON e.id = u.edge_id
+WHERE e.followee_id = $1 AND e.follower_id = $2
+ORDER BY at;
+```
+
+Putting `notified_at` on the unfollow row rather than the edge removes a bug rather than moving
+it: each departure carries its own stamp, so a later return cannot make an unsent alert look
+already sent. The old shape needed that flag reset on every re-follow, and forgetting the reset
+failed silently.
+
+An older database is migrated in place on the next `sync` — the pair key becomes a surrogate id,
+`lost_at` becomes `active` plus an `unfollows` row, and each existing edge gets one `follows` row
+at its first sighting. Cycles from before the change are not recoverable; the old shape overwrote
+them, which is why this exists.
+
 The whole write is one transaction: a sync that dies halfway leaves the graph as it was, because a
 half-refreshed graph looks like unfollows to the next run.
 
@@ -184,6 +218,39 @@ Not built yet: the alert dispatcher (`unfollow_notified_at` is written and index
 nothing sends mail), any scheduler (run `sync` from cron), and posts beyond the free twelve —
 `post_media` fills only for those, and `deleted_at` stays unused until a complete post listing
 exists.
+
+## The viewer — `insta ui`
+
+```bash
+INSTA_DATABASE_URL=jdbc:postgresql://localhost:5432/insta insta ui
+# insta ui on http://0.0.0.0:5554
+```
+
+A read-only page over whatever `sync` has recorded: the account at the centre, its followers around
+it in a force layout, departed followers in red behind a toggle, and a sidebar of recent departures
+showing who left, when, how many times, and whether they came back.
+
+| Route | |
+|---|---|
+| `GET /` | the page |
+| `GET /api/accounts` | accounts a sync has walked |
+| `GET /api/graph?account=&inactive=` | nodes and links |
+| `GET /api/unfollows?account=` | recent departures |
+| `GET /health` | liveness |
+
+`account` accepts an id or any handle the account has ever used. It draws a **star until you sync
+more than one account** — an edge between two of your followers only exists once one of them has
+been walked too, and the picture fills in from there. That is an honest reflection of what has been
+collected rather than a limitation of the drawing.
+
+It never writes and never calls Apify, so leaving it open costs nothing. It runs on the repo's
+lightweight Undertow runtime rather than a Spring stack, and opens a connection per request — a
+database restart costs one failed refresh instead of a wedged server.
+
+> **No authentication.** It binds `0.0.0.0` by default, as asked, so anything that can reach port
+> 5554 can read the graph — handles, follower lists, departure history. Set
+> `INSTA_UI_ADDRESS=127.0.0.1` to keep it on this machine, or put it behind something that
+> authenticates. It logs a warning on every start saying the same.
 
 ## Caching
 
@@ -274,6 +341,8 @@ required one, and a missing one fails before anything can be spent.
 | `INSTA_PICTURE_DIR` | *(empty)* | directory for `filesystem` |
 | `INSTA_BUCKET_URL` / `INSTA_BUCKET_TOKEN` | *(empty)* | bucket endpoint for `http` |
 | `INSTA_MAX_RETIRE_PERCENT` | `20` | fuse on how much one walk may retire |
+| `INSTA_UI_ADDRESS` | `0.0.0.0` | interface the viewer binds; `127.0.0.1` to keep it local |
+| `INSTA_UI_PORT` | `5554` | viewer port |
 | `INSTA_LOG_CONSOLE` | `true` | whether log records go to the console (on stderr) |
 | `LOKI_URL` / `LOKI_TENANT_ID` | *(empty)* | ship records to Loki as well |
 | `LOGGING_FILE_NAME` | *(empty)* | append records as JSON lines to this file |
@@ -349,6 +418,7 @@ dev.orwell.insta.apify      ApifyClient, ApifyException, ActorRun — everything
 dev.orwell.insta.cache      ScrapeCache + Redis and disabled implementations
 dev.orwell.insta.instagram  InstagramService and the value types it produces
 dev.orwell.insta.graph      Postgres schema, writers, and the sync command
+dev.orwell.insta.ui         the read-only graph viewer
 ```
 
 The dependency arrows all point one way: `instagram` uses `apify` and `cache`, both of which know

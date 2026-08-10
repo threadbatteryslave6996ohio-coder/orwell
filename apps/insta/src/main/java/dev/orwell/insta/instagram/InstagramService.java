@@ -19,6 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -42,15 +43,22 @@ import java.util.regex.Pattern;
 public class InstagramService {
     /** Instagram's own rule: letters, digits, periods and underscores, up to 30 characters. */
     private static final Pattern USERNAME = Pattern.compile("[A-Za-z0-9._]{1,30}");
-    /** The default connections actor rejects a smaller {@code resultsLimit}. */
-    private static final int MIN_RESULTS_LIMIT = 50;
     /** Bump when a cached shape changes, so old entries are ignored rather than mis-read. */
-    private static final String CACHE_VERSION = "v2";
+    private static final String CACHE_VERSION = "v3";
+    /**
+     * Failures worth trying the next actor for. A spent quota, an empty balance or a broken actor
+     * are all "this one cannot answer"; a timeout is not — it usually means the account is large,
+     * and another actor would spend the same money to time out the same way.
+     */
+    private static final Set<ApifyException.Kind> WORTH_FAILING_OVER = Set.of(
+            ApifyException.Kind.RATE_LIMITED,
+            ApifyException.Kind.OUT_OF_CREDIT,
+            ApifyException.Kind.UNAVAILABLE);
 
     private final ApifyClient apify;
     private final ScrapeCache cache;
     private final String profileActor;
-    private final String connectionsActor;
+    private final List<ConnectionsAdapter> adapters;
     private final int defaultLimit;
     private final int maxLimit;
     private final Logger logger;
@@ -59,14 +67,14 @@ public class InstagramService {
             ApifyClient apify,
             ScrapeCache cache,
             String profileActor,
-            String connectionsActor,
+            List<ConnectionsAdapter> adapters,
             int defaultLimit,
             int maxLimit,
             Logger logger) {
         this.apify = Objects.requireNonNull(apify, "apify");
         this.cache = Objects.requireNonNull(cache, "cache");
         this.profileActor = Objects.requireNonNull(profileActor, "profileActor");
-        this.connectionsActor = Objects.requireNonNull(connectionsActor, "connectionsActor");
+        this.adapters = List.copyOf(Objects.requireNonNull(adapters, "adapters"));
         this.defaultLimit = defaultLimit;
         this.maxLimit = maxLimit;
         this.logger = Objects.requireNonNull(logger, "logger");
@@ -124,12 +132,12 @@ public class InstagramService {
             String rawUsername, ConnectionType type, Integer requestedLimit, String cursor) {
         String username = normalizedUsername(rawUsername);
         int limit = boundedLimit(requestedLimit);
-        String continuation = cursor == null || cursor.isBlank()
+        ConnectionCursor resume = cursor == null || cursor.isBlank()
                 ? null
-                : ConnectionCursor.tokenFor(cursor, username, type);
+                : ConnectionCursor.decode(cursor, username, type);
 
         String key = CACHE_VERSION + ":" + type.name().toLowerCase(Locale.ROOT) + ":" + username
-                + ":" + limit + ":" + fingerprint(continuation);
+                + ":" + limit + ":" + fingerprint(resume == null ? null : resume.token());
         Optional<ConnectionsPage> cached = read(key, new TypeReference<ConnectionsPage>() {
         });
         if (cached.isPresent()) {
@@ -139,27 +147,78 @@ public class InstagramService {
             return cached.get();
         }
 
-        Map<String, Object> input = new LinkedHashMap<>();
-        input.put("Account", List.of(username));
-        input.put("dataToScrape", type.actorValue());
-        // The actor floors this; `maxItems` on the run is what actually enforces `limit`.
-        input.put("resultsLimit", Math.max(limit, MIN_RESULTS_LIMIT));
-        if (continuation != null) {
-            input.put("continuationToken", continuation);
+        ConnectionsPage page = fetchFromFirstWillingAdapter(username, type, limit, resume);
+        write(key, page);
+        logger.info("Fetched Instagram connections.", Map.of(
+                "username", username, "type", type.name(), "count", page.accounts().size(),
+                "limit", limit, "endOfList", page.endOfList()));
+        return page;
+    }
+
+    /**
+     * Works down the chain until one actor answers.
+     *
+     * <p>Each attempt is all or nothing: a failed adapter's partial results are discarded rather
+     * than merged with the next one's, because a list stitched together from two actors mid-walk is
+     * neither actor's complete answer and would look, to the diff, like whatever it happens to be
+     * missing has unfollowed.
+     *
+     * <p>Resuming pins the walk to the adapter that issued the cursor — a continuation token means
+     * nothing to anyone else — so a resumed walk cannot fail over at all.
+     */
+    private ConnectionsPage fetchFromFirstWillingAdapter(
+            String username, ConnectionType type, int limit, ConnectionCursor resume) {
+        List<ConnectionsAdapter> candidates = resume == null
+                ? adapters.stream().filter(adapter -> adapter.supports(type)).toList()
+                : adapters.stream().filter(a -> a.name().equals(resume.adapter())).toList();
+        if (candidates.isEmpty()) {
+            throw new ApifyException(resume == null
+                    ? "No configured actor can scrape " + type.name().toLowerCase(Locale.ROOT) + "."
+                    : "The actor that issued that cursor (" + resume.adapter()
+                            + ") is no longer configured.",
+                    ApifyException.Kind.UNAVAILABLE);
         }
 
-        ActorRun run = runForOutput(connectionsActor, input, limit, username);
-        List<InstagramAccount> accounts = accountsIn(run.items(), username, type);
-        String nextToken = ConnectionCursor.nextTokenIn(run.output());
-        ConnectionsPage page = new ConnectionsPage(accounts, nextToken == null
-                ? null
-                : new ConnectionCursor(username, type, nextToken).encode());
-        write(key, page);
+        ApifyException lastFailure = null;
+        for (int index = 0; index < candidates.size(); index++) {
+            ConnectionsAdapter adapter = candidates.get(index);
+            try {
+                return fetch(adapter, username, type, limit, resume);
+            } catch (ApifyException failure) {
+                boolean more = index < candidates.size() - 1;
+                if (!more || !WORTH_FAILING_OVER.contains(failure.kind())) {
+                    throw failure;
+                }
+                logger.warn("Falling back to the next connections actor.", Map.of(
+                        "username", username,
+                        "exhausted", adapter.name(),
+                        "kind", failure.kind().name(),
+                        "next", candidates.get(index + 1).name()));
+                lastFailure = failure;
+            }
+        }
+        throw lastFailure;
+    }
 
-        logger.info("Fetched Instagram connections.", Map.of(
-                "username", username, "type", type.name(), "count", accounts.size(),
-                "limit", limit, "hasMore", page.nextCursor() != null));
-        return page;
+    private ConnectionsPage fetch(
+            ConnectionsAdapter adapter, String username, ConnectionType type, int limit,
+            ConnectionCursor resume) {
+        String token = resume == null ? null : resume.token();
+        ActorRun run = runForOutput(
+                adapter.actorId(), adapter.input(username, type, limit, token), limit, username);
+        adapter.verify(run.output());
+
+        List<InstagramAccount> accounts = accountsIn(run.items(), username, type);
+        String nextToken = adapter.supportsCursor() ? adapter.nextToken(run.output()) : null;
+        // An actor without pagination can never establish the end of a list. A short page looks
+        // like proof and is not: datadoping returned 48 for a limit of 50 on an account with 441
+        // followers, so "fewer than asked" means the actor stopped, not that there is no more.
+        // Such a walk therefore never completes, and never retires an edge — it can only add.
+        boolean endOfList = adapter.supportsCursor() && nextToken == null;
+        return new ConnectionsPage(accounts, nextToken == null
+                ? null
+                : new ConnectionCursor(username, type, adapter.name(), nextToken).encode(),
+                endOfList);
     }
 
     /** {@code limit} clamped into 1..{@code INSTA_MAX_LIMIT}, defaulting when absent or invalid. */
@@ -168,6 +227,39 @@ public class InstagramService {
             return Math.min(defaultLimit, maxLimit);
         }
         return Math.min(requested, maxLimit);
+    }
+
+    /**
+     * The connections actor can finish <em>successfully</em> with an empty dataset and report the
+     * real outcome only in its {@code OUTPUT} record — a free-plan daily quota does exactly that,
+     * exiting 0 with {@code status=FREE_API_DAILY_LIMIT_REACHED}.
+     *
+     * <p>Left unchecked that is indistinguishable from "this account has no followers", and a
+     * <em>complete</em> walk of zero followers is an instruction to retire every edge the account
+     * has. The retirement fuse would refuse an implausible wipe, but a small account would slip
+     * under it, so the honest fix is to fail the lookup here rather than believe an empty answer
+     * the actor already said was not one.
+     */
+    private void refuseIfTheActorReportedFailure(
+            JsonNode output, String username, ConnectionType type) {
+        if (output == null || !output.isObject()) {
+            return;
+        }
+        JsonNode success = output.get("success");
+        if (success == null || !success.isBoolean() || success.asBoolean()) {
+            return;
+        }
+        String status = DatasetFields.text(output, "status");
+        String message = DatasetFields.text(output, "message");
+        logger.error("The connections actor reported a failed run.", Map.of(
+                "username", username,
+                "type", type.name(),
+                "status", String.valueOf(status),
+                "message", String.valueOf(message)));
+        throw new ApifyException(
+                "The Apify actor returned no accounts and reported "
+                        + (status == null ? "a failure" : status) + ".",
+                ApifyException.Kind.RATE_LIMITED);
     }
 
     private List<InstagramAccount> accountsIn(

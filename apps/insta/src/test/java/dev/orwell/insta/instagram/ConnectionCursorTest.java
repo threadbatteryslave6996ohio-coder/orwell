@@ -41,17 +41,22 @@ class ConnectionCursorTest {
 
     @Test
     void roundTripsAccountAndDirectionThroughTheEncodedForm() {
-        String cursor = new ConnectionCursor("nasa", ConnectionType.FOLLOWERS, "TOKEN-2").encode();
+        String cursor = new ConnectionCursor(
+                "nasa", ConnectionType.FOLLOWERS, "scraping-solutions", "TOKEN-2").encode();
 
-        assertThat(ConnectionCursor.tokenFor(cursor, "nasa", ConnectionType.FOLLOWERS))
-                .isEqualTo("TOKEN-2");
+        ConnectionCursor decoded =
+                ConnectionCursor.decode(cursor, "nasa", ConnectionType.FOLLOWERS);
+
+        assertThat(decoded.token()).isEqualTo("TOKEN-2");
+        // The issuing adapter travels with it: a token means nothing to any other actor.
+        assertThat(decoded.adapter()).isEqualTo("scraping-solutions");
     }
 
     /** It travels in a URL, so it has to survive one without escaping. */
     @Test
     void encodesToAUrlSafeString() {
         String cursor = new ConnectionCursor(
-                "nasa", ConnectionType.FOLLOWERS, "a/b+c=d?e&f").encode();
+                "nasa", ConnectionType.FOLLOWERS, "scraping-solutions", "a/b+c=d?e&f").encode();
 
         assertThat(cursor).matches("[A-Za-z0-9_-]+");
     }

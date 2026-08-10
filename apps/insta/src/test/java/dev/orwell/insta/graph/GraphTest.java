@@ -25,8 +25,8 @@ import java.util.List;
  * that survives translation to another dialect.
  */
 @Testcontainers
-abstract class GraphTest {
-    protected static final Logger NO_OP_LOGGER = entry -> {
+public abstract class GraphTest {
+    public static final Logger NO_OP_LOGGER = entry -> {
     };
 
     @Container
@@ -42,9 +42,9 @@ abstract class GraphTest {
         // Every table the schema creates, or rows leak between tests through the shared container.
         // Adding a table to schema.sql means adding it here too.
         try (PreparedStatement drop = connection.prepareStatement(
-                "DROP TABLE IF EXISTS post_media, post_metric, post_caption, post, follow_edge,"
-                        + " account_profile_picture, account_bio, account_username, account"
-                        + " CASCADE")) {
+                "DROP TABLE IF EXISTS post_media, post_metric, post_caption, post, unfollows,"
+                        + " follows, follow_edge, account_profile_picture, account_bio,"
+                        + " account_username, account CASCADE")) {
             drop.execute();
         }
         GraphSchema.apply(connection);

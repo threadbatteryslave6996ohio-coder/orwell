@@ -82,7 +82,7 @@ public final class FollowWriter {
                 continue;
             }
             accounts.record(account, observedAt);
-            added += upsertEdge(
+            added += recordFollow(
                     followeeOf(subjectId, account, direction),
                     followerOf(subjectId, account, direction),
                     observedAt);
@@ -114,28 +114,58 @@ public final class FollowWriter {
         return diff;
     }
 
-    /** @return 1 if this edge is new, 0 if it already existed. */
-    private int upsertEdge(String followeeId, String followerId, Instant observedAt)
+    /**
+     * Refreshes the edge and, when this is the start of a follow rather than the continuation of
+     * one, appends a {@code follows} row.
+     *
+     * <p>The {@code prior} CTE reads the row as it was before the upsert, which is the only way to
+     * tell a return from a continuation: {@code RETURNING} sees the new row, and {@code xmax}
+     * distinguishes insert from update but not reactivation from refresh.
+     *
+     * @return 1 if a follow began here, 0 if it was already running.
+     */
+    private int recordFollow(String followeeId, String followerId, Instant observedAt)
             throws SQLException {
+        long edgeId;
+        boolean began;
         try (PreparedStatement statement = connection.prepareStatement("""
-                INSERT INTO follow_edge
-                    (followee_id, follower_id, first_seen_at, last_seen_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT (followee_id, follower_id) DO UPDATE
-                SET last_seen_at = EXCLUDED.last_seen_at,
-                    lost_at = NULL,
-                    -- Cleared with lost_at, never separately: a re-followed edge that kept its
-                    -- stamp would look already-notified, and the next unfollow would alert nobody.
-                    unfollow_notified_at = NULL
-                RETURNING (xmax = 0) AS inserted""")) {
+                WITH prior AS (
+                    SELECT id, active FROM follow_edge
+                    WHERE followee_id = ? AND follower_id = ?
+                ), upserted AS (
+                    INSERT INTO follow_edge
+                        (followee_id, follower_id, first_seen_at, last_seen_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT ON CONSTRAINT follow_edge_pair_key DO UPDATE
+                    SET last_seen_at = EXCLUDED.last_seen_at, active = TRUE
+                    RETURNING id, (xmax = 0) AS inserted
+                )
+                SELECT u.id, u.inserted, COALESCE(p.active, TRUE) AS was_active
+                FROM upserted u LEFT JOIN prior p ON p.id = u.id""")) {
             statement.setString(1, followeeId);
             statement.setString(2, followerId);
-            statement.setTimestamp(3, Timestamp.from(observedAt));
-            statement.setTimestamp(4, Timestamp.from(observedAt));
+            statement.setString(3, followeeId);
+            statement.setString(4, followerId);
+            statement.setTimestamp(5, Timestamp.from(observedAt));
+            statement.setTimestamp(6, Timestamp.from(observedAt));
             try (ResultSet results = statement.executeQuery()) {
-                return results.next() && results.getBoolean("inserted") ? 1 : 0;
+                if (!results.next()) {
+                    return 0;
+                }
+                edgeId = results.getLong("id");
+                began = results.getBoolean("inserted") || !results.getBoolean("was_active");
             }
         }
+        if (!began) {
+            return 0;
+        }
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO follows (edge_id, at) VALUES (?, ?)")) {
+            statement.setLong(1, edgeId);
+            statement.setTimestamp(2, Timestamp.from(observedAt));
+            statement.executeUpdate();
+        }
+        return 1;
     }
 
     private String retirementBlockedBecause(boolean complete, int skippedNoId) {
@@ -152,28 +182,37 @@ public final class FollowWriter {
         return live > FRACTION_APPLIES_ABOVE && candidates > live * maxRetireFraction;
     }
 
+    /**
+     * Deactivates every edge the walk did not refresh and writes an {@code unfollows} row for each,
+     * in one statement so the state and its history cannot disagree.
+     */
     private int retire(
             String subjectId, ConnectionType direction, Instant walkStarted, Instant observedAt)
             throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(
-                "UPDATE follow_edge SET lost_at = ? WHERE " + subjectColumn(direction)
-                        + " = ? AND last_seen_at < ? AND lost_at IS NULL")) {
-            statement.setTimestamp(1, Timestamp.from(observedAt));
-            statement.setString(2, subjectId);
-            statement.setTimestamp(3, Timestamp.from(walkStarted));
+        try (PreparedStatement statement = connection.prepareStatement("""
+                WITH retired AS (
+                    UPDATE follow_edge SET active = FALSE
+                    WHERE %s = ? AND active AND last_seen_at < ?
+                    RETURNING id
+                )
+                INSERT INTO unfollows (edge_id, at) SELECT id, ? FROM retired
+                """.formatted(subjectColumn(direction)))) {
+            statement.setString(1, subjectId);
+            statement.setTimestamp(2, Timestamp.from(walkStarted));
+            statement.setTimestamp(3, Timestamp.from(observedAt));
             return statement.executeUpdate();
         }
     }
 
     private int liveEdges(String subjectId, ConnectionType direction) throws SQLException {
         return count("SELECT count(*) FROM follow_edge WHERE " + subjectColumn(direction)
-                + " = ? AND lost_at IS NULL", subjectId, null);
+                + " = ? AND active", subjectId, null);
     }
 
     private int staleEdges(String subjectId, ConnectionType direction, Instant walkStarted)
             throws SQLException {
         return count("SELECT count(*) FROM follow_edge WHERE " + subjectColumn(direction)
-                + " = ? AND last_seen_at < ? AND lost_at IS NULL", subjectId, walkStarted);
+                + " = ? AND active AND last_seen_at < ?", subjectId, walkStarted);
     }
 
     private int count(String sql, String subjectId, Instant before) throws SQLException {

@@ -21,11 +21,13 @@ import java.util.Objects;
  * the cursor a single URL-safe string and discourages callers from parsing it, which is the point.
  * Nothing secret goes in it.
  */
-public record ConnectionCursor(String username, ConnectionType type, String token) {
+public record ConnectionCursor(
+        String username, ConnectionType type, String adapter, String token) {
 
     public ConnectionCursor {
         Objects.requireNonNull(username, "username");
         Objects.requireNonNull(type, "type");
+        Objects.requireNonNull(adapter, "adapter");
         Objects.requireNonNull(token, "token");
     }
 
@@ -33,7 +35,8 @@ public record ConnectionCursor(String username, ConnectionType type, String toke
     public String encode() {
         try {
             String payload = InstaJson.mapper().writeValueAsString(
-                    java.util.Map.of("u", username, "t", type.name(), "c", token));
+                    java.util.Map.of("u", username, "t", type.name(),
+                            "a", adapter, "c", token));
             return Base64.getUrlEncoder().withoutPadding()
                     .encodeToString(payload.getBytes(StandardCharsets.UTF_8));
         } catch (Exception exception) {
@@ -42,12 +45,16 @@ public record ConnectionCursor(String username, ConnectionType type, String toke
     }
 
     /**
-     * Reads a cursor a caller sent back and returns the actor token inside it.
+     * Reads a cursor a caller sent back.
+     *
+     * <p>The adapter travels inside it because a continuation token means nothing to an actor that
+     * did not issue it — resuming a walk has to go back to the same one, even when the chain would
+     * otherwise have preferred another.
      *
      * @throws IllegalArgumentException if the cursor is unreadable, or belongs to a different
      *                                  account or scrape direction than the request it arrived on.
      */
-    public static String tokenFor(String cursor, String username, ConnectionType type) {
+    public static ConnectionCursor decode(String cursor, String username, ConnectionType type) {
         JsonNode decoded;
         try {
             byte[] raw = Base64.getUrlDecoder().decode(cursor);
@@ -61,10 +68,11 @@ public record ConnectionCursor(String username, ConnectionType type, String toke
                     "That cursor belongs to a different account or list. Start again without one.");
         }
         String token = decoded.path("c").asText(null);
-        if (token == null || token.isBlank()) {
+        String adapter = decoded.path("a").asText(null);
+        if (token == null || token.isBlank() || adapter == null || adapter.isBlank()) {
             throw new IllegalArgumentException("That cursor is not readable.");
         }
-        return token;
+        return new ConnectionCursor(username, type, adapter, token);
     }
 
     /**

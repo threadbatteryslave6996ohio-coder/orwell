@@ -27,7 +27,8 @@ public final class InstaEnvs {
     public static final EnvOption<String> APIFY_TOKEN;
     public static final EnvOption<String> APIFY_BASE_URL;
     public static final EnvOption<String> APIFY_PROFILE_ACTOR;
-    public static final EnvOption<String> APIFY_CONNECTIONS_ACTOR;
+    public static final EnvOption<String> APIFY_CONNECTIONS_ACTORS;
+    public static final EnvOption<String> INSTA_INSTAGRAM_COOKIES;
     public static final EnvOption<Integer> APIFY_RUN_TIMEOUT_SECONDS;
     public static final EnvOption<Integer> INSTA_DEFAULT_LIMIT;
     public static final EnvOption<Integer> INSTA_MAX_LIMIT;
@@ -47,6 +48,9 @@ public final class InstaEnvs {
     public static final EnvOption<String> INSTA_BUCKET_URL;
     public static final EnvOption<String> INSTA_BUCKET_TOKEN;
     public static final EnvOption<Integer> INSTA_MAX_RETIRE_PERCENT;
+    public static final EnvOption<Integer> INSTA_SKIP_ABOVE_FOLLOWERS;
+    public static final EnvOption<String> INSTA_UI_ADDRESS;
+    public static final EnvOption<Integer> INSTA_UI_PORT;
 
     private static final EnvSchema SCHEMA;
 
@@ -55,8 +59,15 @@ public final class InstaEnvs {
         APIFY_BASE_URL = BUILDER.optional("APIFY_BASE_URL", EnvType.string(), "https://api.apify.com");
         APIFY_PROFILE_ACTOR = BUILDER.optional(
                 "APIFY_PROFILE_ACTOR", EnvType.string(), "apify/instagram-profile-scraper");
-        APIFY_CONNECTIONS_ACTOR = BUILDER.optional("APIFY_CONNECTIONS_ACTOR", EnvType.string(),
-                "scraping_solutions/instagram-scraper-followers-following-no-cookies");
+        // An ordered chain, not one actor: each has its own quota, and the next is tried when one
+        // refuses. Names, not actor ids — every actor wants a different input shape, so each is an
+        // adapter in the code. Known: scraping-solutions, datadoping, logical-scrapers.
+        APIFY_CONNECTIONS_ACTORS = BUILDER.optional(
+                "APIFY_CONNECTIONS_ACTORS", EnvType.string(), "scraping-solutions");
+        // Only the logical-scrapers adapter uses these, and only if you set them: they are a live
+        // Instagram session handed to a third-party actor.
+        INSTA_INSTAGRAM_COOKIES = BUILDER.optional(
+                "INSTA_INSTAGRAM_COOKIES", EnvType.string(), "");
         APIFY_RUN_TIMEOUT_SECONDS =
                 BUILDER.optional("APIFY_RUN_TIMEOUT_SECONDS", EnvType.integer(), 120);
         INSTA_DEFAULT_LIMIT = BUILDER.optional("INSTA_DEFAULT_LIMIT", EnvType.integer(), 100);
@@ -89,6 +100,16 @@ public final class InstaEnvs {
         // is refusing to believe itself. A private account returns an empty list, and that is
         // indistinguishable from everyone leaving at once.
         INSTA_MAX_RETIRE_PERCENT = BUILDER.optional("INSTA_MAX_RETIRE_PERCENT", EnvType.integer(), 20);
+        // The spend ceiling that actually bounds a crawl. `sync` walks a list to exhaustion, so
+        // one popular account can cost more than every ordinary one put together — a 100k-follower
+        // account is ~$60 at $0.60/1,000. Above this many, the walk is skipped entirely and only
+        // the cheap profile lookup is paid for. 0 disables the guard.
+        INSTA_SKIP_ABOVE_FOLLOWERS =
+                BUILDER.optional("INSTA_SKIP_ABOVE_FOLLOWERS", EnvType.integer(), 1500);
+        // The viewer binds every interface by default, as asked. It has no authentication, so
+        // 127.0.0.1 is the setting that keeps it on this machine.
+        INSTA_UI_ADDRESS = BUILDER.optional("INSTA_UI_ADDRESS", EnvType.string(), "0.0.0.0");
+        INSTA_UI_PORT = BUILDER.optional("INSTA_UI_PORT", EnvType.integer(), 5554);
 
         SCHEMA = BUILDER.build();
     }

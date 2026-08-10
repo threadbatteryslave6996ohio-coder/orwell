@@ -5,9 +5,11 @@ import dev.orwell.insta.apify.ApifyClient;
 import dev.orwell.insta.apify.ApifyException;
 import dev.orwell.insta.cache.DisabledScrapeCache;
 import dev.orwell.insta.graph.SyncCommand;
+import dev.orwell.insta.ui.UiCommand;
 import dev.orwell.insta.cache.RedisScrapeCache;
 import dev.orwell.insta.cache.ScrapeCache;
 import dev.orwell.insta.instagram.ConnectionType;
+import dev.orwell.insta.instagram.ConnectionsAdapters;
 import dev.orwell.insta.instagram.ConnectionsPage;
 import dev.orwell.insta.instagram.InstagramAccount;
 import dev.orwell.insta.instagram.InstagramProfile;
@@ -52,6 +54,7 @@ public final class InstaCli {
               followers <username>            the accounts following them
               following <username>            the accounts they follow
               sync      <username>            walk the followers and record them in Postgres
+              ui                              serve the graph viewer (default 0.0.0.0:5554)
 
             options (list commands only):
               --limit N     accounts per lookup (default INSTA_DEFAULT_LIMIT, max INSTA_MAX_LIMIT)
@@ -112,6 +115,7 @@ public final class InstaCli {
                         instagram, arguments, ConnectionType.FOLLOWING, out, err);
                 case SYNC -> new SyncCommand(env, instagram, logger)
                         .run(arguments.username(), arguments.limit(), out, err);
+                case UI -> new UiCommand(env, logger).run(err);
             };
         } catch (IllegalArgumentException exception) {
             err.println(exception.getMessage());
@@ -176,7 +180,7 @@ public final class InstaCli {
 
         if (arguments.json()) {
             out.println(InstaJson.mapper().writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(new ConnectionsPage(collected, nextCursor)));
+                    .writeValueAsString(new ConnectionsPage(collected, nextCursor, nextCursor == null)));
             return OK;
         }
         for (InstagramAccount account : collected) {
@@ -202,7 +206,9 @@ public final class InstaCli {
         return new InstagramService(
                 apify, cache,
                 env.get(InstaEnvs.APIFY_PROFILE_ACTOR),
-                env.get(InstaEnvs.APIFY_CONNECTIONS_ACTOR),
+                ConnectionsAdapters.parse(
+                        env.get(InstaEnvs.APIFY_CONNECTIONS_ACTORS),
+                        env.get(InstaEnvs.INSTA_INSTAGRAM_COOKIES)),
                 env.get(InstaEnvs.INSTA_DEFAULT_LIMIT),
                 env.get(InstaEnvs.INSTA_MAX_LIMIT),
                 logger);
@@ -229,7 +235,7 @@ public final class InstaCli {
     }
 
     enum Command {
-        PROFILE, FOLLOWERS, FOLLOWING, SYNC
+        PROFILE, FOLLOWERS, FOLLOWING, SYNC, UI
     }
 
     /**
@@ -249,18 +255,20 @@ public final class InstaCli {
                 case "followers" -> Command.FOLLOWERS;
                 case "following" -> Command.FOLLOWING;
                 case "sync" -> Command.SYNC;
+                case "ui" -> Command.UI;
                 default -> throw new IllegalArgumentException("Unknown command: " + args[0]);
             };
-            if (args.length < 2 || args[1].startsWith("-")) {
+            // `ui` serves whatever is already in the database, so it names no account.
+            boolean needsUsername = command != Command.UI;
+            if (needsUsername && (args.length < 2 || args[1].startsWith("-"))) {
                 throw new IllegalArgumentException("Missing username for '" + args[0] + "'.");
             }
-
-            String username = args[1];
+            String username = needsUsername ? args[1] : null;
             Integer limit = null;
             boolean all = false;
             boolean json = false;
             String cursor = null;
-            for (int index = 2; index < args.length; index++) {
+            for (int index = needsUsername ? 2 : 1; index < args.length; index++) {
                 switch (args[index]) {
                     case "--all" -> all = true;
                     case "--json" -> json = true;
@@ -277,6 +285,10 @@ public final class InstaCli {
             if (command == Command.PROFILE && (limit != null || all || cursor != null)) {
                 throw new IllegalArgumentException(
                         "'profile' returns one account; --limit, --all and --cursor do not apply.");
+            }
+            if (command == Command.UI && (limit != null || all || cursor != null || json)) {
+                throw new IllegalArgumentException("'ui' takes no options; configure it with "
+                        + "INSTA_UI_ADDRESS and INSTA_UI_PORT.");
             }
             if (command == Command.SYNC && (all || cursor != null)) {
                 // Resuming or half-walking would produce a diff that reports unfollows for pages

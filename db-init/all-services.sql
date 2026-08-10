@@ -22,3 +22,6 @@ CREATE DATABASE secrets OWNER secrets;
 
 CREATE ROLE gmail   LOGIN PASSWORD 'gmail';
 CREATE DATABASE gmail   OWNER gmail;
+
+CREATE ROLE insta   LOGIN PASSWORD 'insta';
+CREATE DATABASE insta   OWNER insta;

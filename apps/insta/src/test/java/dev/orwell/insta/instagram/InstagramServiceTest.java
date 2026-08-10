@@ -27,7 +27,6 @@ class InstagramServiceTest {
     private static final Logger NO_OP_LOGGER = entry -> {
     };
     private static final String PROFILE_ACTOR = "apify/instagram-profile-scraper";
-    private static final String CONNECTIONS_ACTOR = "vendor/instagram-connections-scraper";
 
     private ApifyStubServer apify;
     private InMemoryScrapeCache cache;
@@ -137,7 +136,8 @@ class InstagramServiceTest {
         assertThat(followers.get(1).isPrivate()).isTrue();
 
         JsonNode input = actorInput();
-        assertThat(apify.runStart().path()).contains("vendor~instagram-connections-scraper");
+        assertThat(apify.runStart().path())
+                .contains("scraping_solutions~instagram-scraper-followers-following-no-cookies");
         assertThat(input.get("Account").get(0).asText()).isEqualTo("nasa");
         assertThat(input.get("dataToScrape").asText()).isEqualTo("Followers");
         assertThat(input.get("resultsLimit").asInt()).isEqualTo(200);
@@ -403,6 +403,35 @@ class InstagramServiceTest {
                         assertThat(exception.kind()).isEqualTo(ApifyException.Kind.UNAVAILABLE));
     }
 
+    /**
+     * The failure this was written for: on a free plan the connections actor hits a daily item
+     * quota, exits 0, and returns an empty dataset — saying so only in OUTPUT. Believing that would
+     * report "0 followers" for an account that has hundreds, and on a populated graph a complete
+     * walk of zero followers retires every edge there is.
+     */
+    @Test
+    void refusesAnEmptyRunTheActorItselfReportedAsFailed() {
+        apify.responds(200, "[]");
+        apify.outputs("""
+                {"status":"FREE_API_DAILY_LIMIT_REACHED","success":false,
+                 "message":"Extraction completed.","resultsDelivered":0,"continuations":[]}""");
+
+        assertThatThrownBy(() -> service().connections("nasa", ConnectionType.FOLLOWERS, 500, null))
+                .isInstanceOfSatisfying(ApifyException.class, exception ->
+                        assertThat(exception.kind()).isEqualTo(ApifyException.Kind.RATE_LIMITED))
+                .hasMessageContaining("FREE_API_DAILY_LIMIT_REACHED");
+    }
+
+    /** An OUTPUT that says the run went fine is not a failure, empty dataset or not. */
+    @Test
+    void acceptsAnEmptyRunTheActorReportedAsSuccessful() {
+        apify.responds(200, "[]");
+        apify.outputs("{\"success\":true,\"resultsDelivered\":0,\"continuations\":[]}");
+
+        assertThat(service().connections("nasa", ConnectionType.FOLLOWERS, 50, null).accounts())
+                .isEmpty();
+    }
+
     @Test
     void reportsARunThatFailedAfterStarting() {
         apify.responds(200, "[]");
@@ -435,6 +464,7 @@ class InstagramServiceTest {
     private InstagramService service() {
         ApifyClient client = new ApifyClient(apify.baseUrl(), "test-token", 120, NO_OP_LOGGER);
         return new InstagramService(
-                client, cache, PROFILE_ACTOR, CONNECTIONS_ACTOR, 100, 500, NO_OP_LOGGER);
+                client, cache, PROFILE_ACTOR, List.of(new ScrapingSolutionsAdapter()),
+                100, 500, NO_OP_LOGGER);
     }
 }

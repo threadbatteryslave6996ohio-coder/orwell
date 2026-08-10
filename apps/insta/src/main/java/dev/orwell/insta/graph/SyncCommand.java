@@ -98,6 +98,19 @@ public final class SyncCommand {
         // so recording them costs nothing beyond the lookup that just happened.
         int posts = new PostWriter(connection, new HttpPictureSource(), pictures, logger)
                 .record(profile.id(), profile.latestPosts(), walkStarted);
+        // The count for the direction being walked — followers here; a following walk would read
+        // followingCount. Checked before the walk, so an oversized account costs one dataset item
+        // rather than a list.
+        int ceiling = env.get(InstaEnvs.INSTA_SKIP_ABOVE_FOLLOWERS);
+        Long followers = profile.followersCount();
+        if (ceiling > 0 && followers != null && followers > ceiling) {
+            out.printf("%s: %,d followers is above the %,d ceiling — profile and %d posts "
+                            + "recorded, follower list not walked.%n",
+                    profile.username(), followers, ceiling, posts);
+            logger.info("Skipped a walk over the follower ceiling.", Map.of(
+                    "username", profile.username(), "followers", followers, "ceiling", ceiling));
+            return 0;
+        }
         if (Boolean.TRUE.equals(profile.isPrivate())) {
             // Recording the profile was still worth doing; walking a private account is not.
             out.printf("%s is private: profile and %d posts recorded, follower list not walked.%n",
@@ -134,9 +147,9 @@ public final class SyncCommand {
             page++;
             String next = result.nextCursor();
             if (next == null) {
-                // The only exit that means "we saw the whole list". Every other way out of this
-                // loop either throws — rolling the transaction back — or is marked incomplete.
-                return new Walk(collected, true);
+                // endOfList, not "no cursor": an actor that cannot paginate always returns none,
+                // and a full page from one of those proves nothing about what it did not return.
+                return new Walk(collected, result.endOfList());
             }
             if (next.equals(cursor)) {
                 // A cursor that does not advance would page forever, and every round is billed.
