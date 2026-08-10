@@ -82,8 +82,19 @@ The two beans are wired in `auth/SecretsAuthConfiguration.java` as distinct
 wrapper types (`AdminAuth`, `ClientAuth`) rather than two `AuthenticationStrategy`
 beans, so `server-bootstrap`'s by-type injection of the shared request-scoped
 `AuthenticationContext` stays unambiguous and neither bean needs a qualifier.
-Controllers read the credentials off the request rather than from that shared
-context, which only ever speaks to the client deployment.
+The guard reads the credentials off the request rather than from that shared
+context, which only ever speaks to the client deployment — which is also why
+`server-bootstrap`'s `@RequireAuthentication` cannot serve here.
+
+A route declares its role with `@RequireAdmin` or `@RequireAccessor` (usually on
+the controller class), and `SecretsRoleInterceptor` enforces it before the
+handler runs. Because that is ahead of body parsing, an unauthenticated request
+with an invalid body is answered `401`, not `400`. Handlers that need the
+caller's identity — the two that stamp `createdBy` — take
+`@RequestAttribute(SecretsRoleInterceptor.CALLER_ATTRIBUTE) AuthenticationContext`,
+which the guard has already resolved, so there is no second round trip to the
+auth server. An endpoint that declares no role is not guarded, so
+`SecretsRoleCoverageTest` fails the build if one appears.
 
 ## Routes
 

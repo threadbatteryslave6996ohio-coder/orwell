@@ -26,6 +26,16 @@ in-file dedups landed — `BucketProxyClient`'s six copy-pasted try/catch blocks
 `call(...)`/`rejected(...)` pair, and `SecretsManagerClient`'s two `execute` overloads merged into one
 deserializer-parameterized method.
 
+Also done since: secrets-manager's 23 hand-repeated `requireAdmin()` / `requireAccessor()` calls —
+one per handler, fail-open if you forgot one — are three `@RequireAdmin`/`@RequireAccessor` class
+annotations enforced by `SecretsRoleInterceptor`, with `SecretsRoleCoverageTest` failing the build if
+any handler under `dev.orwell.secrets.controller` declares no role (the annotation alone is not
+fail-closed: an unannotated handler is still served). `AbstractSecretsAdminController` is gone with
+them, and the two handlers that stamp `createdBy` take the caller as a `@RequestAttribute` the guard
+already resolved rather than re-validating. Note the guard runs ahead of body parsing, so an
+unauthenticated request with an invalid body answers 401 rather than 400 — the same ordering
+`@RequireAuthentication` documents.
+
 Also done since (auth dedup): `HttpAuthenticationStrategy` kept two copies of the same RestClient
 error plumbing, one per endpoint — they share one `post(...)` now, so the two calls cannot drift into
 reporting the same failure differently. `ClipboardApiClient`'s `currentToken()` and
