@@ -26,6 +26,17 @@ in-file dedups landed — `BucketProxyClient`'s six copy-pasted try/catch blocks
 `call(...)`/`rejected(...)` pair, and `SecretsManagerClient`'s two `execute` overloads merged into one
 deserializer-parameterized method.
 
+Also done since (auth dedup): `HttpAuthenticationStrategy` kept two copies of the same RestClient
+error plumbing, one per endpoint — they share one `post(...)` now, so the two calls cannot drift into
+reporting the same failure differently. `ClipboardApiClient`'s `currentToken()` and
+`refreshFailure()` encoded one classification rule twice, with javadoc reading "mirrors the other" —
+a keep-in-sync-by-hand hazard — and are one `authFailure(...)`; its stale claim that a blank token
+from the auth server arrives as `IllegalArgumentException` (it became an
+`HttpAuthenticationException` when `ClientAuthSession.tokenFrom` was fixed) now names the cause that
+can still produce one, a malformed base URL. And `/tokens/check` emits one log record instead of two
+on what is the highest-volume path in the repo: every authenticated request to every service lands
+there.
+
 Also done since (auth pass): the auth server's `logback-spring.xml` — the last one in the repo, and a
 non-rolling `FileAppender` that contradicted "servers no longer write an app log file by default" — is
 deleted, so `LOGGING_FILE_NAME` went optional there (`new AppServerEnv(false, false)`) and dropped out

@@ -92,19 +92,19 @@ public class AuthController {
 
     @PostMapping("/tokens/check")
     public CheckTokenHttpResponse checkToken(@Valid @RequestBody CheckTokenHttpRequest request) {
-        logger.info("Token check request received.", Map.of("clientId", request.clientId()));
-
-        return tokens.findWithIdentityByTokenHash(credentialHasher.hashToken(request.token()))
+        boolean valid = tokens.findWithIdentityByTokenHash(credentialHasher.hashToken(request.token()))
                 .map(ClientToken::getIdentity)
                 .filter(ClientIdentity::isActive)
                 .filter(identity -> request.clientId().equals(identity.getClientId()))
-                .map(identity -> {
-                    logger.info("Token check completed.", Map.of("clientId", request.clientId(), "valid", true));
-                    return new CheckTokenHttpResponse(true, identity.getClientId());
-                })
-                .orElseGet(() -> {
-                    logger.info("Token check completed.", Map.of("clientId", request.clientId(), "valid", false));
-                    return new CheckTokenHttpResponse(false, request.clientId());
-                });
+                .isPresent();
+
+        // One record per check, not a "received" line as well: every authenticated request to every
+        // service in the stack lands here, so this is the highest-volume log site in the repo and a
+        // second line per call would say nothing the outcome does not.
+        logger.info("Token check completed.", Map.of("clientId", request.clientId(), "valid", valid));
+
+        // The clientId echoed back is the request's own: the filter above only passes an identity
+        // whose clientId equals it, so reading it off the identity said the same thing indirectly.
+        return new CheckTokenHttpResponse(valid, request.clientId());
     }
 }
