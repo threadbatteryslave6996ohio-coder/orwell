@@ -52,24 +52,21 @@ All values are required unless marked optional. These values provide a local con
 | `AUTH_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/auth` | PostgreSQL JDBC URL. |
 | `AUTH_DATASOURCE_USERNAME` | `auth` | Database username. |
 | `AUTH_DATASOURCE_PASSWORD` | `auth` | Database password. |
-| `LOGGING_FILE_NAME` | `logs/auth-server.log` | File path for server logs. |
 | `AUTH_JPA_HIBERNATE_DDL_AUTO` | `update` | Hibernate schema-management mode. |
 | `AUTH_JPA_JDBC_TIME_ZONE` | `UTC` | Hibernate JDBC timezone. |
+| `LOKI_URL` | `http://loki:3100` | Optional. Loki endpoint for log push. Console-only when unset. |
+| `LOKI_TENANT_ID` | `orwell` | Optional. Loki tenant header. |
 
 ## Logging
 
-Spring Boot writes normal logs to `LOGGING_FILE_NAME`. A separate
-`auth-server.txt` audit log in the same directory records startup, login, token
-issuance, and token-check events. Raw secrets and bearer tokens are never
+Records go through the shared `dev.orwell.logging.Logger` bean — console plus an
+async Loki push when `LOKI_URL` is set, console only when it is not. Login,
+token issuance, and token-check events travel that path, as does the
+local-database notice at startup. Raw secrets and bearer tokens are never
 logged.
 
-If you run the `CustomLogger` directly elsewhere, you can still redirect it with the JVM system property `custom.logger.dir`, for example:
-
-```bash
-java -Dcustom.logger.dir=/tmp/auth-logs -jar apps/auth/http-based/server/target/auth-http-server-0.1.0-SNAPSHOT-exec.jar
-```
-
-For Azure, point `AUTH_DATASOURCE_URL` at the `auth` database on the deployed PostgreSQL server.
+The server writes no log file of its own. `LOGGING_FILE_NAME` is accepted as a
+common key but is not set by the compose stack and is not needed here.
 
 The service uses Hibernate `ddl-auto: update`, so it creates or updates the local schema on startup. The persistent tables are:
 

@@ -31,7 +31,7 @@ class ClipboardEntryControllerTest {
 
         ClipboardEntryController controller = new ClipboardEntryController(
                 repository,
-                provider(AuthenticationContext.authenticated("android-pixel-8", 1L)),
+                provider(AuthenticationContext.authenticated("android-pixel-8")),
                 logged::add
         );
         ClipboardEntryResponse response = controller.create(
@@ -60,7 +60,7 @@ class ClipboardEntryControllerTest {
 
         ClipboardEntryController controller = new ClipboardEntryController(
                 repository,
-                provider(AuthenticationContext.authenticated("android-pixel-8", 1L)),
+                provider(AuthenticationContext.authenticated("android-pixel-8")),
                 failingLogger
         );
         ClipboardEntryResponse response = controller.create(
@@ -83,7 +83,7 @@ class ClipboardEntryControllerTest {
         ClipboardEntryRepository repository = clipboardEntryRepository(List.of(existing), saves);
         ClipboardEntryResponse response = new ClipboardEntryController(
                 repository,
-                provider(AuthenticationContext.authenticated("android-pixel-8", 1L)),
+                provider(AuthenticationContext.authenticated("android-pixel-8")),
                 entry -> {
                 }
         ).create(
@@ -110,7 +110,7 @@ class ClipboardEntryControllerTest {
         ClipboardEntryRepository repository = clipboardEntryRepository(List.of(latest), saves);
         ClipboardEntryResponse response = new ClipboardEntryController(
                 repository,
-                provider(AuthenticationContext.authenticated("android-pixel-8", 1L)),
+                provider(AuthenticationContext.authenticated("android-pixel-8")),
                 entry -> {
                 }
         ).create(
@@ -138,7 +138,7 @@ class ClipboardEntryControllerTest {
 
         ClipboardEntryResponse response = new ClipboardEntryController(
                 repository,
-                provider(AuthenticationContext.authenticated("android-pixel-8", 1L)),
+                provider(AuthenticationContext.authenticated("android-pixel-8")),
                 entry -> {
                 }
         ).create(
@@ -164,7 +164,7 @@ class ClipboardEntryControllerTest {
         ));
         ClipboardEntryController controller = new ClipboardEntryController(
                 repository,
-                provider(AuthenticationContext.authenticated("client-a", 1L)),
+                provider(AuthenticationContext.authenticated("client-a")),
                 entry -> {
                 }
         );

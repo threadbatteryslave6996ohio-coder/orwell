@@ -27,19 +27,7 @@ public final class HttpAuthenticationStrategy implements AuthenticationStrategy 
     }
 
     public LoginHttpResponse login(String clientId, String secret) {
-        try {
-            return restClient
-                    .post()
-                    .uri("/login")
-                    .body(new LoginHttpRequest(clientId, secret))
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (request, response) -> {
-                        throw new HttpAuthenticationException("Auth server rejected login with HTTP " + response.getStatusCode().value(), response.getStatusCode().value());
-                    })
-                    .body(LoginHttpResponse.class);
-        } catch (RestClientException exception) {
-            throw new HttpAuthenticationException("Cannot login with auth server.", exception);
-        }
+        return post("/login", new LoginHttpRequest(clientId, secret), LoginHttpResponse.class, "login");
     }
 
     @Override
@@ -49,22 +37,38 @@ public final class HttpAuthenticationStrategy implements AuthenticationStrategy 
 
     @Override
     public AuthenticationContext authenticate(String clientId, String token) {
-        try {
-            CheckTokenHttpResponse response = restClient.post()
-                    .uri("/tokens/check")
-                    .body(new CheckTokenHttpRequest(clientId, token))
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (request, serverResponse) -> {
-                        throw new HttpAuthenticationException("Auth server rejected token check with HTTP " + serverResponse.getStatusCode().value(), serverResponse.getStatusCode().value());
-                    })
-                    .body(CheckTokenHttpResponse.class);
+        CheckTokenHttpResponse response = post(
+                "/tokens/check", new CheckTokenHttpRequest(clientId, token), CheckTokenHttpResponse.class, "token check");
 
-            if (response == null || !response.valid() || !clientId.equals(response.clientId())) {
-                return AuthenticationContext.unauthenticated();
-            }
-            return AuthenticationContext.authenticated(response.clientId(), response.identityId());
+        if (response == null || !response.valid() || !clientId.equals(response.clientId())) {
+            return AuthenticationContext.unauthenticated();
+        }
+        return AuthenticationContext.authenticated(response.clientId());
+    }
+
+    /**
+     * Both auth calls fail the same two ways, so they share one path: an error status becomes an
+     * {@link HttpAuthenticationException} carrying that status, and a transport failure becomes one
+     * carrying the cause. Keeping the two endpoints on separate copies of this meant they could
+     * drift into reporting the same failure differently.
+     *
+     * <p>The status handler's exception is not a {@link RestClientException}, so it travels past the
+     * catch below rather than being rewrapped as a transport failure.
+     */
+    private <T> T post(String uri, Object body, Class<T> responseType, String action) {
+        try {
+            return restClient.post()
+                    .uri(uri)
+                    .body(body)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (request, response) -> {
+                        throw new HttpAuthenticationException(
+                                "Auth server rejected %s with HTTP %d".formatted(action, response.getStatusCode().value()),
+                                response.getStatusCode().value());
+                    })
+                    .body(responseType);
         } catch (RestClientException exception) {
-            throw new HttpAuthenticationException("Cannot check token with auth server.", exception);
+            throw new HttpAuthenticationException("Cannot complete %s with auth server.".formatted(action), exception);
         }
     }
 }

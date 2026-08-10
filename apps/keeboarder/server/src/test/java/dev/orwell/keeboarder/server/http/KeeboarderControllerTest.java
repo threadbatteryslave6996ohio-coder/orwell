@@ -17,7 +17,7 @@ class KeeboarderControllerTest {
 
     @Test
     void checksClientListingCredentialsWithAuthenticator() {
-        KeeboarderController controller = newController(AuthenticationContext.authenticated("caller", 7L));
+        KeeboarderController controller = newController(AuthenticationContext.authenticated("caller"));
         var response = controller.clients();
 
         assertEquals(200, response.getStatusCode().value());

@@ -45,7 +45,7 @@ public class InstagramService {
     /** The default connections actor rejects a smaller {@code resultsLimit}. */
     private static final int MIN_RESULTS_LIMIT = 50;
     /** Bump when a cached shape changes, so old entries are ignored rather than mis-read. */
-    private static final String CACHE_VERSION = "v1";
+    private static final String CACHE_VERSION = "v2";
 
     private final ApifyClient apify;
     private final ScrapeCache cache;

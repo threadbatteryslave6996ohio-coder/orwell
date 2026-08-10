@@ -7,7 +7,7 @@ public interface AuthenticationStrategy {
 
     default AuthenticationContext authenticate(String clientId, String token) {
         return isTokenValidForClient(clientId, token)
-                ? AuthenticationContext.authenticated(clientId, null)
+                ? AuthenticationContext.authenticated(clientId)
                 : AuthenticationContext.unauthenticated();
     }
 }

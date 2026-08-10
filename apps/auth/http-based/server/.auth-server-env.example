@@ -3,4 +3,3 @@ AUTH_DATASOURCE_USERNAME=your-db-username
 AUTH_DATASOURCE_PASSWORD=replace-with-your-db-password
 SERVER_ADDRESS=0.0.0.0
 SERVER_PORT=8081
-LOGGING_FILE_NAME=logs/auth-server.log

@@ -53,22 +53,134 @@ CREATE TABLE IF NOT EXISTS account_profile_picture (
 CREATE INDEX IF NOT EXISTS account_profile_picture_hash_idx
     ON account_profile_picture (content_hash);
 
--- One row per follow, in one direction: follower_id follows followee_id.
+-- One row per follow relationship, in one direction: follower_id follows followee_id.
+--
+-- The edge holds the *current state* and the watermark; the *history* lives in `follows` and
+-- `unfollows`, one row per event. That split is what makes a repeat offender visible: an account
+-- that has left three times has three `unfollows` rows, where a single flag would show only the
+-- most recent departure and a resurrected row would erase even that.
 --
 -- last_seen_at is the watermark that makes unfollows detectable at all. An unfollow is never an
 -- event anyone observes — you learn it from an account being absent from a walk that saw
--- everything — so a complete walk retires whatever it did not refresh, and an incomplete one
--- retires nothing.
+-- everything — so a complete walk deactivates whatever it did not refresh, and an incomplete one
+-- deactivates nothing.
 CREATE TABLE IF NOT EXISTS follow_edge (
-    followee_id          TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
-    follower_id          TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
-    first_seen_at        TIMESTAMPTZ NOT NULL,
-    last_seen_at         TIMESTAMPTZ NOT NULL,
-    lost_at              TIMESTAMPTZ,
-    unfollow_notified_at TIMESTAMPTZ,
-    PRIMARY KEY (followee_id, follower_id)
+    id            BIGSERIAL PRIMARY KEY,
+    followee_id   TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+    follower_id   TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+    active        BOOLEAN NOT NULL DEFAULT TRUE,
+    first_seen_at TIMESTAMPTZ NOT NULL,
+    last_seen_at  TIMESTAMPTZ NOT NULL,
+    CONSTRAINT follow_edge_pair_key UNIQUE (followee_id, follower_id)
 );
 CREATE INDEX IF NOT EXISTS follow_edge_follower_idx ON follow_edge (follower_id);
+CREATE INDEX IF NOT EXISTS follow_edge_active_idx ON follow_edge (followee_id) WHERE active;
+
+-- Every time a follow began. One row on the first sighting, another on each return.
+CREATE TABLE IF NOT EXISTS follows (
+    id      BIGSERIAL PRIMARY KEY,
+    edge_id BIGINT NOT NULL REFERENCES follow_edge(id) ON DELETE CASCADE,
+    at      TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS follows_edge_idx ON follows (edge_id, at);
+
+-- Every time one ended. notified_at lives here rather than on the edge because it belongs to a
+-- single departure: each unfollow is its own row with its own stamp, so a later return cannot make
+-- an unsent alert look already sent — the bug a flag on the edge had to be reset to avoid.
+CREATE TABLE IF NOT EXISTS unfollows (
+    id          BIGSERIAL PRIMARY KEY,
+    edge_id     BIGINT NOT NULL REFERENCES follow_edge(id) ON DELETE CASCADE,
+    at          TIMESTAMPTZ NOT NULL,
+    notified_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS unfollows_edge_idx ON unfollows (edge_id, at);
 -- The alert dispatcher's entire working set.
-CREATE INDEX IF NOT EXISTS follow_edge_unnotified_idx ON follow_edge (lost_at)
-    WHERE lost_at IS NOT NULL AND unfollow_notified_at IS NULL;
+CREATE INDEX IF NOT EXISTS unfollows_unnotified_idx ON unfollows (at) WHERE notified_at IS NULL;
+
+-- Migration from the earlier shape, where follow_edge was keyed on the pair and carried lost_at
+-- and unfollow_notified_at. Idempotent and self-skipping, so a fresh database never enters it.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'follow_edge' AND column_name = 'lost_at') THEN
+
+        ALTER TABLE follow_edge ADD COLUMN IF NOT EXISTS id BIGSERIAL;
+        ALTER TABLE follow_edge ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+        UPDATE follow_edge SET active = (lost_at IS NULL);
+
+        ALTER TABLE follow_edge DROP CONSTRAINT IF EXISTS follow_edge_pkey;
+        ALTER TABLE follow_edge ADD PRIMARY KEY (id);
+        ALTER TABLE follow_edge ADD CONSTRAINT follow_edge_pair_key
+            UNIQUE (followee_id, follower_id);
+
+        -- Backfill the history the old shape could hold: one follow at the first sighting, and an
+        -- unfollow for anyone currently departed. Earlier cycles are simply not recoverable — the
+        -- old schema overwrote them, which is the reason for this change.
+        INSERT INTO follows (edge_id, at) SELECT id, first_seen_at FROM follow_edge;
+        INSERT INTO unfollows (edge_id, at, notified_at)
+            SELECT id, lost_at, unfollow_notified_at FROM follow_edge WHERE lost_at IS NOT NULL;
+
+        ALTER TABLE follow_edge DROP COLUMN lost_at;
+        ALTER TABLE follow_edge DROP COLUMN unfollow_notified_at;
+    END IF;
+END $$;
+
+-- ─── posts ─────────────────────────────────────────────────────────────────────────────────────
+
+-- Identity plus the facts that cannot change after publication.
+--
+-- deleted_at is deliberately never set by the profile-lookup path: `latestPosts` is only the 12
+-- most recent posts, which is a truncated listing by definition, and inferring deletion from a
+-- truncated listing would retire every post older than the newest twelve. It waits for a complete
+-- listing from the dedicated post actor, under the same rule as follow_edge.lost_at.
+CREATE TABLE IF NOT EXISTS post (
+    id            TEXT PRIMARY KEY,
+    account_id    TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+    short_code    TEXT,
+    taken_at      TIMESTAMPTZ,
+    type          TEXT,
+    first_seen_at TIMESTAMPTZ NOT NULL,
+    last_seen_at  TIMESTAMPTZ NOT NULL,
+    deleted_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS post_account_idx ON post (account_id, taken_at DESC);
+CREATE INDEX IF NOT EXISTS post_live_idx ON post (account_id) WHERE deleted_at IS NULL;
+
+-- Captions are editable, so they are a value history like bios, digest-keyed for the same reason.
+CREATE TABLE IF NOT EXISTS post_caption (
+    post_id       TEXT NOT NULL REFERENCES post(id) ON DELETE CASCADE,
+    caption_hash  TEXT NOT NULL,
+    caption       TEXT NOT NULL,
+    first_seen_at TIMESTAMPTZ NOT NULL,
+    last_seen_at  TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (post_id, caption_hash)
+);
+
+-- The one genuine time series here: likes and comments move on almost every observation, and the
+-- curve is the point. A row is inserted only when a number actually changes; last_seen_at covers
+-- the flat stretches, so a repeated sync of an unchanged post adds nothing.
+CREATE TABLE IF NOT EXISTS post_metric (
+    post_id          TEXT NOT NULL REFERENCES post(id) ON DELETE CASCADE,
+    likes_count      BIGINT,
+    comments_count   BIGINT,
+    video_view_count BIGINT,
+    first_seen_at    TIMESTAMPTZ NOT NULL,
+    last_seen_at     TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (post_id, first_seen_at)
+);
+CREATE INDEX IF NOT EXISTS post_metric_latest_idx ON post_metric (post_id, last_seen_at DESC);
+
+-- Same content-hash-plus-bucket design as profile pictures, so it reuses PictureStore unchanged.
+-- position orders the items of a carousel.
+CREATE TABLE IF NOT EXISTS post_media (
+    post_id       TEXT NOT NULL REFERENCES post(id) ON DELETE CASCADE,
+    content_hash  TEXT NOT NULL,
+    bucket_key    TEXT NOT NULL,
+    source_url    TEXT,
+    position      INT,
+    byte_size     INT,
+    first_seen_at TIMESTAMPTZ NOT NULL,
+    last_seen_at  TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (post_id, content_hash)
+);
+CREATE INDEX IF NOT EXISTS post_media_hash_idx ON post_media (content_hash);

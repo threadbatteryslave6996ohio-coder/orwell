@@ -17,6 +17,8 @@
         <dependency><groupId>dev.orwell</groupId><artifactId>redis-client</artifactId></dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>primitives</artifactId></dependency>
         <dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency>
+        <!-- Posts carry an Instant, and the cache round-trips profiles through JSON. -->
+        <dependency><groupId>com.fasterxml.jackson.datatype</groupId><artifactId>jackson-datatype-jsr310</artifactId></dependency>
         <!-- The graph store. Plain JDBC: one connection per sync does not want a pool or an ORM. -->
         <dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
         <!-- Jedis drags in slf4j-api, which prints a three-line "no providers found" warning on

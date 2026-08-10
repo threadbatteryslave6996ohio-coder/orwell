@@ -1,6 +1,7 @@
 package dev.orwell.auth.http.server.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.orwell.env.Env;
@@ -32,7 +33,6 @@ class AuthServerEnvsTest {
                         "AUTH_DATASOURCE_PASSWORD=example-pass\n" +
                         "SERVER_ADDRESS=0.0.0.0\n" +
                         "SERVER_PORT=9090\n" +
-                        "LOGGING_FILE_NAME=/tmp/auth.log\n" +
                         "AUTH_JPA_HIBERNATE_DDL_AUTO=validate\n" +
                         "AUTH_JPA_JDBC_TIME_ZONE=UTC\n"
         );
@@ -44,7 +44,21 @@ class AuthServerEnvsTest {
         assertEquals("example-pass", env.get(AuthServerEnvs.AUTH_DATASOURCE_PASSWORD));
         assertEquals("0.0.0.0", env.get(AuthServerEnvs.ENV.SERVER_ADDRESS));
         assertEquals(9090, env.get(AuthServerEnvs.ENV.SERVER_PORT));
-        assertEquals("/tmp/auth.log", env.get(AuthServerEnvs.ENV.LOGGING_FILE_NAME));
+    }
+
+    @Test
+    void startsWithoutALogFileBecauseTheServerLogsToConsoleAndLoki() {
+        Env env = AuthServerEnvs.ENV.schema().from(Map.of(
+                "AUTH_DATASOURCE_URL", "jdbc:postgresql://database/auth",
+                "AUTH_DATASOURCE_USERNAME", "user",
+                "AUTH_DATASOURCE_PASSWORD", "password",
+                "SERVER_ADDRESS", "0.0.0.0",
+                "SERVER_PORT", "9091",
+                "AUTH_JPA_HIBERNATE_DDL_AUTO", "validate",
+                "AUTH_JPA_JDBC_TIME_ZONE", "UTC"
+        ));
+
+        assertFalse(AuthServerEnvs.ENV.springProperties(env).containsKey("logging.file.name"));
     }
 
     @Test
@@ -55,7 +69,6 @@ class AuthServerEnvsTest {
                 "AUTH_DATASOURCE_PASSWORD", "password",
                 "SERVER_ADDRESS", "0.0.0.0",
                 "SERVER_PORT", "9091",
-                "LOGGING_FILE_NAME", "/tmp/auth.log",
                 "AUTH_JPA_HIBERNATE_DDL_AUTO", "validate",
                 "AUTH_JPA_JDBC_TIME_ZONE", "UTC",
                 "AUTH_ROUTE_PREFIX", "/auth"
@@ -67,7 +80,6 @@ class AuthServerEnvsTest {
                 "spring.datasource.password", "password",
                 "server.address", "0.0.0.0",
                 "server.port", 9091,
-                "logging.file.name", "/tmp/auth.log",
                 "spring.jpa.hibernate.ddl-auto", "validate",
                 "spring.jpa.properties.hibernate.jdbc.time_zone", "UTC",
                 "orwell.auth.route-prefix", "/auth"

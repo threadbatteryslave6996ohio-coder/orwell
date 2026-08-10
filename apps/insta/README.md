@@ -99,7 +99,7 @@ since last time.
 
 ```console
 $ insta sync nasa
-nasa: 500 followers seen, 3 new, 1 unfollowed
+nasa: 500 followers seen, 3 new, 1 unfollowed, 12 posts
 ```
 
 Five tables, created automatically on first run (`CREATE … IF NOT EXISTS`, so there is no
@@ -112,9 +112,28 @@ migration tool to keep in step):
 | `account_bio` | every distinct bio, keyed by a digest so an oversized one cannot break the index |
 | `account_profile_picture` | every distinct image, keyed by the **hash of the bytes** |
 | `follow_edge` | who follows whom, with `first_seen_at`, `last_seen_at`, `lost_at` |
+| `post` | identity and publication facts, one row per post |
+| `post_caption` | every distinct caption, digest-keyed like bios (captions are editable) |
+| `post_metric` | likes / comments / views over time — a row only when a number moves |
+| `post_media` | post images, content-hashed into the same bucket as avatars |
 
 Identity is Instagram's id rather than a handle because handles change — and it is `TEXT`, not
 `INT`, since real ids already exceed `INT` (`4014759590`).
+
+### Posts come free with the profile lookup
+
+The profile actor bundles up to **twelve recent posts** into the same dataset item the counts come
+from, so `sync` records them at no extra Apify cost — captions, likes, comments, view counts and
+publication dates, all from a lookup you were paying for anyway.
+
+`post_metric` only grows when a number actually moves; a repeat sync of an untouched post bumps a
+timestamp instead of adding a row, so the series stays the shape of the changes rather than the
+shape of your cron schedule.
+
+**`deleted_at` is never set from this path.** `latestPosts` is the newest twelve — a truncated
+listing by definition — and applying the absence rule that works for follows would mark an
+account's entire back catalogue deleted on every run. Detecting deletions needs a complete listing
+from the dedicated post actor ($2.70/1,000 posts), which is not wired up.
 
 ### How an unfollow is detected
 
@@ -162,7 +181,9 @@ about $150 per full pass at depth 2 and $75,000 at depth 3 — so there is delib
 crawl here.
 
 Not built yet: the alert dispatcher (`unfollow_notified_at` is written and indexed for it, but
-nothing sends mail), and any scheduler — run `sync` from cron.
+nothing sends mail), any scheduler (run `sync` from cron), and posts beyond the free twelve —
+`post_media` fills only for those, and `deleted_at` stays unused until a complete post listing
+exists.
 
 ## Caching
 

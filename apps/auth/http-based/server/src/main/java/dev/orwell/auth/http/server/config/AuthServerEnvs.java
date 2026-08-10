@@ -5,7 +5,10 @@ import dev.orwell.env.EnvOption;
 import dev.orwell.env.EnvType;
 
 public final class AuthServerEnvs {
-    public static final AppServerEnv ENV = new AppServerEnv(true, false);
+    // LOGGING_FILE_NAME is optional: this server logs to console plus Loki like every other one,
+    // and nothing here writes an app log file. AUTH_BASE_URL is optional because the auth server
+    // is the thing other servers point at — it never checks a token against itself.
+    public static final AppServerEnv ENV = new AppServerEnv(false, false);
     public static final EnvOption<String> AUTH_DATASOURCE_URL;
     public static final EnvOption<String> AUTH_DATASOURCE_USERNAME;
     public static final EnvOption<String> AUTH_DATASOURCE_PASSWORD;

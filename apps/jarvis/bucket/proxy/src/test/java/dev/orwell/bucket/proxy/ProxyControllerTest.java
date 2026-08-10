@@ -111,7 +111,7 @@ class ProxyControllerTest {
         return new ProxyController(
                 properties,
                 authServerClient,
-                provider(AuthenticationContext.authenticated("client", 1L)),
+                provider(AuthenticationContext.authenticated("client")),
                 storage,
                 newFileAuditLogger(properties),
                 new ManagementSessionService(properties),

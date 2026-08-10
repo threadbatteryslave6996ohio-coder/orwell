@@ -26,7 +26,7 @@ public class AuthValidator {
     public AuthenticationContext requireAdmin(String authorization, String clientId) {
         String token = requireCredentials(authorization, clientId);
         if (adminAuth.accepts(clientId, token)) {
-            return AuthenticationContext.authenticated(clientId, null);
+            return AuthenticationContext.authenticated(clientId);
         }
         // A token the *client* server accepts is a real identity that simply is not an admin, and
         // that stays a 403 the way it did when roles were rows in a table. Only a token neither
@@ -40,7 +40,7 @@ public class AuthValidator {
     public AuthenticationContext requireAccessor(String authorization, String clientId) {
         String token = requireCredentials(authorization, clientId);
         if (clientAuth.accepts(clientId, token)) {
-            return AuthenticationContext.authenticated(clientId, null);
+            return AuthenticationContext.authenticated(clientId);
         }
         if (adminAuth.accepts(clientId, token)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accessor access required.");

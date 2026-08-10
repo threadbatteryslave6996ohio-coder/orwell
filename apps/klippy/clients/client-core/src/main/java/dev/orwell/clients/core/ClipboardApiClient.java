@@ -93,7 +93,7 @@ public final class ClipboardApiClient {
             // beforeRefresh has already written a "started" audit record, and leaving it without a
             // matching outcome would silently lose the end of the auth trail.
             notifyListener(() -> refreshListener.refreshFailed(exception));
-            throw refreshFailure(exception);
+            throw authFailure(exception, "Could not refresh the bearer token after HTTP 401.");
         }
         notifyListener(refreshListener::afterRefresh);
         return send(requestFactory.create(currentToken()));
@@ -102,36 +102,35 @@ public final class ClipboardApiClient {
     /**
      * Reads the bearer token for a request. {@link ClientAuthSession#token()} logs in lazily when it
      * holds no token yet, so this is an auth boundary and not a plain getter.
-     *
-     * <p>Only the credential failures {@link ClientAuthSession} actually raises are reclassified: a
-     * missing token or a missing auth server URL ({@code IllegalStateException}) and a blank token
-     * from the auth server ({@code IllegalArgumentException}). Left unclassified, those reached
-     * callers as bare runtime exceptions no caller could distinguish from a bug, and the desktop
-     * clients dropped the clipboard entry they were holding instead of writing it to the offline
-     * log. The catch stays deliberately narrow for the same reason
-     * {@code AuthenticationStrategyConfiguration}'s does: any OTHER runtime exception here is a
-     * genuine bug and must stay loud rather than masquerade as an endless auth outage that quietly
-     * diverts every entry offline.
      */
     private String currentToken() {
         try {
             return authSession.token();
-        } catch (HttpAuthenticationException exception) {
-            throw exception;
-        } catch (IllegalStateException | IllegalArgumentException exception) {
-            throw new HttpAuthenticationException("Could not obtain a bearer token for the request.", exception);
+        } catch (RuntimeException exception) {
+            throw authFailure(exception, "Could not obtain a bearer token for the request.");
         }
     }
 
     /**
-     * Classifies a failed token refresh. Mirrors {@link #currentToken()}: only the credential
-     * failures {@link ClientAuthSession} raises become an {@link HttpAuthenticationException}, and
-     * anything else is rethrown untouched so a genuine bug stays loud instead of masquerading as an
-     * auth outage that quietly diverts every entry offline.
+     * Classifies a failure from {@link ClientAuthSession} for the two paths that obtain a token —
+     * the lazy login in {@link #currentToken()} and the 401 refresh in
+     * {@link #sendWithAuthRetry(RequestFactory)}. Both classify identically, so both come here
+     * rather than keeping two copies of the rule in sync by hand.
+     *
+     * <p>Only the credential failures the session actually raises are reclassified: a missing token
+     * or a missing auth server URL ({@code IllegalStateException}), and a malformed auth server URL
+     * ({@code IllegalArgumentException}, out of the {@code RestClient} builder). A login response
+     * with no token is already an {@link HttpAuthenticationException} and passes through untouched.
+     * Left unclassified, those reached callers as bare runtime exceptions no caller could
+     * distinguish from a bug, and the desktop clients dropped the clipboard entry they were holding
+     * instead of writing it to the offline log. The rule stays deliberately narrow for the same
+     * reason {@code AuthenticationStrategyConfiguration}'s does: any OTHER runtime exception here is
+     * a genuine bug and must stay loud rather than masquerade as an endless auth outage that quietly
+     * diverts every entry offline.
      */
-    private static RuntimeException refreshFailure(RuntimeException exception) {
+    private static RuntimeException authFailure(RuntimeException exception, String message) {
         return exception instanceof IllegalStateException || exception instanceof IllegalArgumentException
-                ? new HttpAuthenticationException("Could not refresh the bearer token after HTTP 401.", exception)
+                ? new HttpAuthenticationException(message, exception)
                 : exception;
     }
 

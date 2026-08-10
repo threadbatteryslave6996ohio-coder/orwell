@@ -26,6 +26,39 @@ in-file dedups landed — `BucketProxyClient`'s six copy-pasted try/catch blocks
 `call(...)`/`rejected(...)` pair, and `SecretsManagerClient`'s two `execute` overloads merged into one
 deserializer-parameterized method.
 
+Also done since: secrets-manager's 23 hand-repeated `requireAdmin()` / `requireAccessor()` calls —
+one per handler, fail-open if you forgot one — are three `@RequireAdmin`/`@RequireAccessor` class
+annotations enforced by `SecretsRoleInterceptor`, with `SecretsRoleCoverageTest` failing the build if
+any handler under `dev.orwell.secrets.controller` declares no role (the annotation alone is not
+fail-closed: an unannotated handler is still served). `AbstractSecretsAdminController` is gone with
+them, and the two handlers that stamp `createdBy` take the caller as a `@RequestAttribute` the guard
+already resolved rather than re-validating. Note the guard runs ahead of body parsing, so an
+unauthenticated request with an invalid body answers 401 rather than 400 — the same ordering
+`@RequireAuthentication` documents.
+
+Also done since (auth dedup): `HttpAuthenticationStrategy` kept two copies of the same RestClient
+error plumbing, one per endpoint — they share one `post(...)` now, so the two calls cannot drift into
+reporting the same failure differently. `ClipboardApiClient`'s `currentToken()` and
+`refreshFailure()` encoded one classification rule twice, with javadoc reading "mirrors the other" —
+a keep-in-sync-by-hand hazard — and are one `authFailure(...)`; its stale claim that a blank token
+from the auth server arrives as `IllegalArgumentException` (it became an
+`HttpAuthenticationException` when `ClientAuthSession.tokenFrom` was fixed) now names the cause that
+can still produce one, a malformed base URL. And `/tokens/check` emits one log record instead of two
+on what is the highest-volume path in the repo: every authenticated request to every service lands
+there.
+
+Also done since (auth pass): the auth server's `logback-spring.xml` — the last one in the repo, and a
+non-rolling `FileAppender` that contradicted "servers no longer write an app log file by default" — is
+deleted, so `LOGGING_FILE_NAME` went optional there (`new AppServerEnv(false, false)`) and dropped out
+of the compose stack and `.auth-server-env.example`. Three pieces of dead code went with it:
+`ClientTokenRepository.findByTokenHash` (unused, and the non-`join fetch` variant, so a trap),
+`InMemoryAuthenticationStrategy.authenticate` (byte-identical to the interface default), and the
+`identityId` that `AuthController` put on the wire and `HttpAuthenticationStrategy` parked in
+`AuthenticationContext` where nothing ever read it — removed from the record, from
+`CheckTokenHttpResponse`, and from the four controller tests that passed a fixture value for it. The
+server README's stale claims went too: an `auth-server.txt` `CustomLogger` audit log that no code
+creates, and an Azure datasource note left over from the deleted devops stack.
+
 Also done since: the two hand-rolled Redis wrappers are one shared module. `dev.orwell.redis.RedisClient`
 (`packages/redis-client`) owns the `JedisPool`, the connect timeout, the key prefix its constructor is
 given, and the translation of a driver failure into an unchecked `RedisOperationException`;
@@ -137,6 +170,22 @@ re-parented to the root.
     `DataIntegrityViolationException` catch already covers it.
   - *Timing side-channel on inactive identities*: the `isActive` check precedes PBKDF2, so
     inactive accounts reject measurably faster and account status leaks remotely.
+  - *`POST /identities` is unauthenticated and publicly reachable* — **the highest-value item, and
+    unlike the rest of this list it is a live authorization gap.** `AuthController` carries no
+    `@RequireAuthentication`, and `nginx/all-services.conf` proxies `/auth/` off the published port,
+    so anyone who can reach the stack can self-register an identity and log in for a token that every
+    client-side service accepts. `admin-auth-server` has no nginx location, so admin is not reachable
+    this way — which is what makes the client server's open registration look like an oversight.
+  - *Tokens never expire and cannot be revoked*: `ClientToken` has no `expiresAt` and `checkToken`
+    never checks age, so a leaked token is valid until someone deletes the row by hand. Every login
+    also inserts a row that nothing ever removes.
+  - *Timing enumeration on unknown clientId*: an empty `findByClientId` short-circuits the filter
+    chain before PBKDF2 runs, so an unknown clientId answers ~100ms faster than a known one. Bigger
+    signal than the inactive-identity channel above it, on the same unthrottled public endpoint.
+  - *`ClientAuthSession` refresh is heavier than it needs to be*: `refresh()` builds a new
+    `HttpAuthenticationStrategy` (and `RestClient`, and `ObjectMapper`) per call, and because
+    `refreshIfUnauthorized` is `synchronized`, N threads that all see a 401 serialize into N logins —
+    N full PBKDF2 runs on the server that has no rate limit.
   - *Test gaps*: the `DataIntegrityViolationException` path is never exercised; nothing asserts
     `tokens.save()` is skipped on failed login; there is no token-not-found test for `checkToken`;
     `CredentialHasherTest`/`TokenGeneratorTest` hardcode `120000` and `43` instead of referencing

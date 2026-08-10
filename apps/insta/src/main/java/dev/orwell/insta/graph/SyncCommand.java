@@ -91,10 +91,17 @@ public final class SyncCommand {
             err.println("That account has no Instagram id, so it cannot be recorded.");
             return 4;
         }
+        // After the id check, not before: post rows carry a foreign key to the account, so writing
+        // them for an account that was never inserted would fail the whole transaction.
+        //
+        // The profile actor bundles up to twelve recent posts into the item we already paid for,
+        // so recording them costs nothing beyond the lookup that just happened.
+        int posts = new PostWriter(connection, new HttpPictureSource(), pictures, logger)
+                .record(profile.id(), profile.latestPosts(), walkStarted);
         if (Boolean.TRUE.equals(profile.isPrivate())) {
             // Recording the profile was still worth doing; walking a private account is not.
-            out.printf("%s is private: profile recorded, follower list not walked.%n",
-                    profile.username());
+            out.printf("%s is private: profile and %d posts recorded, follower list not walked.%n",
+                    profile.username(), posts);
             return 0;
         }
 
@@ -103,8 +110,8 @@ public final class SyncCommand {
                 profile.id(), ConnectionType.FOLLOWERS, walk.accounts(),
                 walkStarted, Instant.now(), walk.complete());
 
-        out.printf("%s: %d followers seen, %d new, %d unfollowed%n",
-                profile.username(), diff.seen(), diff.added(), diff.retired());
+        out.printf("%s: %d followers seen, %d new, %d unfollowed, %d posts%n",
+                profile.username(), diff.seen(), diff.added(), diff.retired(), posts);
         if (!diff.retirementRan()) {
             // Saying nothing here would let a silently-skipped diff look like "no unfollows".
             out.printf("unfollows not computed: %s%n", diff.retirementSkipped());
