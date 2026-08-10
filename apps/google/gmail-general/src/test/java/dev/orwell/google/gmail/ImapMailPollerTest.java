@@ -29,7 +29,7 @@ class ImapMailPollerTest {
         MimeMessage message = new MimeMessage(SESSION,
                 new ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8)));
 
-        GmailMessage result = ImapMailPoller.toGmailMessage(message, 42L);
+        GmailMessage result = ImapMailPoller.toGmailMessage("owner@example.com", message, 42L);
 
         assertEquals("<abc@example.com>", result.id());
         assertEquals("Hello there", result.subject());
@@ -44,7 +44,7 @@ class ImapMailPollerTest {
         MimeMessage message = new MimeMessage(SESSION,
                 new ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8)));
 
-        GmailMessage result = ImapMailPoller.toGmailMessage(message, 7L);
+        GmailMessage result = ImapMailPoller.toGmailMessage("owner@example.com", message, 7L);
 
         assertEquals("uid-7", result.id());
     }
@@ -64,7 +64,7 @@ class ImapMailPollerTest {
         message.setContent(multipart);
         message.saveChanges();
 
-        GmailMessage result = ImapMailPoller.toGmailMessage(message, 1L);
+        GmailMessage result = ImapMailPoller.toGmailMessage("owner@example.com", message, 1L);
 
         assertEquals("the plain part", result.body().strip());
     }

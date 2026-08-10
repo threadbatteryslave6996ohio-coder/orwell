@@ -164,3 +164,121 @@ re-parented to the root.
   `META-INF/spring/...AutoConfiguration.imports` resolve; a typo silently drops the shared
   `/health` endpoint, 401 guard, logger, and auth-strategy beans. Add a `@SpringBootTest`
   asserting those beans exist.
+
+## 4. gmail-general: multiple mailboxes, and subscribers that pick accounts — IN PROGRESS
+
+**Status.** §4.1 (schema), §4.2 (DB-managed accounts), §4.3 (concurrent per-user polling), §4.4
+(the `account` field on the webhook payload), §4.5 (per-mailbox subscriptions with cursor-tracked
+delivery) and §4.7 (docs) have landed.
+
+**The one significant thing left is credential storage** — see §4.2: per-user IMAP app passwords
+are still a plaintext `secrets.imap_password` column, so anyone with read access to the database, a
+backup, or a replica holds every registered mailbox's live credentials. Note
+`secrets-manager-client` is **read-only** (`listGroups`/`listEnvironments`/`getBundle` — no write),
+so the reference approach needs each password provisioned in secrets-manager out of band first, and
+changes `PUT /users/{id}/secret` from taking a password to taking a reference. Encrypting the column
+with a key from the environment is the smaller alternative. Deliberately deferred, not overlooked.
+
+The original problem: `gmail-general` was single-mailbox end to end — one set of `IMAP_*`
+credentials as flat env scalars, one `@Scheduled` poll, and one static comma-separated fan-out list
+every webhook client shared. Wanted: N mailboxes in one service, and subscribers that register for
+specific mailboxes rather than receiving everything. Running one service instance per account is
+**not** a shortcut around this — the instances would share the `gmail` database and collide on the
+two constraints below.
+
+**4.1 Schema blockers — these break silently, and must land first.** Both are wrong for more than
+one account regardless of which config approach §4.2 picks:
+
+- `imap_checkpoints` is keyed by folder alone (`ImapCheckpointEntity:19`, `@Id` on `folder`). Two
+  accounts polling `INBOX` share one row and overwrite each other's UID cursor, so each skips the
+  mail the other advanced past. Needs a composite key on `(account, folder)`.
+- `email_messages.message_id` is globally unique (`EmailMessageEntity:33`). One email addressed to
+  two subscribed accounts carries a single `Message-ID`, so the second account's copy is swallowed
+  by the `existsByMessageId` check in `GmailService:60` — no error, just missing mail. Needs an
+  `account` column and a unique constraint on `(account, message_id)`.
+
+There is **no Flyway or Liquibase in this repo** (checked: nothing in any pom) and
+`spring.jpa.hibernate.ddl-auto=update` will not alter an existing primary key or drop a unique
+constraint. So this needs hand-written SQL, run before the new jar starts: add `account`, backfill
+existing rows with the current `IMAP_USERNAME` value, drop the old unique index and the old PK,
+add the composite ones. `db-init/all-services.sql` creates the role/database only and is not a
+migration home; decide where that SQL lives as part of this item.
+
+**4.2 Where the account list comes from — decision still open.** Two viable shapes:
+
+- *Env-driven*: one `IMAP_ACCOUNTS` value parsed into typed account records by a custom
+  `EnvType.of(...)` parser (the framework already supports custom parsers). Smallest change, app
+  passwords stay in env as today, adding a mailbox is an env edit plus a restart.
+- *DB-managed*: an `imap_accounts` table plus authenticated `POST`/`DELETE /accounts`. Runtime
+  registration, and it composes with §4.5 since both accounts and subscribers become live state.
+  Costs credential storage — per-account app passwords should not be a plaintext column, and
+  `secrets-manager-client` already exists for exactly this, so the row would hold a secret
+  reference. The poller also has to notice accounts added or removed between ticks.
+
+Per-account subscriptions (§4.5) work with either: a subscription row references an account by
+name whether that name came from env or from a table.
+
+**4.3 Poller fan-out — DONE.** `ImapMailPoller` dispatches one poll per user onto a bounded pool
+(`GMAIL_POLL_CONCURRENCY`, default 4), each user's body wrapped in its own try/catch, and the single
+shared `polling` flag replaced by one `AtomicBoolean` per user id. A mailbox whose previous poll is
+still running is skipped for that round alone; every other mailbox proceeds. Flags for deleted users
+are dropped each round so the map cannot grow for the process's lifetime, and the pool threads are
+daemons so a hung IMAP read cannot keep the JVM alive past context close.
+
+Still open (minor): the poll interval is still global — a per-account interval remains
+unimplemented and is still worth considering if mailboxes differ a lot in traffic.
+
+**4.4 DTO and read API — DONE (webhook side).** `GmailMessage` now carries `account`, sourced from
+the polled user's row rather than a header (a mail can arrive by Bcc, alias, or forwarding, so `to`
+is not the owner). `apps/analyzer` only deserializes it as a `@RequestBody` and was unaffected, as
+predicted.
+
+Still open: `MailResponse` has no `account` field, and `/mails`/`/mails/latest` have no `account=`
+filter. Both are lower value than they were — a reader is already scoped to exactly one mailbox by
+its client id, so there is nothing to disambiguate — and they only become necessary if one consumer
+is ever allowed to own several mailboxes.
+
+**4.5 Per-account subscribers — DONE.** `webhook_subscriptions` (user, url, active, created) plus
+`@RequireAuthentication`-guarded `GET`/`POST`/`DELETE /subscriptions` in `SubscriptionController`.
+The mailbox comes from the injected `AuthenticationContext`, never the request body, so a consumer
+can only subscribe its own mailbox and can only list or delete its own rows; a delete addressed to
+another user's id is 404, not 403, so ids cannot be probed. `GmailService.targetsFor(user)` now
+resolves each message's targets from that user's active subscriptions. No separate `client_id`
+column: the owning user already carries the consumer's client id, and a second identity here could
+disagree with it.
+
+`GMAIL_WEBHOOK_CLIENTS` is retained as an explicit "subscribed to all accounts" broadcast for the
+transition, now logged as a WARN at startup and documented as legacy. Targets are deduplicated, so
+a URL that is both broadcast-configured and subscribed is delivered once — migration can be
+gradual. **Deleting it is the remaining step**, and until then it is the one path that still hands
+every mailbox's mail to one receiver.
+
+**Delivery durability — DONE.** Each subscription carries `last_delivered_id`, and
+`WebhookDeliveryJob` (`GMAIL_DELIVERY_INTERVAL_SECONDS`, default 5) walks `email_messages` forward
+per subscription, advancing the cursor only on a 2xx. A subscriber that was down catches up instead
+of losing mail — previously, dedup on `(user_id, message_id)` meant a failed delivery was never
+re-sent. Delivery is at-least-once and ordered per subscription: it stops at the first failure for
+that subscription so later mail cannot overtake a rejected message, and other subscriptions continue
+in the same round. A new subscription's cursor starts at the mailbox head, so subscribing does not
+replay history. The HTTP/auth half is shared with the broadcast path via `WebhookSender`.
+
+Still open: nothing ever sets `active = false`. A receiver that fails every round is retried
+forever at the head of its own queue, which blocks that subscription's later mail indefinitely.
+Wanted: a failure count on the row, and a threshold past which the job deactivates the subscription
+and says so — the `active` column exists for exactly this.
+
+**4.6 Tests.** Covered: `ImapMailPollerIntegrationTest` runs two GreenMail accounts with
+independent checkpoints and per-user read scoping; `SubscriptionApiIntegrationTest` covers the
+subscription API's scoping (cross-user list and delete both refused) and the head-start cursor;
+`GmailServiceWebhookTest` covers the legacy broadcast and its skip of already-subscribed URLs;
+`WebhookDeliveryJobTest` covers cursor advance, retry-after-failure, stop-at-first-failure ordering,
+and per-subscription isolation.
+
+Still open: no test asserts the same `Message-ID` is stored once *per account* rather than once
+globally — the §4.1 constraint change is currently only proved by the migration, not by a test.
+
+**4.7 Docs — DONE.** `apps/google/gmail-general/README.md` documents multiple mailboxes, the
+`/users` and `/subscriptions` routes, the `webhook_subscriptions` table, the delivery payload
+including `account`, and `GMAIL_WEBHOOK_CLIENTS` as legacy broadcast. `.env.example` carries the
+same warning, and `migrations/001-multi-user.sql` has an optional step 6 for moving broadcast
+receivers onto per-mailbox subscriptions.
