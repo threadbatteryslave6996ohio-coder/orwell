@@ -100,11 +100,11 @@ public class AuthController {
                 .filter(identity -> request.clientId().equals(identity.getClientId()))
                 .map(identity -> {
                     logger.info("Token check completed.", Map.of("clientId", request.clientId(), "valid", true));
-                    return new CheckTokenHttpResponse(true, identity.getClientId(), identity.getId());
+                    return new CheckTokenHttpResponse(true, identity.getClientId());
                 })
                 .orElseGet(() -> {
                     logger.info("Token check completed.", Map.of("clientId", request.clientId(), "valid", false));
-                    return new CheckTokenHttpResponse(false, request.clientId(), null);
+                    return new CheckTokenHttpResponse(false, request.clientId());
                 });
     }
 }

@@ -62,7 +62,7 @@ public final class HttpAuthenticationStrategy implements AuthenticationStrategy 
             if (response == null || !response.valid() || !clientId.equals(response.clientId())) {
                 return AuthenticationContext.unauthenticated();
             }
-            return AuthenticationContext.authenticated(response.clientId(), response.identityId());
+            return AuthenticationContext.authenticated(response.clientId());
         } catch (RestClientException exception) {
             throw new HttpAuthenticationException("Cannot check token with auth server.", exception);
         }
