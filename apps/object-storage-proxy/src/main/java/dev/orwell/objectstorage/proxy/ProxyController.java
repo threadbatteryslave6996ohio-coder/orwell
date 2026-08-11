@@ -29,7 +29,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +43,7 @@ public class ProxyController {
     private final ObjectProvider<AuthenticationContext> authenticationContextProvider;
     private final BucketStorage storage;
     private final FileAuditLogger audit;
-    private final ManagementSessionService sessions;
+    private final AdminAuthClient adminAuth;
     private final String routePrefix;
 
     public ProxyController(
@@ -53,7 +52,7 @@ public class ProxyController {
             ObjectProvider<AuthenticationContext> authenticationContextProvider,
             BucketStorage storage,
             FileAuditLogger audit,
-            ManagementSessionService sessions,
+            AdminAuthClient adminAuth,
             @Value("${jarvis.server.route-prefix:}") String routePrefix
         ) {
         this.properties = properties;
@@ -61,7 +60,7 @@ public class ProxyController {
         this.authenticationContextProvider = authenticationContextProvider;
         this.storage = storage;
         this.audit = audit;
-        this.sessions = sessions;
+        this.adminAuth = adminAuth;
         this.routePrefix = normalizeRoutePrefix(routePrefix);
     }
 
@@ -163,8 +162,8 @@ public class ProxyController {
     }
 
     @GetMapping(value = "/admin", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> admin(@CookieValue(value = "s3proxy_admin", required = false) String token) {
-        Optional<String> username = token == null ? Optional.empty() : sessions.validate(token);
+    public ResponseEntity<String> admin(@CookieValue(value = "s3proxy_admin", required = false) String session) {
+        Optional<String> username = adminAuth.signedInAdmin(session);
         if (username.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(adminLoginPage(""));
         }
@@ -175,27 +174,32 @@ public class ProxyController {
     public ResponseEntity<String> adminLogin(@RequestParam("username") String username,
                                              @RequestParam("password") String password,
                                              HttpServletResponse response) {
-        if (!SecureTokenUtils.constantTimeEquals(username, properties.management().username()) || !SecureTokenUtils.constantTimeEquals(password, properties.management().password())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(adminLoginPage("Invalid username or password."));
+        var result = adminAuth.login(username, password);
+        if (!result.success() || !StringUtils.hasText(result.token())) {
+            int status = result.statusCode() >= 400 ? result.statusCode() : HttpStatus.UNAUTHORIZED.value();
+            String message = status == HttpStatus.UNAUTHORIZED.value()
+                    ? "Invalid username or password."
+                    : "Admin auth server rejected sign-in with HTTP " + status + ".";
+            return ResponseEntity.status(status).body(adminLoginPage(message));
         }
-        String token = sessions.createSession(username, Instant.now().plusSeconds(8 * 3600));
-        ResponseCookie cookie = ResponseCookie.from("s3proxy_admin", token).httpOnly(true).secure(useSecureCookies()).path(routePath("/")).sameSite("Strict").maxAge(8 * 3600).build();
+        String session = AdminAuthClient.session(username, result.token());
+        ResponseCookie cookie = ResponseCookie.from("s3proxy_admin", session).httpOnly(true).secure(useSecureCookies()).path(routePath("/")).sameSite("Strict").maxAge(8 * 3600).build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, routePath("/admin")).body(adminDashboard(username, ""));
     }
 
     @PostMapping(value = "/admin/logout", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-    public ResponseEntity<String> adminLogout(@CookieValue(value = "s3proxy_admin", required = false) String token, HttpServletResponse response) {
+    public ResponseEntity<String> adminLogout(@CookieValue(value = "s3proxy_admin", required = false) String session, HttpServletResponse response) {
         ResponseCookie cookie = ResponseCookie.from("s3proxy_admin", "").httpOnly(true).secure(useSecureCookies()).path(routePath("/")).sameSite("Strict").maxAge(0).build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, routePath("/admin")).body(adminLoginPage(""));
     }
 
     @PostMapping(value = "/admin/users", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-    public ResponseEntity<String> createIdentity(@CookieValue(value = "s3proxy_admin", required = false) String token,
+    public ResponseEntity<String> createIdentity(@CookieValue(value = "s3proxy_admin", required = false) String session,
                                                  @RequestParam("clientId") String clientId,
                                                  @RequestParam("secret") String secret) {
-        Optional<String> username = token == null ? Optional.empty() : sessions.validate(token);
+        Optional<String> username = adminAuth.signedInAdmin(session);
         if (username.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(adminLoginPage("Please sign in."));
         }

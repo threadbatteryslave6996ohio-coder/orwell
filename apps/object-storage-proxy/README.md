@@ -35,8 +35,8 @@ The main runtime settings are:
 - `AUTH_BASE_URL` for token validation (the shared key from `AppServerEnv`; the proxy maps it
   to `object-storage.auth-server.base-url`)
 - `AUTH_IDENTITY_PROVISIONING_KEY` for provisioning identities through the proxy
-- `OBJECT_STORAGE_MANAGEMENT_USERNAME`, `OBJECT_STORAGE_MANAGEMENT_PASSWORD`, and
-  `OBJECT_STORAGE_MANAGEMENT_SESSION_SECRET` for the management panel
+- `OBJECT_STORAGE_ADMIN_AUTH_BASE_URL` (**required**) for the management panel — see
+  [Management panel](#management-panel) below
 - `OBJECT_STORAGE_CORS_ALLOWED_ORIGINS`, `OBJECT_STORAGE_LOGGING_AUDIT_FILE`, and
   `OBJECT_STORAGE_SERVER_URL` for HTTP/runtime behavior
 - `STREAM_ANALYSIS_ENDPOINT` for the stream worker's frame destination (see below)
@@ -134,10 +134,27 @@ The mac/linux recorders are record-only; the `syncer` client
 (`apps/jarvis/clients/syncer/`) drains their recordings through this proxy using
 the `/login` + `/upload` flow above.
 
+## Management panel
+
+`/admin` authenticates against `apps/auth` like everything else here — it has no credential of
+its own. Signing in posts the identity to the auth server's `/login`, the session cookie carries
+the token that comes back, and every page load re-checks it against `/tokens/check`. Revoking an
+admin is therefore a change at the auth server, not a redeploy of this service.
+
+**It is a second auth deployment, not the one upload clients use.** `AUTH_BASE_URL` holds the
+upload identities; `OBJECT_STORAGE_ADMIN_AUTH_BASE_URL` holds the identities allowed into
+`/admin`. Which server accepts a credential is what grants the role, so pointing both at one
+server would make every upload client an admin of the panel that mints upload clients. The same
+split `apps/secrets-manager` makes between its admin and accessor deployments; in the local stack
+the two are the `auth-server` and `admin-auth-server` compose services.
+
+`OBJECT_STORAGE_ADMIN_AUTH_BASE_URL` is required, so a blank one fails startup with the key
+named rather than leaving a panel nobody can sign in to. Create an admin with
+`scripts/local-stack.sh admin-identity <clientId> <secret>`.
+
 ## Notes
 
 - `/health` and `/login` do not require a bearer token.
 - Upload, list, metadata, and delete endpoints require
   `Authorization: Bearer TOKEN` and `X-Client-Id`.
 - The proxy validates tokens by calling the auth server `/tokens/check` endpoint.
-- `/admin` uses the separate management credential from server config.

@@ -18,16 +18,21 @@ cd apps/object-storage-proxy
 #    docker-compose.all-services.yml up -d db`, the same Postgres every other app uses.
 scripts/local-stack.sh up
 
-# 2. In one terminal, run the auth server (builds the jar on first run).
+# 2. In one terminal, run the client auth server (builds the jar on first run).
 scripts/local-stack.sh auth
 
-# 3. In another terminal, run the proxy pointed at MinIO.
+# 3. In another, run the admin auth server. Same jar, separate database: it holds the
+#    identities allowed into /admin, so an upload client cannot sign in there.
+scripts/local-stack.sh admin-auth
+
+# 4. In another terminal, run the proxy pointed at MinIO.
 scripts/local-stack.sh proxy
 
-# 4. Create an upload identity (secret must be >= 8 chars).
+# 5. Create an upload identity, and an admin (secrets must be >= 8 chars).
 scripts/local-stack.sh identity tester testsecret
+scripts/local-stack.sh admin-identity operator operatorsecret
 
-# 5. Check everything is up.
+# 6. Check everything is up.
 scripts/local-stack.sh status
 ```
 
@@ -72,11 +77,20 @@ want it down.
 
 The proxy's S3 client supports an endpoint override. `local-stack.sh proxy` starts it pointed at
 MinIO on `http://localhost:9000` with path-style addressing, the `keeboarder-recordings` bucket,
-`minioadmin`/`minioadmin` as the S3 credentials, and `AUTH_BASE_URL=http://localhost:8081` for
-the local auth server.
+`minioadmin`/`minioadmin` as the S3 credentials, `AUTH_BASE_URL=http://localhost:8081` for the
+local client auth server, and `OBJECT_STORAGE_ADMIN_AUTH_BASE_URL=http://localhost:8082` for the
+admin one. That second URL is required — the proxy will not start without it, because `/admin`
+has no local credential to fall back on.
 
 Point `OBJECT_STORAGE_S3_ENDPOINT` at whichever S3-compatible bucket service you run; there is no default
 remote endpoint. See `application.yml`.
+
+## Signing in to /admin
+
+Browse to `http://localhost:5000/admin` and sign in with the admin identity from step 5
+(`operator` / `operatorsecret`). The panel checks that credential against the admin auth server
+on :8082, not the client one on :8081, so `tester` cannot sign in — that separation is the point.
+From there, "Create identity" mints upload identities in the *client* auth server.
 
 ## Pointing the syncer / recorder clients at it
 

@@ -149,6 +149,9 @@ services:
       SERVER_PORT: "5000"
       JARVIS_SERVER_ROUTE_PREFIX: /jarvis
       AUTH_BASE_URL: http://auth-server/auth
+      # The /admin panel authenticates against the admin deployment, never this one: an upload
+      # identity must not be able to sign in and mint more upload identities.
+      OBJECT_STORAGE_ADMIN_AUTH_BASE_URL: http://admin-auth-server/auth
       OBJECT_STORAGE_SERVER_URL: http://localhost:${ORWELL_HTTP_PORT:-8080}/jarvis
       OBJECT_STORAGE_LOGGING_AUDIT_FILE: /app/logs/audit.log
     # Without this the audit log lives in the container's writable layer and is lost on every
@@ -158,6 +161,8 @@ services:
       - all-services-proxy-audit-logs:/app/logs
     depends_on:
       auth-server:
+        condition: service_started
+      admin-auth-server:
         condition: service_started
     restart: unless-stopped
     healthcheck:

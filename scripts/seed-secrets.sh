@@ -155,9 +155,9 @@ JARVIS_AZURE_CONT=$(create_env "$JARVIS_GROUP" "AZURE_STORAGE_CONTAINER"      ""
 JARVIS_AZURE_ENDP=$(create_env "$JARVIS_GROUP" "AZURE_STORAGE_ENDPOINT"       "")
 JARVIS_AZURE_CONN=$(create_env "$JARVIS_GROUP" "AZURE_STORAGE_CONNECTION_STRING" "")
 JARVIS_AUTH_KEY=$(create_env "$JARVIS_GROUP"  "AUTH_IDENTITY_PROVISIONING_KEY" "")
-JARVIS_MGMT_USER=$(create_env "$JARVIS_GROUP" "OBJECT_STORAGE_MANAGEMENT_USERNAME"     "")
-JARVIS_MGMT_PASS=$(create_env "$JARVIS_GROUP" "OBJECT_STORAGE_MANAGEMENT_PASSWORD"     "")
-JARVIS_MGMT_SESS=$(create_env "$JARVIS_GROUP" "OBJECT_STORAGE_MANAGEMENT_SESSION_SECRET" "")
+# The /admin panel's auth deployment. Deliberately a different server from AUTH_BASE_URL:
+# which one accepts a credential is what makes it an admin.
+JARVIS_ADMIN_AUTH=$(create_env "$JARVIS_GROUP" "OBJECT_STORAGE_ADMIN_AUTH_BASE_URL"     "http://localhost:8082")
 JARVIS_SRV_URL=$(create_env "$JARVIS_GROUP"   "OBJECT_STORAGE_SERVER_URL"              "http://localhost:5000")
 JARVIS_AUDIT=$(create_env "$JARVIS_GROUP"     "OBJECT_STORAGE_LOGGING_AUDIT_FILE"              "logs/audit.log")
 
@@ -235,7 +235,7 @@ set_bundle_envs "$DB_BUNDLE_ID" "$( \
 AUTH_BUNDLE=$(post "/bundles" '{"name":"auth-config","description":"Authentication-related configuration"}')
 AUTH_BUNDLE_ID=$(echo "$AUTH_BUNDLE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 set_bundle_envs "$AUTH_BUNDLE_ID" "$( \
-  echo '[' "$KLIP_AUTH,$KEEB_AUTH,$SEC_AUTH,$JARVIS_AUTH_KEY" ']' | sed 's/ //g' \
+  echo '[' "$KLIP_AUTH,$KEEB_AUTH,$SEC_AUTH,$JARVIS_AUTH_KEY,$JARVIS_ADMIN_AUTH" ']' | sed 's/ //g' \
 )" && echo "  bundle 'auth-config' created"
 
 # --- Storage bundle ---
