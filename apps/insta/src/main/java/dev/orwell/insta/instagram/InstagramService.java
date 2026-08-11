@@ -31,9 +31,12 @@ import java.util.regex.Pattern;
  * account it returns. Asking the expensive one for a count would be a waste of the caller's Apify
  * credit, so {@link #profile} and {@link #connections} stay separate calls.
  *
- * <p>Every answer is cached under a key that includes everything which changes it — username,
- * direction, page size, cursor — so a repeated walk of the same list costs nothing. The cache is
- * consulted before Apify and written after; a cache failure just means paying for the scrape.
+ * <p>Every answer is cached under a key that includes everything which changes it. For a partial
+ * page that is username, direction, page size and cursor, so a repeated walk of the same list
+ * costs nothing; for a list the actor said was complete it is username and direction alone, under
+ * {@code all}, because a whole list is not a page and the size it was fetched with says nothing
+ * about it. The cache is consulted before Apify and written after; a cache failure just means
+ * paying for the scrape.
  *
  * <p>Upstream failures propagate as {@link ApifyException}, which already distinguishes a timeout
  * from an exhausted balance from a broken actor. A missing account is a
@@ -136,23 +139,69 @@ public class InstagramService {
                 ? null
                 : ConnectionCursor.decode(cursor, username, type);
 
-        String key = CACHE_VERSION + ":" + type.name().toLowerCase(Locale.ROOT) + ":" + username
-                + ":" + limit + ":" + fingerprint(resume == null ? null : resume.token());
-        Optional<ConnectionsPage> cached = read(key, new TypeReference<ConnectionsPage>() {
-        });
+        String pageKey = pageKey(username, type, limit, resume);
+        Optional<ConnectionsPage> cached = resume == null
+                ? completeList(username, type, limit)
+                : Optional.empty();
+        if (cached.isEmpty()) {
+            cached = read(pageKey, new TypeReference<ConnectionsPage>() {
+            });
+        }
         if (cached.isPresent()) {
             logger.info("Served Instagram connections from cache.", Map.of(
                     "username", username, "type", type.name(), "count",
-                    cached.get().accounts().size()));
+                    cached.get().accounts().size(), "complete", cached.get().endOfList()));
             return cached.get();
         }
 
         ConnectionsPage page = fetchFromFirstWillingAdapter(username, type, limit, resume);
-        write(key, page);
+        boolean complete = resume == null && page.endOfList();
+        write(complete ? completeListKey(username, type) : pageKey, page);
         logger.info("Fetched Instagram connections.", Map.of(
                 "username", username, "type", type.name(), "count", page.accounts().size(),
                 "limit", limit, "endOfList", page.endOfList()));
         return page;
+    }
+
+    /**
+     * A list already known to be complete, when it fits inside what was asked for.
+     *
+     * <p>The size guard is what keeps this honest in the one direction it could lie: a complete
+     * list of 300 is the right answer to a request for 500, but not to a request for 100 — that
+     * caller asked for a page, and there is no cursor to hand it alongside a truncation. Such a
+     * request falls through to its own page entry and pays for a run.
+     */
+    private Optional<ConnectionsPage> completeList(String username, ConnectionType type, int limit) {
+        return read(completeListKey(username, type), new TypeReference<ConnectionsPage>() {
+        }).filter(page -> page.accounts().size() <= limit);
+    }
+
+    /**
+     * Where a list lands once the actor has said there is no more of it.
+     *
+     * <p>It carries no page size and no cursor, because neither is a property of the answer. A
+     * limit is how much we were willing to pay for in one run; a list we know is whole is the same
+     * list whatever we asked for, and keying it by the number that happened to be in flight would
+     * make the next walk at a different size pay for it again — and store a second copy of the
+     * identical accounts.
+     */
+    private static String completeListKey(String username, ConnectionType type) {
+        return listKey(username, type) + ":all";
+    }
+
+    /**
+     * Where a page that might not be the whole list lands. The size stays in the key here because
+     * it genuinely changes the answer: asking for 50 and asking for 500 are two different pages,
+     * and each resumes from a different place.
+     */
+    private static String pageKey(
+            String username, ConnectionType type, int limit, ConnectionCursor resume) {
+        return listKey(username, type) + ":" + limit + ":"
+                + fingerprint(resume == null ? null : resume.token());
+    }
+
+    private static String listKey(String username, ConnectionType type) {
+        return CACHE_VERSION + ":" + type.name().toLowerCase(Locale.ROOT) + ":" + username;
     }
 
     /**

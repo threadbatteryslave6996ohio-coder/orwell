@@ -149,6 +149,93 @@ public final class GraphQueries {
         return new GraphView(List.copyOf(nodes.values()), links);
     }
 
+    /**
+     * Everything worth showing about one account when you click its node: who it is now, who it
+     * used to be, what it says about itself, and — when a subject is given — the history of that
+     * one relationship.
+     *
+     * <p>Most of these fields are empty for the outer ring of the graph. An account seen only as
+     * somebody else's follower has a handle and nothing more, because nothing has ever run a
+     * profile lookup against it. The card says so rather than rendering a row of zeroes.
+     */
+    public static Map<String, Object> accountCard(
+            Connection connection, String accountId, String subjectId) throws SQLException {
+        Map<String, Object> card = new LinkedHashMap<>();
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT a.id, a.added,
+                       (SELECT u.username FROM account_username u WHERE u.account_id = a.id
+                        ORDER BY u.last_seen_at DESC LIMIT 1) AS username,
+                       (SELECT b.bio FROM account_bio b WHERE b.account_id = a.id
+                        ORDER BY b.last_seen_at DESC LIMIT 1) AS bio,
+                       (SELECT count(*) FROM follow_edge e
+                        WHERE e.followee_id = a.id AND e.active) AS followers,
+                       (SELECT count(*) FROM follow_edge e
+                        WHERE e.follower_id = a.id AND e.active) AS following,
+                       (SELECT count(*) FROM post p WHERE p.account_id = a.id) AS posts,
+                       (SELECT count(*) FROM follow_edge e WHERE e.followee_id = a.id) AS walked
+                FROM account a WHERE a.id = ?""")) {
+            statement.setString(1, accountId);
+            try (ResultSet results = statement.executeQuery()) {
+                if (!results.next()) {
+                    return Map.of();
+                }
+                card.put("id", results.getString("id"));
+                card.put("username", results.getString("username"));
+                card.put("bio", results.getString("bio"));
+                card.put("followers", results.getInt("followers"));
+                card.put("following", results.getInt("following"));
+                card.put("posts", results.getInt("posts"));
+                card.put("walked", results.getInt("walked") > 0);
+                card.put("firstSeen", String.valueOf(results.getTimestamp("added").toInstant()));
+            }
+        }
+
+        // Former handles, so a rename is visible rather than silently replacing the old name.
+        card.put("formerUsernames", strings(connection, """
+                SELECT username FROM account_username WHERE account_id = ?
+                  AND username <> COALESCE((SELECT u.username FROM account_username u
+                      WHERE u.account_id = ? ORDER BY u.last_seen_at DESC LIMIT 1), '')
+                ORDER BY last_seen_at DESC""", accountId, accountId));
+
+        if (subjectId != null && !subjectId.equals(accountId)) {
+            try (PreparedStatement statement = connection.prepareStatement("""
+                    SELECT e.active, e.first_seen_at,
+                           (SELECT count(*) FROM unfollows u WHERE u.edge_id = e.id) AS times_left
+                    FROM follow_edge e
+                    WHERE e.followee_id = ? AND e.follower_id = ?""")) {
+                statement.setString(1, subjectId);
+                statement.setString(2, accountId);
+                try (ResultSet results = statement.executeQuery()) {
+                    if (results.next()) {
+                        Map<String, Object> relation = new LinkedHashMap<>();
+                        relation.put("follows", results.getBoolean("active"));
+                        relation.put("since",
+                                String.valueOf(results.getTimestamp("first_seen_at").toInstant()));
+                        relation.put("timesLeft", results.getInt("times_left"));
+                        card.put("relation", relation);
+                    }
+                }
+            }
+        }
+        return card;
+    }
+
+    private static List<String> strings(Connection connection, String sql, String... parameters)
+            throws SQLException {
+        List<String> values = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int index = 0; index < parameters.length; index++) {
+                statement.setString(index + 1, parameters[index]);
+            }
+            try (ResultSet results = statement.executeQuery()) {
+                while (results.next()) {
+                    values.add(results.getString(1));
+                }
+            }
+        }
+        return values;
+    }
+
     /** The most recent departures, newest first — the thing you actually open this to look at. */
     public static List<Map<String, Object>> recentUnfollows(
             Connection connection, String subjectId, int limit) throws SQLException {

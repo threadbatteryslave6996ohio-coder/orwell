@@ -69,7 +69,10 @@ public final class InstaEnvs {
                 "INSTA_INSTAGRAM_COOKIES", EnvType.string(), "");
         APIFY_RUN_TIMEOUT_SECONDS =
                 BUILDER.optional("APIFY_RUN_TIMEOUT_SECONDS", EnvType.integer(), 120);
-        INSTA_DEFAULT_LIMIT = BUILDER.optional("INSTA_DEFAULT_LIMIT", EnvType.integer(), 100);
+        // Raised to the ceiling: a lookup that reaches the end of a list in one run is cached as
+        // the whole list and answers every later request for it, so asking for fewer than we are
+        // allowed mostly buys a second run.
+        INSTA_DEFAULT_LIMIT = BUILDER.optional("INSTA_DEFAULT_LIMIT", EnvType.integer(), 500);
         // Every result is billed by the actor, so the ceiling is a spend guard, not a page size.
         // 500 is what this deployment needs; a larger list also risks outrunning the run timeout.
         INSTA_MAX_LIMIT = BUILDER.optional("INSTA_MAX_LIMIT", EnvType.integer(), 500);

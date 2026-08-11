@@ -308,16 +308,72 @@ class InstagramServiceTest {
         assertThat(second.accounts()).isEqualTo(first.accounts());
     }
 
-    /** Different page sizes are different answers; sharing one entry would truncate or over-serve. */
+    /**
+     * Two page sizes are two different answers while a list is still being paged: each resumes
+     * from somewhere else, so one cannot be served from the other's entry.
+     */
     @Test
-    void doesNotServeOneLimitFromAnothersCacheEntry() {
+    void doesNotServeOneLimitFromAnotherPartialPagesCacheEntry() {
         apify.responds(200, "[{\"username\":\"alice\"},{\"username\":\"bob\"}]");
+        apify.outputs("{\"continuations\":[{\"nextContinuationToken\":\"TOKEN-2\"}]}");
         service().connections("nasa", ConnectionType.FOLLOWERS, 50, null);
         int callsAfterFirst = apify.requests().size();
 
         service().connections("nasa", ConnectionType.FOLLOWERS, 200, null);
 
         assertThat(apify.requests().size()).isGreaterThan(callsAfterFirst);
+        assertThat(cache.entries().keySet()).allSatisfy(key -> assertThat(key).doesNotContain(":all"));
+    }
+
+    /**
+     * A page size is what we were willing to pay for in one run, not a property of the answer. Once
+     * the actor says a list is finished, the whole list is the answer to any request big enough to
+     * hold it — so it is stored once, under {@code all}, and a larger later request is free.
+     */
+    @Test
+    void servesACompletedListToAnyLargerLimitWithoutPayingAgain() {
+        apify.responds(200, "[{\"username\":\"alice\"},{\"username\":\"bob\"}]");
+        service().connections("nasa", ConnectionType.FOLLOWERS, 50, null);
+        int callsAfterFirst = apify.requests().size();
+
+        ConnectionsPage bigger = service().connections("nasa", ConnectionType.FOLLOWERS, 500, null);
+
+        assertThat(apify.requests()).hasSize(callsAfterFirst);
+        assertThat(bigger.accounts()).extracting(InstagramAccount::username)
+                .containsExactly("alice", "bob");
+        assertThat(cache.entries()).hasSize(1);
+        assertThat(cache.entries().keySet()).containsExactly("v3:followers:nasa:all");
+    }
+
+    /**
+     * The one direction the {@code all} entry could lie in: a caller asking for fewer accounts than
+     * the complete list holds asked for a page, and there is no cursor to hand it with a truncation.
+     */
+    @Test
+    void doesNotServeACompletedListToASmallerLimitThanItHolds() {
+        apify.responds(200, "[{\"username\":\"alice\"},{\"username\":\"bob\"}]");
+        service().connections("nasa", ConnectionType.FOLLOWERS, 50, null);
+        int callsAfterFirst = apify.requests().size();
+
+        service().connections("nasa", ConnectionType.FOLLOWERS, 1, null);
+
+        assertThat(apify.requests().size()).isGreaterThan(callsAfterFirst);
+    }
+
+    /**
+     * An actor that cannot paginate never establishes the end of a list, so nothing it returns may
+     * be stored as the whole one — a short page from it is the actor stopping, not the list ending.
+     */
+    @Test
+    void neverStoresAnUnpaginatedActorsAnswerAsAWholeList() {
+        apify.responds(200, "[{\"username\":\"alice\"}]");
+
+        new InstagramService(
+                new ApifyClient(apify.baseUrl(), "test-token", 120, NO_OP_LOGGER), cache,
+                PROFILE_ACTOR, List.of(new DataDopingAdapter()), 100, 500, NO_OP_LOGGER)
+                .connections("nasa", ConnectionType.FOLLOWERS, 50, null);
+
+        assertThat(cache.entries().keySet()).allSatisfy(key -> assertThat(key).doesNotContain(":all"));
     }
 
     /** Followers and following are different lists; one must never answer for the other. */

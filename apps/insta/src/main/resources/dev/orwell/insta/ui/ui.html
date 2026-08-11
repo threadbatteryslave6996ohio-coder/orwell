@@ -34,10 +34,31 @@
   .when { color: var(--dim); font-size: 12px; }
   .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 999px;
          border: 1px solid var(--line); color: var(--dim); margin-left: 6px; }
+  .ext { color: var(--active); text-decoration: none; font-size: 12px; border: 1px solid var(--line);
+         border-radius: 6px; padding: 5px 8px; }
+  .ext:hover { border-color: var(--active); }
+  aside a { color: inherit; text-decoration: none; }
+  aside a:hover { text-decoration: underline; }
   .legend { display: flex; gap: 14px; color: var(--dim); font-size: 12px; margin-left: auto; }
   .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
             margin-right: 5px; vertical-align: -1px; }
   #status { position: absolute; left: 12px; bottom: 10px; color: var(--dim); font-size: 12px; }
+  #card { position: absolute; width: 288px; background: var(--panel);
+          border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+          box-shadow: 0 10px 30px rgba(0,0,0,.45); display: none; z-index: 5; }
+  #card h3 { margin: 0; font-size: 15px; }
+  #card .sub { color: var(--dim); font-size: 12px; margin-top: 2px; }
+  #card .bio { margin: 10px 0 0; font-size: 13px; white-space: pre-wrap;
+               border-left: 2px solid var(--line); padding-left: 8px; }
+  #card .stats { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--dim); }
+  #card .stats b { color: var(--ink); font-weight: 600; }
+  #card .rel { margin-top: 10px; font-size: 12px; color: var(--dim); }
+  #card .actions { display: flex; gap: 8px; margin-top: 12px; }
+  #card .actions a, #card .actions button { flex: 1; text-align: center; }
+  #cardClose { position: absolute; top: 8px; right: 8px; border: 0; background: transparent;
+               color: var(--dim); font-size: 16px; padding: 2px 6px; }
+  #cardClose:hover { color: var(--ink); }
+  .thin { color: var(--dim); font-style: italic; }
   #tip { position: absolute; pointer-events: none; background: #0b0d12; border: 1px solid var(--line);
          padding: 4px 8px; border-radius: 6px; font-size: 12px; display: none; white-space: nowrap; }
 </style>
@@ -48,6 +69,7 @@
   <select id="account"></select>
   <label><input type="checkbox" id="inactive"> show departed</label>
   <button id="reload">reload</button>
+  <a id="openSubject" class="ext" target="_blank" rel="noopener noreferrer">open on instagram ↗</a>
   <span class="legend">
     <span><i class="swatch" style="background:var(--subject)"></i>subject</span>
     <span><i class="swatch" style="background:var(--active)"></i>following</span>
@@ -59,6 +81,7 @@
     <canvas id="graph"></canvas>
     <div id="status">loading…</div>
     <div id="tip"></div>
+    <div id="card"><button id="cardClose" title="close">×</button><div id="cardBody"></div></div>
   </div>
   <aside>
     <h2>recent departures</h2>
@@ -155,12 +178,89 @@ canvas.addEventListener('mousemove', event => {
   const r = canvas.getBoundingClientRect();
   const x = event.clientX - r.left, y = event.clientY - r.top;
   hover = nodes.find(n => Math.hypot(n.x - x, n.y - y) <= radius(n) + 4) || null;
+  canvas.style.cursor = hover ? 'pointer' : 'default';
   if (hover) {
     tip.style.display = 'block';
     tip.style.left = (x + 12) + 'px'; tip.style.top = (y + 12) + 'px';
-    tip.textContent = '@' + (hover.username || hover.id) + ' · ' + hover.followers + ' followers';
+    tip.textContent = '@' + (hover.username || hover.id) + ' · ' + hover.followers
+      + ' followers · click for details';
   } else { tip.style.display = 'none'; }
 });
+
+// Clicking a node opens a card rather than navigating away: most of what you want to know is
+// already in the database, and leaving the page would throw away the layout the graph settled into.
+const card = document.getElementById('card');
+const cardBody = document.getElementById('cardBody');
+let cardFor = null;
+
+canvas.addEventListener('click', event => {
+  if (!hover) { hideCard(); return; }
+  const r = canvas.getBoundingClientRect();
+  showCard(hover, event.clientX - r.left, event.clientY - r.top);
+});
+
+document.getElementById('cardClose').addEventListener('click', hideCard);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCard(); });
+
+function hideCard() { card.style.display = 'none'; cardFor = null; }
+
+async function showCard(node, x, y) {
+  cardFor = node.id;
+  card.style.display = 'block';
+  // Keep it on screen: flip to the left of the cursor when there is no room to the right.
+  const wrap = canvas.parentElement.getBoundingClientRect();
+  card.style.left = Math.min(x + 14, wrap.width - 300) + 'px';
+  card.style.top = Math.min(y + 14, Math.max(8, wrap.height - 260)) + 'px';
+  cardBody.innerHTML = '<div class="sub">loading…</div>';
+
+  const account = document.getElementById('account').value;
+  const response = await fetch('/api/account?id=' + encodeURIComponent(node.id)
+    + '&account=' + encodeURIComponent(account));
+  if (cardFor !== node.id) return;            // a later click won the race
+  if (!response.ok) { cardBody.innerHTML = '<div class="sub">no details recorded</div>'; return; }
+  render(await response.json());
+}
+
+function render(a) {
+  const handle = a.username || a.id;
+  const former = (a.formerUsernames || []).length
+    ? '<div class="sub">formerly ' + a.formerUsernames.map(u => '@' + esc(u)).join(', ') + '</div>'
+    : '';
+  const bio = a.bio
+    ? '<p class="bio">' + esc(a.bio) + '</p>'
+    : '';
+  // An outer-ring account has a handle and nothing else: say so rather than showing zeroes as if
+  // they were measurements.
+  const stats = a.walked
+    ? '<div class="stats"><span><b>' + a.followers + '</b> followers</span>'
+      + '<span><b>' + a.following + '</b> following</span>'
+      + '<span><b>' + a.posts + '</b> posts</span></div>'
+    : '<div class="stats thin">not synced — only seen as a follower</div>';
+
+  let rel = '';
+  if (a.relation) {
+    const since = String(a.relation.since).slice(0, 10);
+    rel = '<div class="rel">' + (a.relation.follows
+        ? 'follows you · first seen ' + since
+        : 'no longer follows you')
+      + (a.relation.timesLeft ? ' · left ' + a.relation.timesLeft + '×' : '') + '</div>';
+  }
+
+  cardBody.innerHTML = '<h3>@' + esc(handle) + '</h3>' + former + bio + stats + rel
+    + '<div class="actions">'
+    + '<a class="ext" target="_blank" rel="noopener noreferrer" href="' + profileUrl(handle)
+    + '">open on instagram ↗</a></div>';
+}
+
+// Handles and bios are other people's text arriving from a scraper; it goes in as text, never HTML.
+function esc(value) {
+  return String(value).replace(/[&<>"']/g, c =>
+    ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+}
+
+function profileUrl(username) {
+  return 'https://www.instagram.com/' + encodeURIComponent(username) + '/';
+}
 
 async function load() {
   const account = document.getElementById('account').value;
@@ -193,6 +293,15 @@ async function load() {
     return link;
   });
   status.textContent = nodes.length + ' accounts · ' + links.length + ' follows';
+  const subject = nodes.find(n => n.subject);
+  const open = document.getElementById('openSubject');
+  if (subject && subject.username) {
+    open.href = profileUrl(subject.username);
+    open.textContent = 'open @' + subject.username + ' ↗';
+    open.style.display = '';
+  } else {
+    open.style.display = 'none';
+  }
 
   const departures = await (await fetch('/api/unfollows' + query)).json();
   const panel = document.getElementById('unfollows');
@@ -200,7 +309,9 @@ async function load() {
   for (const d of departures) {
     const row = document.createElement('div');
     row.className = 'row';
-    row.innerHTML = '<div class="who">@' + (d.username || d.accountId)
+    const handle = d.username || d.accountId;
+    row.innerHTML = '<div class="who"><a target="_blank" rel="noopener noreferrer" href="'
+      + profileUrl(handle) + '">@' + esc(handle) + '</a>'
       + (d.timesLeft > 1 ? '<span class="tag">left ' + d.timesLeft + '×</span>' : '')
       + (d.returned ? '<span class="tag">came back</span>' : '')
       + '</div><div class="when">' + d.at.replace('T', ' ').slice(0, 19) + '</div>';

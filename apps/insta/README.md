@@ -254,13 +254,37 @@ database restart costs one failed refresh instead of a wedged server.
 
 ## Caching
 
-Every answer is cached in Redis under a key covering everything that changes it — username,
-direction, page size, cursor — so re-running a lookup, or re-walking a list, costs nothing.
+Every answer is cached in Redis under a key covering everything that changes it, so re-running a
+lookup, or re-walking a list, costs nothing.
 
-**Entries do not expire** (`INSTA_CACHE_TTL_HOURS=0`). The expiry existed because Instagram data
-goes stale, but actor quotas turned out to be the binding constraint rather than freshness: a
-cached follower list stays authoritative until a later walk overwrites it. Set a positive number of
-hours to put the expiry back.
+```
+insta:v3:profile:<username>
+insta:v3:{followers|following}:<username>:all              # the whole list
+insta:v3:{followers|following}:<username>:<limit>:<cursor> # one page of a walk
+```
+
+**A finished list is stored as a list, not as a page.** A limit is how many accounts we were
+willing to pay for in one run — it is not a property of the answer. So when the actor says a list
+is exhausted (`endOfList`, which only a paginating actor can establish), that answer is written
+under **`all`** instead, with no page size and no cursor in the key, and it then serves *any* later
+request big enough to hold it: fetch nasa's 300 followers with `--limit 500` and a later
+`--limit 400` is free rather than a second identical run stored under a second key.
+
+The one request it does not answer is a *smaller* one. A caller asking for 100 out of a complete
+300 asked for a page, and there is no cursor to hand it alongside a truncation, so that falls
+through to its own `:<limit>:<cursor>` entry and pays for a run. Pages of a walk that has not
+finished keep the page size in the key for the same reason: at 50 and at 500 they are genuinely
+different pages, resuming from different places.
+
+This is why `INSTA_DEFAULT_LIMIT` sits at the ceiling (500): reaching the end of a list in one run
+is what earns the `all` entry, and a smaller default mostly buys a second billed run for a list
+that would have fitted.
+
+**Entries do not expire, and there is no setting for it.** The expiry existed because Instagram
+data goes stale, but actor quotas bind long before freshness does: a cached follower list is worth
+more than a fresh charge against a daily cap, so it stays authoritative until a later walk
+overwrites it. To read something fresh, delete its key —
+`redis-cli DEL insta:v3:followers:<username>:all`.
 
 - **A cache failure is never a lookup failure.** If Redis is down, a miss is the answer and you pay
   for a scrape. A cache outage should cost money, not availability.
@@ -333,12 +357,13 @@ required one, and a missing one fails before anything can be spent.
 | `APIFY_TOKEN` | — | Apify API token, sent as a bearer header (never in the URL) |
 | `APIFY_BASE_URL` | `https://api.apify.com` | Apify API root |
 | `APIFY_PROFILE_ACTOR` | `apify/instagram-profile-scraper` | actor behind `profile` |
-| `APIFY_CONNECTIONS_ACTOR` | `scraping_solutions/instagram-scraper-followers-following-no-cookies` | actor behind `followers` / `following` |
+| `APIFY_CONNECTIONS_ACTORS` | `scraping-solutions` | ordered chain of adapters for list lookups |
+| `INSTA_INSTAGRAM_COOKIES` | *(empty)* | session cookies, used only by `logical-scrapers` |
+| `INSTA_SKIP_ABOVE_FOLLOWERS` | `1500` | skip the walk above this many followers; 0 disables |
 | `APIFY_RUN_TIMEOUT_SECONDS` | `120` | per-run budget; a run that outlives it is aborted |
-| `INSTA_DEFAULT_LIMIT` | `100` | accounts returned when `--limit` is omitted |
+| `INSTA_DEFAULT_LIMIT` | `500` | accounts returned when `--limit` is omitted — at the ceiling, see [Caching](#caching) |
 | `INSTA_MAX_LIMIT` | `500` | ceiling on `--limit` — a spend guard |
 | `INSTA_CACHE_ENABLED` | `true` | whether to consult Redis at all |
-| `INSTA_CACHE_TTL_HOURS` | `0` | how long a cached answer stays good; **0 = never expires** |
 | `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | the shared Redis |
 | `INSTA_DATABASE_URL` / `_USERNAME` / `_PASSWORD` | *(empty)* | Postgres for `sync` |
 | `INSTA_PICTURE_STORE` | `none` | `none`, `filesystem` or `http` |
@@ -412,6 +437,13 @@ here, so it does not bite, but raising `INSTA_MAX_LIMIT` past 1,000 would.
 applied when mapping — so `INSTA_MAX_LIMIT` is a ceiling no invocation can raise. A run that
 outlives its budget is aborted rather than abandoned, because an orphaned run keeps billing.
 
+Two guards bound a crawl rather than a single run. `INSTA_SKIP_ABOVE_FOLLOWERS` (1500) skips the
+walk for accounts bigger than that — one popular account can cost more than every ordinary one put
+together, and the check runs after the cheap profile lookup so an oversized account costs $0.0026
+instead of a list. Private accounts cost the same and are skipped for free; on a personal follower
+list roughly two thirds are private, which makes a depth-2 sweep far cheaper than the arithmetic
+suggests — measured at about **$0.045 per follower**, not $0.15.
+
 ## How it works
 
 ### Layout
@@ -448,10 +480,38 @@ They are also fetched differently:
   `OUTPUT`, which is where the actor puts its continuation token. The sync endpoint returns dataset
   items and nothing else, so paging is simply not visible from it.
 
-Both actor ids are configurable because the Apify store has many interchangeable Instagram
-scrapers and they come and go. A replacement must accept the same input shape (documented in
-`.env.example`); output field names are read leniently — `full_name` and `fullName`, `verified`
-and `is_verified` are all accepted — so casing differences alone do not need a code change.
+### Actors come in a chain, not one at a time
+
+Every Instagram actor has its own quota, and the free tiers are small — so list lookups work down
+an ordered chain and fall through when one refuses:
+
+| Adapter | Price/1k | Directions | Paginates | Notes |
+|---|---|---|---|---|
+| `scraping-solutions` | from $0.60 | both | **yes** | default; free API capped at 1,000 results/day |
+| `datadoping` | ~$1.55 observed | followers | no | needs no cookies |
+| `logical-scrapers` | $2.50 | followers | no | wants your Instagram session cookies |
+
+`APIFY_CONNECTIONS_ACTORS=scraping-solutions,datadoping` sets the order. They are adapter *names*
+rather than actor ids because swapping actors is not a matter of changing an id: they disagree on
+input field names (`Account` vs `usernames` vs `username`), on the limit field (`resultsLimit` vs
+`max_count` vs `max_results`), on whether they can read a *following* list, on whether they
+paginate, and on how they signal a refusal. Each of those lives in a `ConnectionsAdapter`.
+
+Three rules keep failover from corrupting the graph:
+
+- **Attempts are all or nothing.** A failed adapter's partial results are discarded rather than
+  merged with the next one's — a list stitched from two actors is neither one's complete answer.
+- **A cursor pins the walk to the adapter that issued it.** Continuation tokens mean nothing to
+  another actor, so a resumed walk cannot fail over.
+- **Only a paginating adapter can end a list.** One without pagination never reports `endOfList`,
+  so it can add followers but never retire one. Observed live: `datadoping` answered a limit of 500
+  with 221 accounts for an account that has 441 — "fewer than asked for" is not proof of the end.
+
+A timeout does *not* trigger failover: it usually means the account is large, and a second actor
+would spend the same money to time out the same way.
+
+Output field names are read leniently — `full_name` and `fullName`, `verified` and `is_verified`
+are all accepted — so a new actor's casing alone never needs a code change.
 
 Only public accounts can be read. Private accounts return no data, by design of the actors and of
 Instagram.

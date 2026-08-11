@@ -27,6 +27,7 @@ import java.util.Optional;
  * GET /api/accounts                 accounts a sync has walked
  * GET /api/graph?account=&amp;inactive= the neighbourhood, as nodes and links
  * GET /api/unfollows?account=       recent departures
+ * GET /api/account?id=&amp;account=     one account's card, and its relationship to the subject
  * </pre>
  *
  * <p>A connection is opened per request and closed after it. For a viewer somebody has open in one
@@ -60,6 +61,7 @@ public final class UiServer {
         routes.get("/api/accounts", withConnection(this::accounts));
         routes.get("/api/graph", withConnection(this::graph));
         routes.get("/api/unfollows", withConnection(this::unfollows));
+        routes.get("/api/account", withConnection(this::account));
         routes.get("/health", exchange -> UndertowHttp.sendJson(
                 exchange, 200, UndertowHttp.health(Map.of("app", "insta-ui"))));
         return routes;
@@ -109,6 +111,21 @@ public final class UiServer {
         List<Map<String, Object>> departures =
                 GraphQueries.recentUnfollows(connection, subject.get(), 100);
         UndertowHttp.sendJson(exchange, 200, departures);
+    }
+
+    private void account(HttpServerExchange exchange, Connection connection) throws Exception {
+        String id = parameter(exchange, "id");
+        if (id == null || id.isBlank()) {
+            UndertowHttp.sendError(exchange, 400, "id is required");
+            return;
+        }
+        Map<String, Object> card = GraphQueries.accountCard(
+                connection, id, subject(exchange, connection).orElse(null));
+        if (card.isEmpty()) {
+            UndertowHttp.sendError(exchange, 404, "no such account");
+            return;
+        }
+        UndertowHttp.sendJson(exchange, 200, card);
     }
 
     private Optional<String> subject(HttpServerExchange exchange, Connection connection)
