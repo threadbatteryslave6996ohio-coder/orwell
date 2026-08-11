@@ -5,7 +5,9 @@ into the push hub: producers push frames, the hub stores them in `frame_events` 
 over SSE to connected clients, replaying from the store for a client that reconnects. Positions of
 named subscriptions live in `frame_cursors`. Note the intermediate commit `e587e06` carries an
 earlier cursor-tracked *webhook* fan-out (`frame_subscriptions`, `FrameDeliveryJob`,
-`FrameSender`) that was replaced by the stream — ignore those names. Four things are knowingly
+`FrameSender`) that was replaced by the stream — ignore those names. The hub receives, stores and
+redistributes; it does not inspect a frame, so `DETECTION_RELAY_MODE` and the `changed` columns on
+`frame_events` are gone and change detection is `/motion`'s job alone. Four things are knowingly
 unfinished.
 
 - **The hub is Spring-engine only.** It hands frames to open SSE connections and its retention runs
@@ -30,7 +32,8 @@ unfinished.
   `DETECTION_FRAME_RETENTION_SECONDS` is the only thing bounding the table. The bucket proxy already
   exists to store jarvis bytes — moving the payload there and leaving `(id, source, sha,
   storageKey)` plus cursors in Postgres is the obvious upgrade, at the cost of a proxy dependency in
-  detection.
+  detection. This got sharper when motion detection came out of the hub: the table now grows at the
+  full ingest rate rather than at the changed-frame rate, so retention is the only lever left.
 
 Also: a hung-up client is only noticed on the next failed write, so `connectedClients` and the
 `recipients` count lag a disconnect by one frame. Harmless in practice, but it is why the

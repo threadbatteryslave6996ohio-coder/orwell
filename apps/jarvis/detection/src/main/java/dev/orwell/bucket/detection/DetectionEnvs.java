@@ -11,7 +11,6 @@ public final class DetectionEnvs {
     public static final EnvOption<Double> DETECTION_MIN_CONFIDENCE;
     public static final EnvOption<Integer> DETECTION_MOTION_CELL_THRESHOLD;
     public static final EnvOption<Double> DETECTION_MOTION_MIN_CHANGED_FRACTION;
-    public static final EnvOption<String> DETECTION_RELAY_MODE;
     public static final EnvOption<Integer> DETECTION_STREAM_QUEUE_DEPTH;
     public static final EnvOption<String> DETECTION_DATASOURCE_URL;
     public static final EnvOption<String> DETECTION_DATASOURCE_USERNAME;
@@ -40,10 +39,6 @@ public final class DetectionEnvs {
         ENV.property("detection.motion.cell-threshold", DETECTION_MOTION_CELL_THRESHOLD);
         ENV.property("detection.motion.min-changed-fraction", DETECTION_MOTION_MIN_CHANGED_FRACTION);
 
-        // `changed` relays only frames that differ from the previous one for their source, plus
-        // each source's first frame. `all` relays every pushed frame — the bandwidth difference on
-        // a static scene is the whole point of the default.
-        DETECTION_RELAY_MODE = ENV.optional("DETECTION_RELAY_MODE", EnvType.string(), "changed");
         // Frames a client may fall behind before the hub starts dropping its oldest. Small on
         // purpose: this is a live feed, so a viewer that cannot keep up wants the newest frame,
         // not a growing backlog of stale ones.
@@ -57,8 +52,9 @@ public final class DetectionEnvs {
         DETECTION_DATASOURCE_PASSWORD = ENV.required("DETECTION_DATASOURCE_PASSWORD", EnvType.string());
         DETECTION_JPA_HIBERNATE_DDL_AUTO =
                 ENV.optional("DETECTION_JPA_HIBERNATE_DDL_AUTO", EnvType.string(), "update");
-        // How far back a reconnecting client can catch up, and with it the ceiling on the
-        // frame_events table: retention_seconds x stored frame rate x frame size.
+        // How far back a reconnecting client can catch up, and — since the hub stores every frame
+        // it is pushed — the only bound on the frame_events table: retention_seconds x ingest
+        // rate x frame size, per source.
         DETECTION_FRAME_RETENTION_SECONDS =
                 ENV.optional("DETECTION_FRAME_RETENTION_SECONDS", EnvType.integer(), 300);
         DETECTION_RETENTION_SWEEP_SECONDS =
@@ -72,7 +68,6 @@ public final class DetectionEnvs {
         DETECTION_STORE_QUEUE_DEPTH =
                 ENV.optional("DETECTION_STORE_QUEUE_DEPTH", EnvType.integer(), 512);
 
-        ENV.property("detection.relay.mode", DETECTION_RELAY_MODE);
         ENV.property("detection.store.mode", DETECTION_STORE_MODE);
         ENV.property("detection.store.queue-depth", DETECTION_STORE_QUEUE_DEPTH);
         ENV.property("detection.stream.queue-depth", DETECTION_STREAM_QUEUE_DEPTH);

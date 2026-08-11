@@ -57,21 +57,10 @@ public class MotionService {
      * (mapped to 400 by the endpoint); any other runtime failure surfaces as 500.
      */
     public Map<String, Object> motion(Map<String, Object> payload) {
-        return compare(
-                FramePayload.source(payload),
-                FramePayload.decode(payload),
-                payload.get("frameIndex"),
-                payload.get("timestamp"));
-    }
-
-    /**
-     * The comparison itself, over an already-decoded frame. Split out from {@link
-     * #motion(Map)} so {@link FrameIngestService} — which needs the same bytes to store — can
-     * reach it without base64-decoding and hashing the payload a second time.
-     */
-    public Map<String, Object> compare(String source, byte[] frameBytes, Object frameIndex,
-            Object timestamp) {
-        int[] current = FrameChangeDetector.fingerprint(frameBytes);
+        String source = FramePayload.source(payload);
+        Object frameIndex = payload.get("frameIndex");
+        Object timestamp = payload.get("timestamp");
+        int[] current = FrameChangeDetector.fingerprint(FramePayload.decode(payload));
 
         int[] previous;
         synchronized (previousBySource) {

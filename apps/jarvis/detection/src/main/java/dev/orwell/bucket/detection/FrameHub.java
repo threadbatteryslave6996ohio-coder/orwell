@@ -175,8 +175,6 @@ public class FrameHub {
         message.put("frameIndex", frame.getFrameIndex());
         message.put("capturedAt", frame.getCapturedAt().toString());
         message.put("sha256", frame.getSha256());
-        message.put("changed", frame.isChanged());
-        message.put("changedFraction", frame.getChangedFraction());
         message.put("frameBase64", Base64.getEncoder().encodeToString(frame.getFrameBytes()));
         return message;
     }

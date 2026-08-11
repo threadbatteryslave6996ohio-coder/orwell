@@ -6,9 +6,13 @@ import java.util.Base64;
 import java.util.Map;
 
 /**
- * The frame envelope shared by {@code POST /detect} and {@code POST /motion}. Both receive the
- * same body from the stream worker, so the base64/hash validation lives here rather than being
- * duplicated (and drifting) in either service.
+ * The frame envelope shared by {@code POST /detect}, {@code POST /motion} and {@code POST /frames}.
+ * They receive the same body from the stream worker, so the base64/hash validation lives here
+ * rather than being duplicated (and drifting) in each service.
+ *
+ * <p>Note what is <em>not</em> validated: that the bytes are a decodable image. {@code /detect} and
+ * {@code /motion} have to decode one to do their job and reject a frame they cannot read, but the
+ * hub only stores and relays bytes, so it accepts whatever a producer sends.
  */
 final class FramePayload {
     private FramePayload() {

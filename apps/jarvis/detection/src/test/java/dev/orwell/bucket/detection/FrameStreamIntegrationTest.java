@@ -39,10 +39,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * stored, and it reaches both the clients connected at the time and the ones that connect later
  * and ask to catch up. The replay-then-live handover is the part that can only be proven here.
  *
- * <p>Each test uses its own source name. {@link MotionService} keeps its fingerprint cache in the
- * singleton bean rather than the database, so clearing the tables does not make a source look new
- * again — a second test reusing a name would find its frame treated as an unchanged follow-up and
- * never stored.
+ * <p>Each test uses its own source name so that a scoped client cannot see another test's frames,
+ * and so a leftover connection from a finished test cannot count as a recipient here.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class FrameStreamIntegrationTest extends PostgresIntegrationTest {
@@ -55,7 +53,6 @@ class FrameStreamIntegrationTest extends PostgresIntegrationTest {
         registry.add("detection.min-confidence", () -> 0.35);
         registry.add("detection.motion.cell-threshold", () -> 12);
         registry.add("detection.motion.min-changed-fraction", () -> 0.02);
-        registry.add("detection.relay.mode", () -> "changed");
         registry.add("detection.stream.queue-depth", () -> 8);
         registry.add("detection.store.mode", () -> "async");
         registry.add("detection.store.queue-depth", () -> 512);
@@ -101,13 +98,9 @@ class FrameStreamIntegrationTest extends PostgresIntegrationTest {
     }
 
     private void drainUntilNobodyIsConnected(String source) {
-        int[] level = {100};
         await(() -> {
             try {
-                level[0] = level[0] == 100 ? 220 : 100;
-                Map<String, Object> push = push(source, withBlock(100, level[0]));
-                return Boolean.TRUE.equals(push.get("stored"))
-                        && Integer.valueOf(0).equals(push.get("recipients"));
+                return Integer.valueOf(0).equals(push(source, flat(100)).get("recipients"));
             } catch (Exception exception) {
                 return false;
             }
@@ -155,7 +148,7 @@ class FrameStreamIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void aStaticSceneCostsOneStoredFrame() throws Exception {
+    void aStaticSceneStillCostsAFramePerPush() throws Exception {
         StreamClient viewer = connect(null);
         byte[] frame = flat(100);
 
@@ -163,10 +156,10 @@ class FrameStreamIntegrationTest extends PostgresIntegrationTest {
         push("cam-static", frame);
         push("cam-static", frame);
 
-        await(() -> viewer.frames.size() == 1);
-        Thread.sleep(300);
-        assertThat(viewer.frames).hasSize(1);
-        await(() -> events.count() == 1);
+        // The hub relays what it is given rather than deciding a repeat is not worth sending, so
+        // the retention window is the only thing bounding the table.
+        await(() -> viewer.frames.size() == 3);
+        await(() -> events.count() == 3);
     }
 
     // --- storage and replay -----------------------------------------------------------------
@@ -186,13 +179,13 @@ class FrameStreamIntegrationTest extends PostgresIntegrationTest {
         pushAndStore("cam-head", flat(100));
 
         StreamClient viewer = connect(null);
-        pushAndStore("cam-head", withBlock(100, 200));
+        Map<String, Object> afterConnecting = pushAndStore("cam-head", withBlock(100, 200));
 
         await(() -> viewer.frames.size() == 1);
         Thread.sleep(300);
         // Only the frame pushed after it connected.
         assertThat(viewer.frames).hasSize(1);
-        assertThat(viewer.frame(0).get("changed")).isEqualTo(true);
+        assertThat(viewer.frame(0).get("frameId")).isEqualTo(afterConnecting.get("frameId"));
     }
 
     @Test

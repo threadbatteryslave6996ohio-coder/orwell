@@ -59,6 +59,12 @@ them straight on to every client connected at that moment. A client that was awa
 is replayed what it missed before rejoining the live stream. **Requires Postgres and
 `SERVER_ENGINE=spring`.**
 
+The hub does three things and no more — **receive, store, redistribute**. It does not decode a
+frame, compare it against the last one, or decide that a repeat is not worth sending: every frame
+pushed to it is stored and relayed. Change detection lives at `/motion`, and a producer that wants
+to relay only interesting frames asks that question itself before pushing. The hub is a pipe, so
+the payload does not even have to be an image it could decode.
+
 ```
 recorders ──POST /frames──> hub ──┬──SSE──> clients connected now
                                   │
@@ -67,10 +73,11 @@ recorders ──POST /frames──> hub ──┬──SSE──> clients connec
                           FrameRetentionJob drops aged rows
 ```
 
-`POST /frames` takes the same body as `/detect` and `/motion`, and returns the change verdict plus
-`{"stored":true,"frameId":91,"recipients":2}` — so a camera can tell nobody is watching without
-polling anything. A frame with zero recipients is still stored, so a client connecting later can
-still replay it. Ingest returns as soon as the frame is queued for each client, never after they
+`POST /frames` takes the same body as `/detect` and `/motion`, and answers
+`{"success":true,"source":"cam1","frameIndex":42,"stored":true,"frameId":91,"recipients":2}` — so a
+camera can tell nobody is watching without polling anything. A frame with zero recipients is still
+stored, so a client connecting later can still replay it. The envelope is validated (base64, and
+`frameSha256` against the bytes if sent) but the bytes are not. Ingest returns as soon as the frame is queued for each client, never after they
 have received it, so a producer's frame rate is never coupled to the slowest viewer.
 
 **The frame is broadcast before it is written.** Its id comes from a Postgres sequence allocated in
@@ -109,7 +116,7 @@ data: {"connected":true,"source":null,"subscription":"viewer-1","resumingAfter":
 id: 91
 event: frame
 data: {"frameId":91,"source":"cam1","frameIndex":42,"capturedAt":"2026-08-10T12:00:00Z",
-       "sha256":"9f2c…","changed":true,"changedFraction":0.25,"frameBase64":"…"}
+       "sha256":"9f2c…","frameBase64":"…"}
 ```
 
 **Replay hands over to live without gaps or duplicates.** One virtual thread per connection runs
@@ -124,15 +131,15 @@ behind, the hub drops that client's **oldest** frame — on a live feed the fres
 useful one, and unbounded buffering would turn a slow viewer into an out-of-memory error. A named
 subscription re-fetches dropped frames from the store on its next reconnect; an unnamed one loses
 them. Drops are counted and reported on `GET /health`, alongside `connectedClients`,
-`framesReceivedTotal`, `framesStoredTotal`, `framesDistributedTotal`, `framesReplayedTotal`,
-`framesPendingWrite` and `framesUnstoredTotal`.
+`framesReceivedTotal`, `framesDistributedTotal`, `framesReplayedTotal`, `framesPendingWrite` and
+`framesUnstoredTotal`.
 
-> **Sizing.** `frame_events` holds JPEG bytes, because replay means a frame must still exist to be
-> re-sent. At 40 KB and 5 fps that is ~200 KB/s *per source*, so two settings bound it:
-> `DETECTION_RELAY_MODE=changed` (the default) stores only frames that differ from the previous one
-> for their source plus each source's first frame, and `DETECTION_FRAME_RETENTION_SECONDS`
-> (default 300) caps how long any frame survives. `DETECTION_RELAY_MODE=all` disables the first
-> lever and the table grows at the full ingest rate.
+> **Sizing.** `frame_events` holds the frame bytes, because replay means a frame must still exist to
+> be re-sent, and the hub stores every frame it is pushed. `DETECTION_FRAME_RETENTION_SECONDS`
+> (default 300) is therefore the only thing bounding the table, and it grows at the full ingest
+> rate: at 40 KB and 5 fps that is ~200 KB/s *per source*, so the default window costs ~60 MB per
+> source. Push less, or keep less. Sending only frames that differ is a producer's decision — it can
+> ask `/motion` first, or make the call locally, which is cheaper than shipping a frame to find out.
 
 **Retention wins over catch-up.** The sweep deletes aged frames whether or not every client has
 read them, so a client away longer than the retention window resumes at the oldest surviving frame

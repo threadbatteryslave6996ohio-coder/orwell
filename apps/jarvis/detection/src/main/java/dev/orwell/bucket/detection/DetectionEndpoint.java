@@ -68,7 +68,6 @@ final class DetectionEndpoint {
         details.put("relayAvailable", ingestService != null);
         if (ingestService != null) {
             details.put("framesReceivedTotal", ingestService.framesReceivedTotal());
-            details.put("framesStoredTotal", ingestService.framesStoredTotal());
             details.put("connectedClients", hub.connectedCount());
             details.put("framesDistributedTotal", hub.framesDistributedTotal());
             details.put("framesReplayedTotal", hub.framesReplayedTotal());

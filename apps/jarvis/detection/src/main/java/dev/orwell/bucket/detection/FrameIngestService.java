@@ -2,7 +2,6 @@ package dev.orwell.bucket.detection;
 
 import dev.orwell.bucket.detection.entity.FrameEventEntity;
 import dev.orwell.primitives.Sha256;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -12,8 +11,13 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * The hub's ingest half: accepts a pushed frame, decides whether it is worth keeping, stores it,
- * and hands it to {@link FrameHub} for the clients connected right now.
+ * The hub's ingest half: accepts a pushed frame, hands it to {@link FrameHub} for the clients
+ * connected right now, and queues it for storage so a client that reconnects can be replayed it.
+ *
+ * <p>Every frame that arrives is kept. The hub does not look inside a frame and does not decide
+ * whether one is worth relaying — it receives, stores and redistributes. Whatever a producer thinks
+ * is worth pushing is what viewers get, which also means the payload need not be an image the
+ * server can decode.
  *
  * <p>The id is allocated from a sequence before either step, so the frame can go out to connected
  * clients <em>before</em> it is written — the live stream never waits on Postgres. Storing happens
@@ -23,69 +27,37 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Service
 public class FrameIngestService {
-    private final MotionService motion;
     private final FrameIdAllocator ids;
     private final FrameStoreWriter store;
     private final FrameHub hub;
-    private final boolean changedOnly;
     private final AtomicLong framesReceivedTotal = new AtomicLong();
-    private final AtomicLong framesStoredTotal = new AtomicLong();
 
-    public FrameIngestService(
-            MotionService motion,
-            FrameIdAllocator ids,
-            FrameStoreWriter store,
-            FrameHub hub,
-            @Value("${detection.relay.mode}") String mode
-    ) {
-        this.motion = Objects.requireNonNull(motion, "motion");
+    public FrameIngestService(FrameIdAllocator ids, FrameStoreWriter store, FrameHub hub) {
         this.ids = Objects.requireNonNull(ids, "ids");
         this.store = Objects.requireNonNull(store, "store");
         this.hub = Objects.requireNonNull(hub, "hub");
-        this.changedOnly = !"all".equalsIgnoreCase(mode);
     }
 
     public long framesReceivedTotal() {
         return framesReceivedTotal.get();
     }
 
-    public long framesStoredTotal() {
-        return framesStoredTotal.get();
-    }
-
     /**
-     * Accepts one pushed frame. Throws {@link FramePayload.InvalidFrameException} for a bad frame
-     * (mapped to 400 by the endpoint); any other runtime failure surfaces as 500.
+     * Accepts one pushed frame. Throws {@link FramePayload.InvalidFrameException} for a malformed
+     * envelope — missing base64, undecodable base64, or a hash that does not match the bytes —
+     * which the endpoint maps to 400; any other runtime failure surfaces as 500.
      */
     public Map<String, Object> ingest(Map<String, Object> payload) {
         byte[] frameBytes = FramePayload.decode(payload);
         String source = FramePayload.source(payload);
         Object frameIndex = payload.get("frameIndex");
-        Object timestamp = payload.get("timestamp");
         framesReceivedTotal.incrementAndGet();
-
-        Map<String, Object> verdict = motion.compare(source, frameBytes, frameIndex, timestamp);
-        boolean changed = (boolean) verdict.get("changed");
-        boolean firstFrame = (boolean) verdict.get("firstFrame");
-        // A source's first frame is always kept even in `changed` mode: it is the baseline a
-        // viewer needs before any later "this differs" frame means anything to it.
-        boolean kept = !changedOnly || changed || firstFrame;
-
-        Map<String, Object> response = new LinkedHashMap<>(verdict);
-        if (!kept) {
-            response.put("stored", false);
-            response.put("frameId", null);
-            response.put("recipients", 0);
-            return response;
-        }
 
         FrameEventEntity frame = new FrameEventEntity(
                 ids.next(),
                 source,
                 asLong(frameIndex),
                 Sha256.hex(frameBytes),
-                changed,
-                (double) verdict.get("changedFraction"),
                 Instant.now(),
                 frameBytes);
 
@@ -93,8 +65,14 @@ public class FrameIngestService {
         // stream never waits on the database — a Postgres stall slows catch-up, not the video.
         int recipients = hub.broadcast(frame);
         store.submit(frame);
-        framesStoredTotal.incrementAndGet();
 
+        // LinkedHashMap, not Map.of: frameIndex and timestamp are optional request fields and may
+        // be null, which Map.of rejects with an NPE.
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", true);
+        response.put("source", source);
+        response.put("frameIndex", frameIndex);
+        response.put("timestamp", payload.get("timestamp"));
         response.put("stored", true);
         response.put("frameId", frame.getId());
         // Lets a producer notice nobody is watching without polling anything. A frame with zero

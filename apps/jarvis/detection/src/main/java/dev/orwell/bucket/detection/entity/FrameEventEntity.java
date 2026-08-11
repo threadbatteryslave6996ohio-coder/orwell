@@ -22,9 +22,8 @@ import java.time.Instant;
  *
  * <p>The bytes live here as {@code bytea} rather than in an object store, which makes this table
  * the loudest sizing decision in the service — a 40 KB frame at 5 fps is ~200 KB/s <em>per
- * source</em>. Two things keep it bounded: {@code DETECTION_RELAY_MODE=changed} keeps most frames
- * from being written at all, and {@code DETECTION_FRAME_RETENTION_SECONDS} caps how long any of
- * them survive.
+ * source</em>. Every pushed frame is kept, so {@code DETECTION_FRAME_RETENTION_SECONDS} is the
+ * only thing bounding the table: size it as retention x ingest rate x frame size, per source.
  *
  * <p>Retention wins over catch-up on purpose: {@link
  * dev.orwell.bucket.detection.FrameRetentionJob} deletes aged rows whether or not every client has
@@ -57,12 +56,6 @@ public class FrameEventEntity implements Persistable<Long> {
     @Column(name = "sha256", nullable = false, length = 64)
     private String sha256;
 
-    @Column(name = "changed", nullable = false)
-    private boolean changed;
-
-    @Column(name = "changed_fraction", nullable = false)
-    private double changedFraction;
-
     @Column(name = "captured_at", nullable = false)
     private Instant capturedAt;
 
@@ -82,14 +75,12 @@ public class FrameEventEntity implements Persistable<Long> {
         this.isNew = false;
     }
 
-    public FrameEventEntity(Long id, String source, Long frameIndex, String sha256, boolean changed,
-            double changedFraction, Instant capturedAt, byte[] frameBytes) {
+    public FrameEventEntity(Long id, String source, Long frameIndex, String sha256,
+            Instant capturedAt, byte[] frameBytes) {
         this.id = id;
         this.source = source;
         this.frameIndex = frameIndex;
         this.sha256 = sha256;
-        this.changed = changed;
-        this.changedFraction = changedFraction;
         this.capturedAt = capturedAt;
         this.frameBytes = frameBytes;
     }
@@ -120,14 +111,6 @@ public class FrameEventEntity implements Persistable<Long> {
 
     public String getSha256() {
         return sha256;
-    }
-
-    public boolean isChanged() {
-        return changed;
-    }
-
-    public double getChangedFraction() {
-        return changedFraction;
     }
 
     public Instant getCapturedAt() {

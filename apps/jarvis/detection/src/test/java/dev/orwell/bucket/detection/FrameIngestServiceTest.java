@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static dev.orwell.bucket.detection.FrameTestFixtures.flat;
 import static dev.orwell.bucket.detection.FrameTestFixtures.request;
-import static dev.orwell.bucket.detection.FrameTestFixtures.withBlock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -22,9 +21,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * What ingest does with a pushed frame: which ones it keeps, and in what order it broadcasts and
- * stores them. The ordering is the point — the frame goes out before it is written, which is what
- * keeps a database stall off the live path.
+ * What ingest does with a pushed frame: it keeps every one, and broadcasts before it stores. The
+ * ordering is the point — the frame goes out before it is written, which is what keeps a database
+ * stall off the live path.
  */
 class FrameIngestServiceTest {
     private final FrameHub hub = mock(FrameHub.class);
@@ -32,14 +31,14 @@ class FrameIngestServiceTest {
     private final FrameIdAllocator ids = mock(FrameIdAllocator.class);
     private final AtomicLong nextId = new AtomicLong(1);
 
-    private FrameIngestService service(String mode) {
+    private FrameIngestService service() {
         when(ids.next()).thenAnswer(call -> nextId.getAndIncrement());
-        return new FrameIngestService(new MotionService(12, 0.02), ids, store, hub, mode);
+        return new FrameIngestService(ids, store, hub);
     }
 
     @Test
     void aFrameIsBroadcastBeforeItIsStored() {
-        FrameIngestService service = service("changed");
+        FrameIngestService service = service();
 
         service.ingest(request("cam1", flat(100)));
 
@@ -50,7 +49,7 @@ class FrameIngestServiceTest {
 
     @Test
     void theBroadcastFrameAlreadyCarriesItsStoredId() {
-        FrameIngestService service = service("changed");
+        FrameIngestService service = service();
 
         Map<String, Object> response = service.ingest(request("cam1", flat(100)));
 
@@ -63,63 +62,36 @@ class FrameIngestServiceTest {
     }
 
     @Test
-    void changedModeKeepsTheFirstFrameAsABaseline() {
-        FrameIngestService service = service("changed");
+    void everyPushedFrameIsKeptEvenWhenTheSceneIsIdentical() {
+        FrameIngestService service = service();
+        byte[] frame = flat(100);
+
+        service.ingest(request("cam1", frame));
+        Map<String, Object> response = service.ingest(request("cam1", frame));
+
+        // The hub does not compare frames: what a producer pushes is what viewers get.
+        assertThat(response.get("stored")).isEqualTo(true);
+        verify(hub, times(2)).broadcast(any(FrameEventEntity.class));
+        verify(store, times(2)).submit(any(FrameEventEntity.class));
+        assertThat(service.framesReceivedTotal()).isEqualTo(2L);
+    }
+
+    @Test
+    void theResponseReportsHowManyClientsItWentTo() {
+        FrameIngestService service = service();
         when(hub.broadcast(any(FrameEventEntity.class))).thenReturn(2);
 
         Map<String, Object> response = service.ingest(request("cam1", flat(100)));
 
+        assertThat(response.get("success")).isEqualTo(true);
+        assertThat(response.get("source")).isEqualTo("cam1");
         assertThat(response.get("stored")).isEqualTo(true);
-        assertThat(response.get("firstFrame")).isEqualTo(true);
         assertThat(response.get("recipients")).isEqualTo(2);
-        verify(store, times(1)).submit(any(FrameEventEntity.class));
-    }
-
-    @Test
-    void changedModeDropsAFrameIdenticalToTheLastOne() {
-        FrameIngestService service = service("changed");
-        byte[] frame = flat(100);
-        service.ingest(request("cam1", frame));
-
-        Map<String, Object> response = service.ingest(request("cam1", frame));
-
-        assertThat(response.get("stored")).isEqualTo(false);
-        assertThat(response.get("recipients")).isEqualTo(0);
-        // Only the baseline went out, and no id was burned on the frame that was dropped.
-        verify(hub, times(1)).broadcast(any(FrameEventEntity.class));
-        verify(store, times(1)).submit(any(FrameEventEntity.class));
-        assertThat(service.framesReceivedTotal()).isEqualTo(2L);
-        assertThat(service.framesStoredTotal()).isEqualTo(1L);
-    }
-
-    @Test
-    void changedModeKeepsAFrameThatDiffers() {
-        FrameIngestService service = service("changed");
-        service.ingest(request("cam1", flat(100)));
-
-        Map<String, Object> response = service.ingest(request("cam1", withBlock(100, 200)));
-
-        assertThat(response.get("stored")).isEqualTo(true);
-        assertThat(response.get("changed")).isEqualTo(true);
-        verify(hub, times(2)).broadcast(any(FrameEventEntity.class));
-    }
-
-    @Test
-    void allModeKeepsEveryFrameEvenWhenNothingMoves() {
-        FrameIngestService service = service("all");
-        byte[] frame = flat(100);
-
-        service.ingest(request("cam1", frame));
-        Map<String, Object> response = service.ingest(request("cam1", frame));
-
-        assertThat(response.get("stored")).isEqualTo(true);
-        assertThat(response.get("changed")).isEqualTo(false);
-        verify(hub, times(2)).broadcast(any(FrameEventEntity.class));
     }
 
     @Test
     void theFrameCarriesTheSourceHashAndBytes() {
-        FrameIngestService service = service("changed");
+        FrameIngestService service = service();
         Map<String, Object> payload = request("cam9", flat(100));
         payload.put("frameIndex", 42);
 
@@ -135,9 +107,24 @@ class FrameIngestServiceTest {
     }
 
     @Test
-    void aBadFrameIsRejectedBeforeAnythingIsBroadcastOrStored() {
-        FrameIngestService service = service("changed");
+    void bytesThatAreNotAnImageAreStillRelayed() {
+        FrameIngestService service = service();
         Map<String, Object> payload = request("cam1", new byte[] {1, 2, 3, 4});
+
+        Map<String, Object> response = service.ingest(payload);
+
+        // The hub never decodes a frame, so it has no opinion on the format. /detect and /motion
+        // reject this same payload; the hub is a pipe.
+        assertThat(response.get("stored")).isEqualTo(true);
+        verify(hub).broadcast(any(FrameEventEntity.class));
+        verify(store).submit(any(FrameEventEntity.class));
+    }
+
+    @Test
+    void aMalformedEnvelopeIsRejectedBeforeAnythingIsBroadcastOrStored() {
+        FrameIngestService service = service();
+        Map<String, Object> payload = request("cam1", flat(100));
+        payload.put("frameSha256", "0".repeat(64));
 
         assertThrows(FramePayload.InvalidFrameException.class, () -> service.ingest(payload));
 
@@ -147,7 +134,7 @@ class FrameIngestServiceTest {
 
     @Test
     void aFrameStoredWithNobodyConnectedReportsNoRecipients() {
-        FrameIngestService service = service("changed");
+        FrameIngestService service = service();
         when(hub.broadcast(any(FrameEventEntity.class))).thenReturn(0);
 
         Map<String, Object> response = service.ingest(request("cam1", flat(100)));
