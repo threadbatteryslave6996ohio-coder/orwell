@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.LinkedHashMap;
 
-// Scheduling drives the two fan-out jobs: FrameDeliveryJob and FrameRetentionJob.
+// Scheduling drives FrameRetentionJob, which is what bounds the stored frame log.
 @EnableScheduling
 @SpringBootApplication(proxyBeanMethods = false)
 class DetectionSpringApplication {
@@ -25,8 +25,8 @@ class DetectionSpringApplication {
 
     @Bean
     DetectionEndpoint detectionEndpoint(DetectionService service, MotionService motionService,
-            FrameIngestService ingestService) {
-        return new DetectionEndpoint(service, motionService, ingestService);
+            FrameIngestService ingestService, FrameHub hub, FrameStoreWriter store) {
+        return new DetectionEndpoint(service, motionService, ingestService, hub, store);
     }
 
     @Bean

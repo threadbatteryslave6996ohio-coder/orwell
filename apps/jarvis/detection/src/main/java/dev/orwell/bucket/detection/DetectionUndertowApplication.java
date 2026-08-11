@@ -19,7 +19,7 @@ final class DetectionUndertowApplication {
                 .post("/detect", UndertowHttp.jsonObject(MAX_DETECTION_REQUEST_BYTES, endpoint::detect))
                 .post("/motion", UndertowHttp.jsonObject(MAX_DETECTION_REQUEST_BYTES, endpoint::motion))
                 // Registered so the route answers 501 with an explanation rather than a bare 404
-                // that reads like a typo. The endpoint itself knows fan-out is unavailable here.
+                // that reads like a typo. The endpoint itself knows the relay is unavailable here.
                 .post("/frames", UndertowHttp.jsonObject(MAX_DETECTION_REQUEST_BYTES, endpoint::frames));
         UndertowHttp.startAndWait(
                 env.get(DetectionEnvs.ENV.SERVER_ADDRESS), env.get(DetectionEnvs.ENV.SERVER_PORT), routes);

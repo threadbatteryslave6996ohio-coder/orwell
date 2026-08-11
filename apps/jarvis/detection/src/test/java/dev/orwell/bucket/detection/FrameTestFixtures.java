@@ -1,20 +1,15 @@
 package dev.orwell.bucket.detection;
 
 import dev.orwell.bucket.detection.entity.FrameEventEntity;
-import dev.orwell.bucket.detection.entity.FrameSubscriptionEntity;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
-import java.lang.reflect.Field;
-import java.time.Instant;
+import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-/**
- * Test frames, and entities with database-assigned ids for the tests that mock their repositories.
- *
- * <p>Fan-out and delivery are keyed by id, so these fixtures need one without a round trip. The
- * field is set reflectively rather than adding a setter that production code would never call.
- */
+/** Synthetic frames, shared by every test that needs one. */
 final class FrameTestFixtures {
     static final int WIDTH = 320;
     static final int HEIGHT = 240;
@@ -54,33 +49,28 @@ final class FrameTestFixtures {
         return out.toByteArray();
     }
 
-    static FrameEventEntity frame(long id, String source, byte[] bytes) {
-        return frame(id, source, bytes, Instant.parse("2026-08-10T12:00:00Z"));
+    /** The push body a producer sends to {@code POST /frames}. */
+    static Map<String, Object> request(String source, byte[] frame) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("source", source);
+        payload.put("frameBase64", Base64.getEncoder().encodeToString(frame));
+        return payload;
     }
 
-    static FrameEventEntity frame(long id, String source, byte[] bytes, Instant capturedAt) {
-        FrameEventEntity frame =
-                new FrameEventEntity(source, id, "sha-" + id, true, 0.25, capturedAt, bytes);
-        setId(frame, id);
-        return frame;
-    }
-
-    static FrameSubscriptionEntity subscription(
-            long id, String clientId, String url, String source, long cursor) {
-        FrameSubscriptionEntity subscription = new FrameSubscriptionEntity(
-                clientId, url, source, cursor, Instant.parse("2026-08-10T12:00:00Z"));
-        setId(subscription, id);
-        return subscription;
-    }
-
-    private static void setId(Object entity, long id) {
+    /**
+     * Gives an entity the id the database would have assigned. Streaming and replay are keyed by
+     * id, so the tests that mock the repository need one without a round trip; the field is set
+     * reflectively rather than adding a setter production code would never call.
+     */
+    static FrameEventEntity withId(FrameEventEntity frame, long id) {
         try {
-            Field field = entity.getClass().getDeclaredField("id");
+            java.lang.reflect.Field field = FrameEventEntity.class.getDeclaredField("id");
             field.setAccessible(true);
-            field.set(entity, id);
+            field.set(frame, id);
         } catch (ReflectiveOperationException exception) {
-            throw new IllegalStateException("unable to set id on " + entity.getClass(), exception);
+            throw new IllegalStateException("unable to set id", exception);
         }
+        return frame;
     }
 
     @FunctionalInterface

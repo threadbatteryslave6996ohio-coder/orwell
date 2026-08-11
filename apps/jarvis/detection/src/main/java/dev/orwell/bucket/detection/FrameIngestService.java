@@ -1,7 +1,6 @@
 package dev.orwell.bucket.detection;
 
 import dev.orwell.bucket.detection.entity.FrameEventEntity;
-import dev.orwell.bucket.detection.repository.FrameEventRepository;
 import dev.orwell.primitives.Sha256;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -13,28 +12,36 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * The bastion's ingest half: accepts a pushed frame, decides whether it is worth keeping, and
- * appends it to the log that {@link FrameDeliveryJob} fans out from.
+ * The hub's ingest half: accepts a pushed frame, decides whether it is worth keeping, stores it,
+ * and hands it to {@link FrameHub} for the clients connected right now.
  *
- * <p>Ingest returns as soon as the row is committed. It deliberately does not push to subscribers
- * inline — a producer's frame rate must not be coupled to the slowest subscriber's response time,
- * which is exactly what a synchronous fan-out would do.
+ * <p>The id is allocated from a sequence before either step, so the frame can go out to connected
+ * clients <em>before</em> it is written — the live stream never waits on Postgres. Storing happens
+ * behind it via {@link FrameStoreWriter} and is what makes a reconnecting client able to catch up.
+ * Ingest returns as soon as the frame is queued for each client, never after they have received
+ * it, so a producer's frame rate stays decoupled from the slowest viewer's connection.
  */
 @Service
 public class FrameIngestService {
     private final MotionService motion;
-    private final FrameEventRepository events;
+    private final FrameIdAllocator ids;
+    private final FrameStoreWriter store;
+    private final FrameHub hub;
     private final boolean changedOnly;
     private final AtomicLong framesReceivedTotal = new AtomicLong();
     private final AtomicLong framesStoredTotal = new AtomicLong();
 
     public FrameIngestService(
             MotionService motion,
-            FrameEventRepository events,
-            @Value("${detection.fanout.mode}") String mode
+            FrameIdAllocator ids,
+            FrameStoreWriter store,
+            FrameHub hub,
+            @Value("${detection.relay.mode}") String mode
     ) {
         this.motion = Objects.requireNonNull(motion, "motion");
-        this.events = Objects.requireNonNull(events, "events");
+        this.ids = Objects.requireNonNull(ids, "ids");
+        this.store = Objects.requireNonNull(store, "store");
+        this.hub = Objects.requireNonNull(hub, "hub");
         this.changedOnly = !"all".equalsIgnoreCase(mode);
     }
 
@@ -61,25 +68,38 @@ public class FrameIngestService {
         boolean changed = (boolean) verdict.get("changed");
         boolean firstFrame = (boolean) verdict.get("firstFrame");
         // A source's first frame is always kept even in `changed` mode: it is the baseline a
-        // subscriber needs before any later "this differs" event means anything to it.
-        boolean stored = !changedOnly || changed || firstFrame;
+        // viewer needs before any later "this differs" frame means anything to it.
+        boolean kept = !changedOnly || changed || firstFrame;
 
         Map<String, Object> response = new LinkedHashMap<>(verdict);
-        if (stored) {
-            FrameEventEntity saved = events.save(new FrameEventEntity(
-                    source,
-                    asLong(frameIndex),
-                    Sha256.hex(frameBytes),
-                    changed,
-                    (double) verdict.get("changedFraction"),
-                    Instant.now(),
-                    frameBytes));
-            framesStoredTotal.incrementAndGet();
-            response.put("frameId", saved.getId());
-        } else {
+        if (!kept) {
+            response.put("stored", false);
             response.put("frameId", null);
+            response.put("recipients", 0);
+            return response;
         }
-        response.put("stored", stored);
+
+        FrameEventEntity frame = new FrameEventEntity(
+                ids.next(),
+                source,
+                asLong(frameIndex),
+                Sha256.hex(frameBytes),
+                changed,
+                (double) verdict.get("changedFraction"),
+                Instant.now(),
+                frameBytes);
+
+        // Broadcast first, store second. The id was allocated up front precisely so the live
+        // stream never waits on the database — a Postgres stall slows catch-up, not the video.
+        int recipients = hub.broadcast(frame);
+        store.submit(frame);
+        framesStoredTotal.incrementAndGet();
+
+        response.put("stored", true);
+        response.put("frameId", frame.getId());
+        // Lets a producer notice nobody is watching without polling anything. A frame with zero
+        // recipients is still stored, so a client that connects later can replay it.
+        response.put("recipients", recipients);
         return response;
     }
 

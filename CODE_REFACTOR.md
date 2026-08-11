@@ -1,5 +1,41 @@
 # Refactor backlog
 
+**New debt (jarvis-detection frame hub).** `POST /frames` + `GET /frames/stream` turned detection
+into the push hub: producers push frames, the hub stores them in `frame_events` and streams them
+over SSE to connected clients, replaying from the store for a client that reconnects. Positions of
+named subscriptions live in `frame_cursors`. Note the intermediate commit `e587e06` carries an
+earlier cursor-tracked *webhook* fan-out (`frame_subscriptions`, `FrameDeliveryJob`,
+`FrameSender`) that was replaced by the stream — ignore those names. Four things are knowingly
+unfinished.
+
+- **The hub is Spring-engine only.** It hands frames to open SSE connections and its retention runs
+  on a scheduled bean, neither of which exists in the Undertow runtime, so `/frames` answers 501
+  there and `/frames/stream` is not served. Detection is the one app whose two engines are not
+  feature-equivalent — either implement the stream on Undertow, or decide detection is Spring-only
+  and drop `DetectionUndertowApplication`. Leaving it half-and-half is the worst of the three.
+- **Both frame routes are unauthenticated**, like `/detect` and `/motion` before them. That mattered
+  less for a detection verdict than it does for a video feed anyone who can reach the port can watch
+  — and push into. Wanted: `@RequireAuthentication` on the frame routes, which means making
+  `AUTH_BASE_URL` required for detection and is therefore a breaking change to sequence
+  deliberately.
+- **Subscription names are unauthenticated identities.** Any caller can connect with any
+  `?subscription=` name and advance someone else's cursor. It should be scoped to the authenticated
+  client id — which is blocked on the auth item above.
+- **A frame can be broadcast and never stored.** `DETECTION_STORE_MODE=async` (the default) writes
+  behind the live stream so a database stall cannot stall the video, which means a full write queue
+  or a crash leaves a hole in the id sequence — delivered live, not replayable. `framesUnstoredTotal`
+  counts it and `sync` mode trades it back for latency, but there is no middle ground yet: a small
+  on-disk spool ahead of the database would give one.
+- **Frame bytes live in Postgres `bytea`.** Replay means an unread frame must still exist, and
+  `DETECTION_FRAME_RETENTION_SECONDS` is the only thing bounding the table. The bucket proxy already
+  exists to store jarvis bytes — moving the payload there and leaving `(id, source, sha,
+  storageKey)` plus cursors in Postgres is the obvious upgrade, at the cost of a proxy dependency in
+  detection.
+
+Also: a hung-up client is only noticed on the next failed write, so `connectedClients` and the
+`recipients` count lag a disconnect by one frame. Harmless in practice, but it is why the
+integration test drains frames through the hub in its teardown rather than just closing sockets.
+
 Remaining extraction/cleanup work, ordered by value. (Earlier items — the apps/packages split,
 the Spring migration of all servers, the `AppServer.spring()` descriptor, shared
 logger/health/auth/JSON auto-configs, the invalid-JSON `@RestControllerAdvice`, the

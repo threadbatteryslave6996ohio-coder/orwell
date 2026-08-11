@@ -11,21 +11,26 @@ final class DetectionEndpoint {
     private final DetectionService service;
     private final MotionService motionService;
     /**
-     * Null on the Undertow engine. Frame fan-out is Postgres-backed and driven by scheduled Spring
-     * beans, none of which exist in the Undertow runtime — so rather than pretend, {@code /frames}
-     * answers 501 there and says which engine it needs.
+     * Null on the Undertow engine. The relay hands frames to open SSE connections, which is Spring
+     * MVC async plumbing the Undertow runtime does not set up — so rather than pretend,
+     * {@code /frames} answers 501 there and says which engine it needs.
      */
     private final FrameIngestService ingestService;
+    /** Null alongside {@link #ingestService}; only read when the relay is available. */
+    private final FrameHub hub;
+    private final FrameStoreWriter store;
 
     DetectionEndpoint(DetectionService service, MotionService motionService) {
-        this(service, motionService, null);
+        this(service, motionService, null, null, null);
     }
 
     DetectionEndpoint(DetectionService service, MotionService motionService,
-            FrameIngestService ingestService) {
+            FrameIngestService ingestService, FrameHub hub, FrameStoreWriter store) {
         this.service = service;
         this.motionService = motionService;
         this.ingestService = ingestService;
+        this.hub = hub;
+        this.store = store;
     }
 
     EndpointResponse<Map<String, Object>> detect(Map<String, Object> payload) {
@@ -39,7 +44,7 @@ final class DetectionEndpoint {
     EndpointResponse<Map<String, Object>> frames(Map<String, Object> payload) {
         if (ingestService == null) {
             return EndpointResponse.error(501,
-                    "frame fan-out requires SERVER_ENGINE=spring; this process runs undertow");
+                    "the frame relay requires SERVER_ENGINE=spring; this process runs undertow");
         }
         return run(() -> ingestService.ingest(payload));
     }
@@ -60,10 +65,17 @@ final class DetectionEndpoint {
         details.put("alertsSentTotal", service.alertsSentTotal());
         details.put("framesComparedTotal", motionService.framesComparedTotal());
         details.put("changesDetectedTotal", motionService.changesDetectedTotal());
-        details.put("fanoutAvailable", ingestService != null);
+        details.put("relayAvailable", ingestService != null);
         if (ingestService != null) {
             details.put("framesReceivedTotal", ingestService.framesReceivedTotal());
             details.put("framesStoredTotal", ingestService.framesStoredTotal());
+            details.put("connectedClients", hub.connectedCount());
+            details.put("framesDistributedTotal", hub.framesDistributedTotal());
+            details.put("framesReplayedTotal", hub.framesReplayedTotal());
+            details.put("framesDroppedTotal", hub.framesDroppedTotal());
+            details.put("framesPendingWrite", store.pendingWrites());
+            // Frames that went out live but never made it to the store, so cannot be replayed.
+            details.put("framesUnstoredTotal", store.framesUnstoredTotal());
         }
         return details;
     }

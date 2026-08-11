@@ -2,21 +2,20 @@ package dev.orwell.bucket.detection;
 
 import org.junit.jupiter.api.Test;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static dev.orwell.bucket.detection.FrameTestFixtures.flat;
+import static dev.orwell.bucket.detection.FrameTestFixtures.gradient;
+import static dev.orwell.bucket.detection.FrameTestFixtures.request;
+import static dev.orwell.bucket.detection.FrameTestFixtures.withBlock;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MotionServiceTest {
-    private static final int WIDTH = 320;
-    private static final int HEIGHT = 240;
 
     private final MotionService service = new MotionService(12, 0.02);
 
@@ -154,50 +153,5 @@ class MotionServiceTest {
 
         assertEquals(true, service.motion(request("cam0", flat(100))).get("firstFrame"));
         assertFalse((boolean) service.motion(request("cam199", flat(100))).get("firstFrame"));
-    }
-
-    private static Map<String, Object> request(String source, byte[] frame) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("source", source);
-        payload.put("frameBase64", Base64.getEncoder().encodeToString(frame));
-        return payload;
-    }
-
-    /** A uniform gray frame. */
-    private static byte[] flat(int gray) {
-        return encode(new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB), (x, y) -> gray);
-    }
-
-    /** A uniform gray frame with the top-left quarter filled at a different level. */
-    private static byte[] withBlock(int background, int block) {
-        return encode(new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB),
-                (x, y) -> x < WIDTH / 2 && y < HEIGHT / 2 ? block : background);
-    }
-
-    /** A smooth horizontal ramp — the same scene at any resolution. */
-    private static byte[] gradient(int width, int height) {
-        return encode(new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB),
-                (x, y) -> 255 * x / width);
-    }
-
-    private static byte[] encode(BufferedImage image, Shader shader) {
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                int value = Math.clamp(shader.gray(x, y), 0, 255);
-                image.setRGB(x, y, (value << 16) | (value << 8) | value);
-            }
-        }
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        try {
-            ImageIO.write(image, "jpg", out);
-        } catch (Exception exception) {
-            throw new IllegalStateException("unable to encode test frame", exception);
-        }
-        return out.toByteArray();
-    }
-
-    @FunctionalInterface
-    private interface Shader {
-        int gray(int x, int y);
     }
 }
