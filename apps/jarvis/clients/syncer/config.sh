@@ -1,7 +1,7 @@
 #!/bin/bash
 # Configuration for the Keeboarder "syncer" client.
 #
-# The syncer drains completed recording segments to the bucket proxy. For every
+# The syncer drains completed recording segments to the object storage proxy. For every
 # recording type it leaves the single most recent (still in-progress) segment
 # untouched and merges all older, completed segments into one file before
 # uploading it. Customize the values below before running syncer.sh.
@@ -10,7 +10,7 @@
 # Proxy Configuration
 # ============================================================
 
-# The syncer only talks to the bucket proxy (it never calls the AWS CLI). The
+# The syncer only talks to the object storage proxy (it never calls the AWS CLI). The
 # proxy handles the credential exchange with the auth server.
 PROXY_URL="http://localhost:5000"
 PROXY_USERNAME="tester"

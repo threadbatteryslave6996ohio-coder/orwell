@@ -58,7 +58,7 @@ entry, so a per-client label would create one stream per user, forever.
 ### The `app` label is not always the compose service name
 
 It is `orwell.app.name` — the identity the service chose for itself and the string
-`ConsoleLogger` prints. Two of the seven diverge, so query accordingly:
+`ConsoleLogger` prints. One of the seven diverges, so query accordingly:
 
 | Compose service | `app` label |
 |---|---|
@@ -68,7 +68,7 @@ It is `orwell.app.name` — the identity the service chose for itself and the st
 | `alerting` | `alerting` |
 | `log-analyzer` | `log-analyzer` |
 | `keeboarder-server` | `keeboarder-server` |
-| `jarvis-proxy` | **`bucket-proxy`** |
+| `object-storage-proxy` | `object-storage-proxy` |
 
 ### What direct push costs
 

@@ -1,6 +1,6 @@
 # Syncer Client
 
-Drains completed recording segments to the bucket proxy while leaving the live
+Drains completed recording segments to the object storage proxy while leaving the live
 recording untouched.
 
 For every recording type (`screen`, `microphone`, `system-audio`) the syncer:
@@ -37,7 +37,7 @@ See `config.sh`. Key settings:
 
 | Variable | Meaning |
 | --- | --- |
-| `PROXY_URL` / `PROXY_USERNAME` / `PROXY_PASSWORD` | Bucket proxy endpoint and credentials |
+| `PROXY_URL` / `PROXY_USERNAME` / `PROXY_PASSWORD` | Object storage proxy endpoint and credentials |
 | `RECORDINGS_DIR` | Base directory holding `screen/`, `mic/`, `system-audio/` |
 | `SCREEN_EXTENSIONS` | Screen containers to sync (`mp4 webm`) |
 | `MIN_FILE_AGE` / `FILE_STABILITY_WAIT_SECONDS` | Guards that a segment is fully flushed before merging |

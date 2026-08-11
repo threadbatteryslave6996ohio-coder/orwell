@@ -14,14 +14,7 @@
     <artifactId>jarvis</artifactId>
     <packaging>pom</packaging>
 
-    <properties>
-        <aws.sdk.version>2.27.21</aws.sdk.version>
-        <azure.sdk.version>1.2.35</azure.sdk.version>
-        <jakarta.mail.version>2.0.1</jakarta.mail.version>
-    </properties>
-
     <modules>
-        <module>bucket</module>
         <module>retention</module>
         <module>detection</module>
     </modules>

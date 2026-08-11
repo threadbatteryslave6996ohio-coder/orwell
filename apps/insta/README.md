@@ -197,7 +197,7 @@ half-refreshed graph looks like unfollows to the next run.
 Off by default (`INSTA_PICTURE_STORE=none`) — and with it off, no image is even downloaded.
 Turn it on with `filesystem` (`INSTA_PICTURE_DIR`) or `http` (`INSTA_BUCKET_URL`, optional
 `INSTA_BUCKET_TOKEN`), which PUTs to an S3-compatible endpoint or this repo's
-`jarvis-bucket-proxy`.
+`object-storage-proxy`.
 
 Images are keyed by the **SHA-256 of their bytes**, never by URL. Instagram signs its CDN links, so
 the same picture arrives at a different address on every scrape — keyed on the URL you would record

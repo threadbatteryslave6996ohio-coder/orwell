@@ -59,15 +59,28 @@ public class FrameIdAllocator {
         if (!initialised) {
             ensureSequence();
             initialised = true;
-        }
-        if (next > limit) {
-            long reserved = Objects.requireNonNull(
-                    jdbc.queryForObject("SELECT nextval('" + SEQUENCE + "')", Long.class));
-            // nextval advanced the sequence by BLOCK, so [reserved, reserved + BLOCK - 1] is ours
-            // and no other process can be handed any of it.
-            next = reserved;
-            limit = reserved + BLOCK - 1;
+            // Reserve unconditionally rather than falling through to the `next > limit` check
+            // below: at construction both fields are 0, so that check is false and the first
+            // caller would be handed id 0 without any block being reserved. Two things then
+            // break. A frame with id 0 is unreplayable, because every catch-up query means
+            // "frames after this id" and `?from=0` is also how a client asks to replay
+            // everything. And the id is minted again on the next process start, so the second
+            // run's first frame collides with the first run's row and is silently dropped by
+            // the async writer.
+            reserveBlock();
+        } else if (next > limit) {
+            reserveBlock();
         }
         return next++;
+    }
+
+    /** Takes the next block from the sequence. Caller holds the monitor. */
+    private void reserveBlock() {
+        long reserved = Objects.requireNonNull(
+                jdbc.queryForObject("SELECT nextval('" + SEQUENCE + "')", Long.class));
+        // nextval advanced the sequence by BLOCK, so [reserved, reserved + BLOCK - 1] is ours
+        // and no other process can be handed any of it.
+        next = reserved;
+        limit = reserved + BLOCK - 1;
     }
 }

@@ -1,0 +1,261 @@
+package dev.orwell.objectstorage.proxy;
+
+import dev.orwell.auth.AuthenticationContext;
+import dev.orwell.objectstorage.proxy.storage.BucketStorage;
+import dev.orwell.objectstorage.proxy.storage.ObjectKeys;
+import org.springframework.beans.factory.ObjectProvider;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseCookie;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.CookieValue;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+@RestController
+@RequestMapping("${jarvis.server.route-prefix:}")
+public class ProxyController {
+    private static final String DEFAULT_ROUTE_PREFIX = "";
+    private final ProxyProperties properties;
+    private final AuthServerClient authServerClient;
+    private final ObjectProvider<AuthenticationContext> authenticationContextProvider;
+    private final BucketStorage storage;
+    private final FileAuditLogger audit;
+    private final ManagementSessionService sessions;
+    private final String routePrefix;
+
+    public ProxyController(
+            ProxyProperties properties,
+            AuthServerClient authServerClient,
+            ObjectProvider<AuthenticationContext> authenticationContextProvider,
+            BucketStorage storage,
+            FileAuditLogger audit,
+            ManagementSessionService sessions,
+            @Value("${jarvis.server.route-prefix:}") String routePrefix
+        ) {
+        this.properties = properties;
+        this.authServerClient = authServerClient;
+        this.authenticationContextProvider = authenticationContextProvider;
+        this.storage = storage;
+        this.audit = audit;
+        this.sessions = sessions;
+        this.routePrefix = normalizeRoutePrefix(routePrefix);
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody ProxyLoginRequest login) {
+        var result = authServerClient.login(login.username(), login.password());
+        if (!result.success() || !StringUtils.hasText(result.token())) {
+            int status = result.statusCode() >= 400 ? result.statusCode() : HttpStatus.UNAUTHORIZED.value();
+            String error = status == HttpStatus.UNAUTHORIZED.value()
+                    ? "Invalid username or password"
+                    : "Auth server rejected login with HTTP " + status + ".";
+            return ResponseEntity.status(status)
+                    .body(Map.of("success", false, "error", error));
+        }
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "clientId", result.clientId(),
+                "token", result.token(),
+                "tokenType", "Bearer"
+        ));
+    }
+
+    @PostMapping("/upload")
+    public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file,
+                                    @RequestParam(value = "folder", defaultValue = "uploads") String folder,
+                                    @RequestParam(value = "fileName", required = false) String fileName) throws IOException {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
+            return unauthorized();
+        }
+        Path temp = Files.createTempFile("bucket-upload-", ".bin");
+        try {
+            file.transferTo(temp);
+            var result = storage.upload(temp, file.getContentType(), folder, StringUtils.hasText(fileName) ? fileName : file.getOriginalFilename());
+            return ResponseEntity.ok(Map.of("success", true, "message", "File uploaded successfully", "key", result.key(), "etag", result.etag()));
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+    }
+
+    @PostMapping("/batch-upload")
+    public ResponseEntity<?> batchUpload(@RequestParam("files") List<MultipartFile> files,
+                                         @RequestParam(value = "folder", defaultValue = "uploads") String folder) throws IOException {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
+            return unauthorized();
+        }
+        List<Map<String, Object>> uploaded = new ArrayList<>();
+        for (MultipartFile file : files) {
+            Path temp = Files.createTempFile("bucket-upload-", ".bin");
+            try {
+                file.transferTo(temp);
+                var result = storage.upload(temp, file.getContentType(), folder, file.getOriginalFilename());
+                uploaded.add(Map.of("key", result.key(), "etag", result.etag()));
+            } finally {
+                Files.deleteIfExists(temp);
+            }
+        }
+        return ResponseEntity.ok(Map.of("success", true, "message", uploaded.size() + " files uploaded successfully", "files", uploaded));
+    }
+
+    @GetMapping("/list/{folder}")
+    public ResponseEntity<?> list(@PathVariable("folder") String folder) {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
+            return unauthorized();
+        }
+        var files = storage.list(folder).stream().map(item -> Map.<String, Object>of(
+                "key", item.key(),
+                "size", item.size(),
+                "lastModified", item.lastModified()
+        )).toList();
+        return ResponseEntity.ok(Map.of("success", true, "folder", folder.replaceAll("^/+|/+$", ""), "files", files));
+    }
+
+    @GetMapping("/metadata/{*key}")
+    public ResponseEntity<?> metadata(@PathVariable("key") String key) {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
+            return unauthorized();
+        }
+        String normalizedKey = ObjectKeys.normalizeKey(key);
+        var metadata = storage.metadata(normalizedKey);
+        if (!metadata.exists()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("success", true, "exists", false, "key", normalizedKey));
+        }
+        return ResponseEntity.ok(Map.of("success", true, "exists", true, "key", normalizedKey, "size", metadata.size(), "etag", metadata.etag(), "lastModified", metadata.lastModified()));
+    }
+
+    @DeleteMapping("/delete/{*key}")
+    public ResponseEntity<?> delete(@PathVariable("key") String key) {
+        AuthenticationContext authenticationContext = authenticationContextProvider.getObject();
+        if (!authenticationContext.authenticated()) {
+            return unauthorized();
+        }
+        String normalizedKey = ObjectKeys.normalizeKey(key);
+        storage.delete(normalizedKey);
+        return ResponseEntity.ok(Map.of("success", true, "message", "File deleted successfully", "key", normalizedKey));
+    }
+
+    @GetMapping(value = "/admin", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> admin(@CookieValue(value = "s3proxy_admin", required = false) String token) {
+        Optional<String> username = token == null ? Optional.empty() : sessions.validate(token);
+        if (username.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(adminLoginPage(""));
+        }
+        return ResponseEntity.ok(adminDashboard(username.get(), ""));
+    }
+
+    @PostMapping(value = "/admin/login", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public ResponseEntity<String> adminLogin(@RequestParam("username") String username,
+                                             @RequestParam("password") String password,
+                                             HttpServletResponse response) {
+        if (!SecureTokenUtils.constantTimeEquals(username, properties.management().username()) || !SecureTokenUtils.constantTimeEquals(password, properties.management().password())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(adminLoginPage("Invalid username or password."));
+        }
+        String token = sessions.createSession(username, Instant.now().plusSeconds(8 * 3600));
+        ResponseCookie cookie = ResponseCookie.from("s3proxy_admin", token).httpOnly(true).secure(useSecureCookies()).path(routePath("/")).sameSite("Strict").maxAge(8 * 3600).build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, routePath("/admin")).body(adminDashboard(username, ""));
+    }
+
+    @PostMapping(value = "/admin/logout", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public ResponseEntity<String> adminLogout(@CookieValue(value = "s3proxy_admin", required = false) String token, HttpServletResponse response) {
+        ResponseCookie cookie = ResponseCookie.from("s3proxy_admin", "").httpOnly(true).secure(useSecureCookies()).path(routePath("/")).sameSite("Strict").maxAge(0).build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, routePath("/admin")).body(adminLoginPage(""));
+    }
+
+    @PostMapping(value = "/admin/users", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public ResponseEntity<String> createIdentity(@CookieValue(value = "s3proxy_admin", required = false) String token,
+                                                 @RequestParam("clientId") String clientId,
+                                                 @RequestParam("secret") String secret) {
+        Optional<String> username = token == null ? Optional.empty() : sessions.validate(token);
+        if (username.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(adminLoginPage("Please sign in."));
+        }
+        var result = authServerClient.createIdentity(clientId, secret);
+        int status = result.statusCode() >= 400 ? result.statusCode() : HttpStatus.BAD_REQUEST.value();
+        String message = result.success()
+                ? "Created auth-server identity '" + escapeHtml(clientId) + "'."
+                : "Auth server rejected identity creation with HTTP " + status + ".";
+        int responseStatus = result.success() ? HttpStatus.OK.value() : status;
+        return ResponseEntity.status(responseStatus).body(adminDashboard(username.get(), message));
+    }
+
+    private ResponseEntity<Map<String, Object>> unauthorized() {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("success", false, "error", "Unauthorized"));
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> badRequest(IllegalArgumentException exception) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("success", false, "error", exception.getMessage()));
+    }
+
+    private static String escapeHtml(String value) {
+        return value == null ? "" : value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    private String adminLoginPage(String message) {
+        return "<!doctype html><html><body><h1>S3 Proxy Admin</h1><p>" + escapeHtml(message) + "</p>" +
+                "<form method='post' action='" + routePath("/admin/login") + "'><input name='username'><input name='password' type='password'><button>Sign in</button></form></body></html>";
+    }
+
+    private String adminDashboard(String user, String message) {
+        return "<!doctype html><html><body><h1>S3 Proxy Admin</h1><p>Signed in as " + escapeHtml(user) + "</p><p>" + escapeHtml(message) + "</p>" +
+                "<form method='post' action='" + routePath("/admin/logout") + "'><button>Sign out</button></form>" +
+                "<form method='post' action='" + routePath("/admin/users") + "'><input name='clientId'><input name='secret' type='password'><button>Create identity</button></form></body></html>";
+    }
+
+    private boolean useSecureCookies() {
+        String url = properties.server() == null ? null : properties.server().url();
+        return StringUtils.hasText(url) && url.trim().toLowerCase(java.util.Locale.ROOT).startsWith("https://");
+    }
+
+    private String routePath(String path) {
+        return routePrefix + path;
+    }
+
+    private static String normalizeRoutePrefix(String serverUrl) {
+        if (!StringUtils.hasText(serverUrl)) {
+            return DEFAULT_ROUTE_PREFIX;
+        }
+        try {
+            String path = java.net.URI.create(serverUrl.trim()).getPath();
+            if (!StringUtils.hasText(path) || "/".equals(path)) {
+                return DEFAULT_ROUTE_PREFIX;
+            }
+            String normalized = path.replaceAll("/+$", "");
+            return normalized.startsWith("/") ? normalized : "/" + normalized;
+        } catch (IllegalArgumentException exception) {
+            return DEFAULT_ROUTE_PREFIX;
+        }
+    }
+
+    public record ProxyLoginRequest(@NotBlank String username, @NotBlank String password) {}
+}

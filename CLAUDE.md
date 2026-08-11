@@ -32,7 +32,6 @@ Java packages predate the renames and do NOT always match — use this table, do
 | `apps/google/gmail-general` | `gmail-general` | `dev.orwell.google.gmail` |
 | `apps/insta` | `insta` | `dev.orwell.insta` (CLI; `insta ui` serves a read-only viewer) |
 | `apps/jarvis` | `jarvis` (aggregator) | — |
-| `apps/jarvis/bucket/proxy` | `jarvis-bucket-proxy` | `dev.orwell.bucket.proxy` |
 | `apps/jarvis/detection` | `jarvis-detection` | `dev.orwell.bucket.detection` |
 | `apps/jarvis/retention` | `jarvis-retention` | `dev.orwell.bucket.retention` (library, not a service) |
 | `apps/keeboarder/server` | `keeboarder-server` | `dev.orwell.keeboarder.server` |
@@ -41,6 +40,7 @@ Java packages predate the renames and do NOT always match — use this table, do
 | `apps/klippy/utils` | `klippy-utils` | `dev.orwell.utils` |
 | `apps/klippy/clients/*` | `klippy-client-core`, `klippy-dummy-client`, `klippy-file-locker`, `klippy-linux-client`, `klippy-mac-client`, `klippy-offline-sync-client` | `dev.orwell.clients.*` |
 | `apps/log-analyzer` | `log-analyzer` | `dev.orwell.loganalyzer` |
+| `apps/object-storage-proxy` | `object-storage-proxy` | `dev.orwell.objectstorage.proxy` |
 | `apps/secrets-manager/server` | `secrets-manager-server` | `dev.orwell.secrets` |
 | `apps/secrets-manager/client` | `secrets-manager-client` | `dev.orwell.secrets.client` |
 | `packages/env/{core,http}` | `env-core`, `env-http` | `dev.orwell.env`, `dev.orwell.env.http` |
@@ -71,7 +71,7 @@ Java packages predate the renames and do NOT always match — use this table, do
   AWS-specific infrastructure — don't recreate it either.
 - **There is exactly one Postgres and one Redis**, defined in `docker-compose.all-services.yml`
   (services `db` and `redis`). Nothing else in the repo may create one: the per-app compose files
-  and `apps/jarvis/.../local-stack.sh` all use this instance, and `db-init/all-services.sql` is
+  and `apps/object-storage-proxy/scripts/local-stack.sh` all use this instance, and `db-init/all-services.sql` is
   the single source of the `klippy`/`auth`/`secrets` roles and databases. Ephemeral Testcontainers
   in tests are the one exception — they bind no fixed port. If you find another Postgres or Redis
   being created, it is a straggler to remove, not a setup to preserve.
