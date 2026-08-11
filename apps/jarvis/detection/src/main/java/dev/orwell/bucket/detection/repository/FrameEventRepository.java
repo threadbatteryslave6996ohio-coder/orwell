@@ -22,7 +22,7 @@ public interface FrameEventRepository extends JpaRepository<FrameEventEntity, Lo
     /** The current head, used to start a new subscription's cursor without replaying the window. */
     Optional<FrameEventEntity> findTopByOrderByIdDesc();
 
-    long countByCapturedAtBefore(Instant cutoff);
+    long countBySource(String source);
 
     /**
      * Bulk delete rather than a derived {@code deleteBy}: the derived form loads every matching

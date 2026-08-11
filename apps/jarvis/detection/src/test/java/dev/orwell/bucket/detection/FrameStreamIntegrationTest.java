@@ -159,7 +159,9 @@ class FrameStreamIntegrationTest extends PostgresIntegrationTest {
         // The hub relays what it is given rather than deciding a repeat is not worth sending, so
         // the retention window is the only thing bounding the table.
         await(() -> viewer.frames.size() == 3);
-        await(() -> events.count() == 3);
+        // Counted per source, not over the table: the teardown drain pushes frames of its own, and
+        // its async writes can land after the next test has cleared the store.
+        await(() -> events.countBySource("cam-static") == 3);
     }
 
     // --- storage and replay -----------------------------------------------------------------
@@ -171,7 +173,7 @@ class FrameStreamIntegrationTest extends PostgresIntegrationTest {
         assertThat(push.get("stored")).isEqualTo(true);
         assertThat(push.get("recipients")).isEqualTo(0);
         // Broadcast and storage are separate now: nobody received it, and it still landed.
-        assertThat(events.count()).isEqualTo(1);
+        assertThat(events.countBySource("cam-nobody")).isEqualTo(1);
     }
 
     @Test

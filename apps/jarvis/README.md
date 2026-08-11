@@ -74,11 +74,18 @@ recorders ──POST /frames──> hub ──┬──SSE──> clients connec
 ```
 
 `POST /frames` takes the same body as `/detect` and `/motion`, and answers
-`{"success":true,"source":"cam1","frameIndex":42,"stored":true,"frameId":91,"recipients":2}` — so a
-camera can tell nobody is watching without polling anything. A frame with zero recipients is still
-stored, so a client connecting later can still replay it. The envelope is validated (base64, and
-`frameSha256` against the bytes if sent) but the bytes are not. Ingest returns as soon as the frame is queued for each client, never after they
-have received it, so a producer's frame rate is never coupled to the slowest viewer.
+
+```json
+{"success":true,"source":"cam1","frameIndex":42,"timestamp":"2026-08-10T12:00:00Z",
+ "stored":true,"frameId":91,"recipients":2}
+```
+
+— so a camera can tell nobody is watching without polling anything (`frameIndex` and `timestamp`
+are echoed back from the request, and are null if it did not send them). A frame with zero
+recipients is still stored, so a client connecting later can still replay it. The envelope is
+validated (base64, and `frameSha256` against the bytes if sent) but the bytes are not. Ingest
+returns as soon as the frame is queued for each client, never after they have received it, so a
+producer's frame rate is never coupled to the slowest viewer.
 
 **The frame is broadcast before it is written.** Its id comes from a Postgres sequence allocated in
 blocks up front, so the SSE event id exists before the row does and the live stream never waits on
@@ -140,6 +147,34 @@ them. Drops are counted and reported on `GET /health`, alongside `connectedClien
 > rate: at 40 KB and 5 fps that is ~200 KB/s *per source*, so the default window costs ~60 MB per
 > source. Push less, or keep less. Sending only frames that differ is a producer's decision — it can
 > ask `/motion` first, or make the call locally, which is cheaper than shipping a frame to find out.
+>
+> It is a **write** rate too, not just disk: eight cameras at 5 fps is 40 inserts/s through one
+> writer thread and a 512-frame queue. If Postgres stalls long enough to fill that queue — a
+> checkpoint on a busy disk will do it — `submit()` starts abandoning frames after 50 ms and they
+> become live-only. `framesPendingWrite` climbing on `GET /health` is the warning; raise
+> `DETECTION_STORE_QUEUE_DEPTH` to ride out longer stalls, at the cost of heap.
+
+#### Upgrading a deployment that ran an earlier build
+
+Two breaking changes landed when frame relaying stopped inspecting frames.
+
+**The schema.** `frame_events.changed` and `changed_fraction` are gone. `ddl-auto=update` never
+drops a column and both were `NOT NULL` with no default, so an existing table rejects every insert
+until you drop them:
+
+```sql
+ALTER TABLE frame_events DROP COLUMN IF EXISTS changed, DROP COLUMN IF EXISTS changed_fraction;
+```
+
+Skipping this fails *quietly* in the default `DETECTION_STORE_MODE=async`: the live stream keeps
+working perfectly because broadcast happens before the write, and only replay is dead — every
+reconnect and `?from=` returns nothing, forever. The symptoms are `framesUnstoredTotal` climbing on
+`GET /health` and `Could not store a batch of frames` in the log.
+
+**The wire format.** The SSE `frame` event no longer carries `changed` or `changedFraction`, and
+the `POST /frames` ack no longer carries `changed`, `firstFrame`, `changedCells` or `changedFraction`.
+A consumer branching on `frame.changed` reads undefined rather than failing, so it goes quiet
+instead of erroring — grep your viewers for those field names before upgrading.
 
 **Retention wins over catch-up.** The sweep deletes aged frames whether or not every client has
 read them, so a client away longer than the retention window resumes at the oldest surviving frame
