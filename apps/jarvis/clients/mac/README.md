@@ -112,7 +112,7 @@ Manual Commands:
 
 Uploading (separate client):
   apps/jarvis/clients/syncer/syncer.sh
-    └── Drains completed segments to the bucket proxy
+    └── Drains completed segments to the object storage proxy
 ```
 
 ## Logging Details

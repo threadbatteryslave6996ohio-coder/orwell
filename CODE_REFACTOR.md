@@ -33,7 +33,7 @@ unfinished.
   `DETECTION_FRAME_RETENTION_SECONDS` caps their age, swept by
   [`jarvis-retention`](apps/jarvis/retention/README.md). That makes the footprint safe, not free —
   it is still video bytes on the one Postgres the whole repo shares, with the WAL and autovacuum
-  churn that implies. The bucket proxy already exists to store jarvis bytes; moving the payload
+  churn that implies. The object storage proxy already exists to store jarvis bytes; moving the payload
   there and leaving `(id, source, sha, storageKey)` plus cursors in Postgres is the upgrade, at the
   cost of a proxy dependency in detection. The trigger to do it is **viewer fan-out or a much
   longer window**, not table size: the hub currently base64s every frame to every subscriber, so
@@ -65,7 +65,7 @@ files are gone — `Flag.java`, `packages/env/http/.../HttpExchangeResponses.jav
 `admin/GroupDetailResponse.java`, and secrets-client `PasswordAuthProvider.java`; `ClientAuthSession`
 (token cache + login + 401 refresh) was promoted from klippy into `auth-http-client` and `GmailService`
 now reuses it instead of its own inlined login cache (the §2 "Gmail webhook auth" item); and two
-in-file dedups landed — `BucketProxyClient`'s six copy-pasted try/catch blocks collapsed onto a shared
+in-file dedups landed — `ObjectStorageProxyClient`'s six copy-pasted try/catch blocks collapsed onto a shared
 `call(...)`/`rejected(...)` pair, and `SecretsManagerClient`'s two `execute` overloads merged into one
 deserializer-parameterized method.
 
@@ -152,7 +152,7 @@ re-parented to the root.
   promoted from klippy's client-core into `auth-http-client` (`dev.orwell.auth.http.client`), and
   `GmailService` now reuses it instead of hand-rolling a `LoginHttpResponse` cache. The remaining two
   "variants" turned out **not** to share this shape: `SecretsManagerClient` uses a static bearer token
-  (`TokenAuthProvider`) with no refresh, and `BucketProxyClient` takes the token per call from the
+  (`TokenAuthProvider`) with no refresh, and `ObjectStorageProxyClient` takes the token per call from the
   caller. The password-login-with-cache class (`PasswordAuthProvider`) was dead and is deleted, so
   there is no live 401-refresh path left to unify there.
 - **`KeeboarderWebSocketRuntime`** reduces to a
@@ -175,7 +175,7 @@ re-parented to the root.
 - **`SharedHealthController` allocations**: providers build intermediate maps copied into the
   response on every poll; a `contribute(Map target)` signature would avoid the churn.
 - **Stream-worker hardening (from the streaming/proxy unification review)**: four low-severity
-  items in `dev.orwell.bucket.proxy.streaming.AnalysisWorker` and `scripts/analyze_stream.sh`.
+  items in `dev.orwell.objectstorage.proxy.streaming.AnalysisWorker` and `scripts/analyze_stream.sh`.
   None are correctness regressions — they only bite on pathological or large-frame input the
   default 640px MJPEG pipeline does not produce.
   - *Oversize-frame guard discards the whole buffer instead of resyncing*: in `pollFrame()`, the

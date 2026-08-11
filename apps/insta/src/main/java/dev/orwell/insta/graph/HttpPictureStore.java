@@ -12,7 +12,7 @@ import java.util.Objects;
 
 /**
  * PUTs pictures to a bucket over HTTP — an S3-compatible endpoint, or this repo's
- * {@code jarvis-bucket-proxy}, which fronts S3/MinIO and Azure Blob.
+ * {@code object-storage-proxy}, which fronts S3/MinIO and Azure Blob.
  *
  * <p>The optional bearer token is a plain configured value rather than an auth-server session on
  * purpose: this program dropped its auth dependency when it stopped being a server, and a

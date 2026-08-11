@@ -7,7 +7,7 @@ set -uo pipefail
 #   1. Lists completed segments in chronological order.
 #   2. Leaves the single most recent segment (the still-in-progress file) as is.
 #   3. Merges every older segment of the same container into one file.
-#   4. Uploads that merged file to the bucket proxy.
+#   4. Uploads that merged file to the object storage proxy.
 #
 # If only one older segment exists it is uploaded directly (nothing to merge).
 # If the only segment present is the most recent one, the type is skipped.

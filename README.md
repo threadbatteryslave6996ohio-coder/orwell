@@ -12,11 +12,12 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 | Backup | `apps/backup` | Postgres backup runner |
 | Google | `apps/google` | Gmail integration service |
 | Insta | `apps/insta` | CLI for public Instagram follower/following lookups via the Apify marketplace |
-| Jarvis | `apps/jarvis` | Surveillance (bucket proxy, streaming, detection) |
+| Jarvis | `apps/jarvis` | Surveillance (recorder clients, streaming, detection) |
 | Keeboarder | `apps/keeboarder` | Keyboard/message relay |
 | Klippy | `apps/klippy` | Clipboard history sync |
 | Log analyzer | `apps/log-analyzer` | AI-assisted log triage feeding the alerting service |
 | Liveness analyzer | `apps/liveness-analyzer` | Heartbeat dead-man's switch alerting when a client stops running |
+| Object storage proxy | `apps/object-storage-proxy` | Upload proxy fronting S3-compatible or Azure Blob storage, plus the stream analysis worker |
 | Secrets manager | `apps/secrets-manager` | Secret bundle/environment management |
 
 ## Packages

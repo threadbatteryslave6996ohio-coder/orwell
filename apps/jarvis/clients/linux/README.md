@@ -55,7 +55,7 @@ Edit `config.sh` first if you need a different capture backend, display, screen 
 
 Uploading recordings is **not** this client's job. Point the **syncer** client at
 `apps/jarvis/clients/syncer/` at the recordings directory (`~/recordings`) and run it on a timer;
-it logs in to the bucket proxy and drains completed segments through the proxy's `/upload` flow.
+it logs in to the object storage proxy and drains completed segments through the proxy's `/upload` flow.
 See that client's README for configuration and the recommended timer interval.
 
 ## File Layout

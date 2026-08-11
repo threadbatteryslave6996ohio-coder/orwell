@@ -128,17 +128,17 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  jarvis-proxy:
-    image: jarvis-bucket-proxy:local
+  object-storage-proxy:
+    image: object-storage-proxy:local
     build:
       context: .
-      dockerfile: apps/jarvis/bucket/proxy/docker/deployment/Dockerfile
+      dockerfile: apps/object-storage-proxy/docker/deployment/Dockerfile
     # .env.example holds the committed non-secret defaults; the gitignored .env beside it
     # overrides them and is where real credentials belong. Later files win, and the override
     # is optional so the stack still comes up before anyone has created one.
     env_file:
-      - ./apps/jarvis/bucket/proxy/docker/deployment/.env.example
-      - path: ./apps/jarvis/bucket/proxy/docker/deployment/.env
+      - ./apps/object-storage-proxy/docker/deployment/.env.example
+      - path: ./apps/object-storage-proxy/docker/deployment/.env
         required: false
     mem_limit: 512m
     environment:
@@ -149,8 +149,8 @@ services:
       SERVER_PORT: "5000"
       JARVIS_SERVER_ROUTE_PREFIX: /jarvis
       AUTH_BASE_URL: http://auth-server/auth
-      PROXY_SERVER_URL: http://localhost:${ORWELL_HTTP_PORT:-8080}/jarvis
-      PROXY_LOGGING_AUDIT_FILE: /app/logs/audit.log
+      OBJECT_STORAGE_SERVER_URL: http://localhost:${ORWELL_HTTP_PORT:-8080}/jarvis
+      OBJECT_STORAGE_LOGGING_AUDIT_FILE: /app/logs/audit.log
     # Without this the audit log lives in the container's writable layer and is lost on every
     # recreate. The volume was declared but mounted by nothing after the standalone per-app compose
     # stack (which did mount it) was removed.
@@ -167,6 +167,53 @@ services:
       retries: 5
       start_period: 30s
 
+  # The frame hub: recorders POST /frames, viewers hold GET /frames/stream open, and frame_events
+  # is the replay buffer between them. Spring engine only — see the Dockerfile.
+  #
+  # NOTE: this needs the `jarvis` role and database from db-init/all-services.sql, which Postgres
+  # runs only when the data volume is first initialised. On a volume created before that entry
+  # existed, create them by hand once:
+  #   docker compose exec db psql -U postgres \
+  #     -c "CREATE ROLE jarvis LOGIN PASSWORD 'jarvis'" -c "CREATE DATABASE jarvis OWNER jarvis"
+  jarvis-detection:
+    image: jarvis-detection:local
+    build:
+      context: .
+      dockerfile: apps/jarvis/detection/Dockerfile
+    # See the object-storage-proxy env_file note: committed defaults, optional gitignored override.
+    env_file:
+      - ./apps/jarvis/detection/.env.example
+      - path: ./apps/jarvis/detection/.env
+        required: false
+    # Frames are held in memory twice over: the store queue (DETECTION_STORE_QUEUE_DEPTH frames
+    # awaiting a write) and the per-connection stream queues. At the default 512-deep store queue
+    # that is ~20 MB of 40 KB frames — raise this alongside that setting, or a larger frame size.
+    mem_limit: 512m
+    environment:
+      LOKI_URL: "${LOKI_URL:-}"
+      LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
+      JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "9001"
+      SERVER_ENGINE: spring
+      DETECTION_DATASOURCE_URL: jdbc:postgresql://db/jarvis
+      DETECTION_DATASOURCE_USERNAME: jarvis
+      DETECTION_DATASOURCE_PASSWORD: jarvis
+      DETECTION_JPA_HIBERNATE_DDL_AUTO: update
+      DETECTION_ALERT_URL: http://alerting/alerts
+    depends_on:
+      db:
+        condition: service_healthy
+      alerting:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9001 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
   alerting:
     image: orwell-log-analyzer:local
     build:
@@ -174,7 +221,7 @@ services:
       dockerfile: apps/log-analyzer/Dockerfile
     command: ["java", "-jar", "/app/alerting.jar"]
     mem_limit: 256m
-    # See the jarvis-proxy env_file note: committed defaults, optional gitignored override.
+    # See the object-storage-proxy env_file note: committed defaults, optional gitignored override.
     env_file:
       - ./apps/alerting/.env.example
       - path: ./apps/alerting/.env
@@ -194,7 +241,7 @@ services:
       dockerfile: apps/log-analyzer/Dockerfile
     command: ["java", "-jar", "/app/log-analyzer.jar"]
     mem_limit: 256m
-    # See the jarvis-proxy env_file note: committed defaults, optional gitignored override.
+    # See the object-storage-proxy env_file note: committed defaults, optional gitignored override.
     env_file:
       - ./apps/log-analyzer/.env.example
       - path: ./apps/log-analyzer/.env
@@ -234,7 +281,7 @@ services:
     build:
       context: .
       dockerfile: apps/keeboarder/server/Dockerfile
-    # See the jarvis-proxy env_file note: committed defaults, optional gitignored override.
+    # See the object-storage-proxy env_file note: committed defaults, optional gitignored override.
     env_file:
       - ./apps/keeboarder/server/.env.example
       - path: ./apps/keeboarder/server/.env
@@ -267,7 +314,9 @@ services:
         condition: service_started
       secrets-manager:
         condition: service_started
-      jarvis-proxy:
+      object-storage-proxy:
+        condition: service_healthy
+      jarvis-detection:
         condition: service_healthy
       alerting:
         condition: service_started

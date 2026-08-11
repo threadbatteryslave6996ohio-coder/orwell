@@ -138,28 +138,28 @@ KEEB_REDIS_PORT=$(create_env "$KEEB_GROUP" "REDIS_PORT"   "6379")
 KEEB_AUTH=$(create_env "$KEEB_GROUP"     "AUTH_BASE_URL" "http://localhost:8081")
 
 # ============================================================================
-# 6. JARVIS BUCKET PROXY
+# 6. OBJECT STORAGE PROXY
 # ============================================================================
 echo "[jarvis-proxy]"
 
-JARVIS_GROUP=$(create_group "jarvis-proxy" "S3/Azure object storage proxy (apps/jarvis/bucket/proxy)")
+JARVIS_GROUP=$(create_group "jarvis-proxy" "S3/Azure object storage proxy (apps/object-storage-proxy)")
 
-JARVIS_STORAGE=$(create_env "$JARVIS_GROUP"   "PROXY_STORAGE_PROVIDER"        "aws")
-JARVIS_MAXFILE=$(create_env "$JARVIS_GROUP"   "PROXY_STORAGE_MAX_FILE_SIZE"   "5368709120")
-JARVIS_S3_BUCKET=$(create_env "$JARVIS_GROUP" "PROXY_S3_BUCKET_NAME"          "your-bucket-name")
-JARVIS_S3_REGION=$(create_env "$JARVIS_GROUP" "PROXY_S3_REGION"               "us-east-1")
-JARVIS_S3_ENDPOINT=$(create_env "$JARVIS_GROUP" "PROXY_S3_ENDPOINT"           "")
-JARVIS_S3_PATH=$(create_env "$JARVIS_GROUP"   "PROXY_S3_PATH_STYLE_ACCESS"    "false")
+JARVIS_STORAGE=$(create_env "$JARVIS_GROUP"   "OBJECT_STORAGE_PROVIDER"        "aws")
+JARVIS_MAXFILE=$(create_env "$JARVIS_GROUP"   "OBJECT_STORAGE_MAX_FILE_SIZE"   "5368709120")
+JARVIS_S3_BUCKET=$(create_env "$JARVIS_GROUP" "OBJECT_STORAGE_S3_BUCKET_NAME"          "your-bucket-name")
+JARVIS_S3_REGION=$(create_env "$JARVIS_GROUP" "OBJECT_STORAGE_S3_REGION"               "us-east-1")
+JARVIS_S3_ENDPOINT=$(create_env "$JARVIS_GROUP" "OBJECT_STORAGE_S3_ENDPOINT"           "")
+JARVIS_S3_PATH=$(create_env "$JARVIS_GROUP"   "OBJECT_STORAGE_S3_PATH_STYLE_ACCESS"    "false")
 JARVIS_AZURE_ACCT=$(create_env "$JARVIS_GROUP" "AZURE_STORAGE_ACCOUNT"        "")
 JARVIS_AZURE_CONT=$(create_env "$JARVIS_GROUP" "AZURE_STORAGE_CONTAINER"      "")
 JARVIS_AZURE_ENDP=$(create_env "$JARVIS_GROUP" "AZURE_STORAGE_ENDPOINT"       "")
 JARVIS_AZURE_CONN=$(create_env "$JARVIS_GROUP" "AZURE_STORAGE_CONNECTION_STRING" "")
 JARVIS_AUTH_KEY=$(create_env "$JARVIS_GROUP"  "AUTH_IDENTITY_PROVISIONING_KEY" "")
-JARVIS_MGMT_USER=$(create_env "$JARVIS_GROUP" "PROXY_MANAGEMENT_USERNAME"     "")
-JARVIS_MGMT_PASS=$(create_env "$JARVIS_GROUP" "PROXY_MANAGEMENT_PASSWORD"     "")
-JARVIS_MGMT_SESS=$(create_env "$JARVIS_GROUP" "PROXY_MANAGEMENT_SESSION_SECRET" "")
-JARVIS_SRV_URL=$(create_env "$JARVIS_GROUP"   "PROXY_SERVER_URL"              "http://localhost:5000")
-JARVIS_AUDIT=$(create_env "$JARVIS_GROUP"     "PROXY_LOGGING_AUDIT_FILE"              "logs/audit.log")
+JARVIS_MGMT_USER=$(create_env "$JARVIS_GROUP" "OBJECT_STORAGE_MANAGEMENT_USERNAME"     "")
+JARVIS_MGMT_PASS=$(create_env "$JARVIS_GROUP" "OBJECT_STORAGE_MANAGEMENT_PASSWORD"     "")
+JARVIS_MGMT_SESS=$(create_env "$JARVIS_GROUP" "OBJECT_STORAGE_MANAGEMENT_SESSION_SECRET" "")
+JARVIS_SRV_URL=$(create_env "$JARVIS_GROUP"   "OBJECT_STORAGE_SERVER_URL"              "http://localhost:5000")
+JARVIS_AUDIT=$(create_env "$JARVIS_GROUP"     "OBJECT_STORAGE_LOGGING_AUDIT_FILE"              "logs/audit.log")
 
 # ============================================================================
 # 7. JARVIS DETECTION
@@ -178,7 +178,7 @@ DETECT_CONFIDENCE=$(create_env "$DETECT_GROUP" "DETECTION_MIN_CONFIDENCE" "0.0")
 # ============================================================================
 echo "[jarvis-alerting]"
 
-ALERT_GROUP=$(create_group "jarvis-alerting" "Alert dispatch service (apps/jarvis/bucket/alerting)")
+ALERT_GROUP=$(create_group "jarvis-alerting" "Alert dispatch service (apps/alerting)")
 ALERT_HOST=$(create_env "$ALERT_GROUP"  "SERVER_ADDRESS"       "127.0.0.1")
 ALERT_PORT=$(create_env "$ALERT_GROUP"  "SERVER_PORT"       "9000")
 ALERT_EMAIL_ENABLED=$(create_env "$ALERT_GROUP" "ALERT_EMAIL_ENABLED" "false")
@@ -195,7 +195,7 @@ ALERT_LOG_FILE=$(create_env "$ALERT_GROUP"    "ALERT_LOG_FILE"    "/var/log/stre
 # ============================================================================
 echo "[jarvis-streaming]"
 
-STREAM_GROUP=$(create_group "jarvis-streaming" "Frame analysis worker (apps/jarvis/bucket/proxy)")
+STREAM_GROUP=$(create_group "jarvis-streaming" "Frame analysis worker (apps/object-storage-proxy)")
 STREAM_ENDPOINT=$(create_env "$STREAM_GROUP" "STREAM_ANALYSIS_ENDPOINT" "")
 
 # ============================================================================

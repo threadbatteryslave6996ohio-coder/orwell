@@ -1,10 +1,11 @@
 # Jarvis
 
-Surveillance services (bucket proxy, detection) and macOS/Linux recorder
-clients. Bucket services are under `bucket/`, recorder clients under `clients/`.
+Surveillance services (detection, retention) and macOS/Linux recorder clients,
+the latter under `clients/`.
 Alert delivery is no longer part of jarvis; it is a standalone app at `apps/alerting`.
-The bucket proxy also bundles the stream analysis worker and its ingest scripts
-(see `bucket/proxy/`).
+The upload proxy the recorders push to is likewise standalone, at
+`apps/object-storage-proxy` — it also bundles the stream analysis worker and its ingest
+scripts.
 
 Authentication is supplied by `apps/auth`. Build all services from the repository root:
 
@@ -155,6 +156,40 @@ them. Drops are counted and reported on `GET /health`, alongside `connectedClien
 > become live-only. `framesPendingWrite` climbing on `GET /health` is the warning; raise
 > `DETECTION_STORE_QUEUE_DEPTH` to ride out longer stalls, at the cost of heap.
 
+#### Running it from the stack
+
+`docker compose -f docker-compose.all-services.yml up -d jarvis-detection` builds
+[`detection/Dockerfile`](detection/Dockerfile) and brings the hub up on port 9001, behind nginx at
+`/detection/`:
+
+```bash
+curl http://localhost:8080/detection/health
+curl -N http://localhost:8080/detection/frames/stream        # -N: don't buffer the stream
+curl -X POST http://localhost:8080/detection/frames \
+     -H 'Content-Type: application/json' -d '{"source":"cam1","frameBase64":"..."}'
+```
+
+Three things about that route are deliberate, and are the ones to check first if a viewer connects
+and then sees nothing:
+
+- **`proxy_buffering off` on `/detection/frames/stream`.** Left on, nginx holds SSE events in its
+  own buffer and releases them in batches — the stream looks frozen and then arrives in a burst.
+  This is the usual cause of "the hub works with curl inside the network but not through the proxy".
+- **`proxy_read_timeout 24h`.** The 60-second default drops a connection that has merely gone
+  quiet, which for a camera watching a still scene is the normal case.
+- **`client_max_body_size 16m`.** A frame is base64 in a JSON body, so it arrives ~33% larger than
+  the JPEG; the 1 MB default would reject a high-resolution one.
+
+The service needs the `jarvis` role and database from `db-init/all-services.sql`, which Postgres
+runs **only when its data volume is first initialised**. On a volume created before that entry
+existed, create them once by hand:
+
+```bash
+docker compose -f docker-compose.all-services.yml exec db psql -U postgres \
+  -c "CREATE ROLE jarvis LOGIN PASSWORD 'jarvis'" \
+  -c "CREATE DATABASE jarvis OWNER jarvis"
+```
+
 #### Upgrading a deployment that ran an earlier build
 
 Two breaking changes landed when frame relaying stopped inspecting frames.
@@ -197,8 +232,10 @@ counts frame bytes rather than on-disk table size, so leave headroom for indexes
 not-yet-vacuumed rows.
 
 `GET /health` reports `retainedFrameBytes`, `framesDroppedByAgeTotal`, `framesDroppedByBudgetTotal`
-and `lastRetentionSweepError` — the last is null when healthy, and is worth alerting on, because a
-sweep that stops working is exactly how the table grows without bound.
+and `lastRetentionSweepError`. The last is null when healthy, and is worth alerting on: a sweep that
+stops working is exactly how the table grows without bound. Note `retainedFrameBytes` is measured
+*by* the sweep, so it is only as fresh as `DETECTION_RETENTION_SWEEP_SECONDS` — right after startup
+it reads 0 until the first sweep completes.
 
 The sweep itself lives in [`jarvis-retention`](retention/README.md), which explains why it owns its
 own JDBC transactions rather than being a `@Transactional` Spring bean.
@@ -226,7 +263,7 @@ database. See [`detection/.env.example`](detection/.env.example) for the full se
 
 ### Syncer (`clients/syncer`)
 
-The syncer drains completed recording segments to the bucket proxy. It merges older completed segments (via ffmpeg concat) and uploads the result, leaving the current in-progress segment untouched. Run it on a timer:
+The syncer drains completed recording segments to the object storage proxy (`apps/object-storage-proxy`). It merges older completed segments (via ffmpeg concat) and uploads the result, leaving the current in-progress segment untouched. Run it on a timer:
 
 ```bash
 bash apps/jarvis/clients/syncer/syncer.sh
