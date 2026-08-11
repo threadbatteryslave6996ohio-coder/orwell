@@ -25,8 +25,9 @@ class DetectionSpringApplication {
 
     @Bean
     DetectionEndpoint detectionEndpoint(DetectionService service, MotionService motionService,
-            FrameIngestService ingestService, FrameHub hub, FrameStoreWriter store) {
-        return new DetectionEndpoint(service, motionService, ingestService, hub, store);
+            FrameIngestService ingestService, FrameHub hub, FrameStoreWriter store,
+            FrameRetentionJob retention) {
+        return new DetectionEndpoint(service, motionService, ingestService, hub, store, retention);
     }
 
     @Bean

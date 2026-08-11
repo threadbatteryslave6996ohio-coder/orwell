@@ -57,7 +57,9 @@ class FrameStreamIntegrationTest extends PostgresIntegrationTest {
         registry.add("detection.store.mode", () -> "async");
         registry.add("detection.store.queue-depth", () -> 512);
         registry.add("detection.frame-retention-seconds", () -> 60);
-        // Long enough that the retention sweep never fires mid-test.
+        registry.add("detection.frame-max-bytes", () -> 1024L * 1024 * 1024);
+        // Long enough that the retention sweep never fires mid-test. FrameRetentionSweepTest
+        // drives a sweep directly rather than waiting on this schedule.
         registry.add("detection.retention-sweep-seconds", () -> 3600);
     }
 

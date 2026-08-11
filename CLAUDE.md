@@ -34,6 +34,7 @@ Java packages predate the renames and do NOT always match — use this table, do
 | `apps/jarvis` | `jarvis` (aggregator) | — |
 | `apps/jarvis/bucket/proxy` | `jarvis-bucket-proxy` | `dev.orwell.bucket.proxy` |
 | `apps/jarvis/detection` | `jarvis-detection` | `dev.orwell.bucket.detection` |
+| `apps/jarvis/retention` | `jarvis-retention` | `dev.orwell.bucket.retention` (library, not a service) |
 | `apps/keeboarder/server` | `keeboarder-server` | `dev.orwell.keeboarder.server` |
 | `apps/keeboarder/clients/*` | `keeboarder-{client-core,linux-client,mac-client}` | `dev.orwell.keeboarder.*` |
 | `apps/klippy/server` | `klippy-server` | `dev.orwell.server` |

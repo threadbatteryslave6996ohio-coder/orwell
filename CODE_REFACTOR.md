@@ -28,12 +28,16 @@ unfinished.
   or a crash leaves a hole in the id sequence — delivered live, not replayable. `framesUnstoredTotal`
   counts it and `sync` mode trades it back for latency, but there is no middle ground yet: a small
   on-disk spool ahead of the database would give one.
-- **Frame bytes live in Postgres `bytea`.** Replay means an unread frame must still exist, and
-  `DETECTION_FRAME_RETENTION_SECONDS` is the only thing bounding the table. The bucket proxy already
-  exists to store jarvis bytes — moving the payload there and leaving `(id, source, sha,
-  storageKey)` plus cursors in Postgres is the obvious upgrade, at the cost of a proxy dependency in
-  detection. This got sharper when motion detection came out of the hub: the table now grows at the
-  full ingest rate rather than at the changed-frame rate, so retention is the only lever left.
+- **Frame bytes live in Postgres `bytea`.** Replay means an unread frame must still exist, so the
+  table is bounded rather than small: `DETECTION_FRAME_MAX_BYTES` caps the bytes retained and
+  `DETECTION_FRAME_RETENTION_SECONDS` caps their age, swept by
+  [`jarvis-retention`](apps/jarvis/retention/README.md). That makes the footprint safe, not free —
+  it is still video bytes on the one Postgres the whole repo shares, with the WAL and autovacuum
+  churn that implies. The bucket proxy already exists to store jarvis bytes; moving the payload
+  there and leaving `(id, source, sha, storageKey)` plus cursors in Postgres is the upgrade, at the
+  cost of a proxy dependency in detection. The trigger to do it is **viewer fan-out or a much
+  longer window**, not table size: the hub currently base64s every frame to every subscriber, so
+  serving links instead is what takes it off the hot path.
 
 Also: a hung-up client is only noticed on the next failed write, so `connectedClients` and the
 `recipients` count lag a disconnect by one frame. Harmless in practice, but it is why the

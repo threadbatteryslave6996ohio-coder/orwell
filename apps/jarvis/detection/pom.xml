@@ -29,6 +29,12 @@
             <groupId>dev.orwell</groupId>
             <artifactId>server-bootstrap</artifactId>
         </dependency>
+        <!-- The byte/age budget that bounds frame_events. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>jarvis-retention</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
             <artifactId>undertow-bootstrap</artifactId>

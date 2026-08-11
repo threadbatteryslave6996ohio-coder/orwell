@@ -19,18 +19,21 @@ final class DetectionEndpoint {
     /** Null alongside {@link #ingestService}; only read when the relay is available. */
     private final FrameHub hub;
     private final FrameStoreWriter store;
+    private final FrameRetentionJob retention;
 
     DetectionEndpoint(DetectionService service, MotionService motionService) {
-        this(service, motionService, null, null, null);
+        this(service, motionService, null, null, null, null);
     }
 
     DetectionEndpoint(DetectionService service, MotionService motionService,
-            FrameIngestService ingestService, FrameHub hub, FrameStoreWriter store) {
+            FrameIngestService ingestService, FrameHub hub, FrameStoreWriter store,
+            FrameRetentionJob retention) {
         this.service = service;
         this.motionService = motionService;
         this.ingestService = ingestService;
         this.hub = hub;
         this.store = store;
+        this.retention = retention;
     }
 
     EndpointResponse<Map<String, Object>> detect(Map<String, Object> payload) {
@@ -73,6 +76,12 @@ final class DetectionEndpoint {
             details.put("framesReplayedTotal", hub.framesReplayedTotal());
             details.put("framesDroppedTotal", hub.framesDroppedTotal());
             details.put("framesPendingWrite", store.pendingWrites());
+            details.put("retainedFrameBytes", retention.retainedBytes());
+            details.put("framesDroppedByAgeTotal", retention.framesDroppedByAgeTotal());
+            details.put("framesDroppedByBudgetTotal", retention.framesDroppedByBudgetTotal());
+            // Null unless the last sweep threw. A sweep that stops working is how the table grows
+            // without bound, so it is reported rather than left in the log.
+            details.put("lastRetentionSweepError", retention.lastSweepError());
             // Frames that went out live but never made it to the store, so cannot be replayed.
             details.put("framesUnstoredTotal", store.framesUnstoredTotal());
         }

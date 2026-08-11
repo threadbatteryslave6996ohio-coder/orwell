@@ -22,6 +22,7 @@
 
     <modules>
         <module>bucket</module>
+        <module>retention</module>
         <module>detection</module>
     </modules>
 

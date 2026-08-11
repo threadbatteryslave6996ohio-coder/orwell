@@ -17,6 +17,7 @@ public final class DetectionEnvs {
     public static final EnvOption<String> DETECTION_DATASOURCE_PASSWORD;
     public static final EnvOption<String> DETECTION_JPA_HIBERNATE_DDL_AUTO;
     public static final EnvOption<Integer> DETECTION_FRAME_RETENTION_SECONDS;
+    public static final EnvOption<Long> DETECTION_FRAME_MAX_BYTES;
     public static final EnvOption<Integer> DETECTION_RETENTION_SWEEP_SECONDS;
     public static final EnvOption<String> DETECTION_STORE_MODE;
     public static final EnvOption<Integer> DETECTION_STORE_QUEUE_DEPTH;
@@ -52,9 +53,13 @@ public final class DetectionEnvs {
         DETECTION_DATASOURCE_PASSWORD = ENV.required("DETECTION_DATASOURCE_PASSWORD", EnvType.string());
         DETECTION_JPA_HIBERNATE_DDL_AUTO =
                 ENV.optional("DETECTION_JPA_HIBERNATE_DDL_AUTO", EnvType.string(), "update");
-        // How far back a reconnecting client can catch up, and — since the hub stores every frame
-        // it is pushed — the only bound on the frame_events table: retention_seconds x ingest
-        // rate x frame size, per source.
+        // frame_events is bounded by whichever of these two bites first. The byte budget is what
+        // protects the disk on a busy stream — it holds the footprint constant and lets the
+        // replay window vary — and 2 GiB is chosen to be a modest tenant on the one Postgres the
+        // whole repo shares. The age bound is what keeps a quiet camera's frames from living
+        // forever; set either to 0 to disable that bound.
+        DETECTION_FRAME_MAX_BYTES =
+                ENV.optional("DETECTION_FRAME_MAX_BYTES", EnvType.longInteger(), 2L * 1024 * 1024 * 1024);
         DETECTION_FRAME_RETENTION_SECONDS =
                 ENV.optional("DETECTION_FRAME_RETENTION_SECONDS", EnvType.integer(), 300);
         DETECTION_RETENTION_SWEEP_SECONDS =
@@ -76,6 +81,7 @@ public final class DetectionEnvs {
         ENV.property("spring.datasource.password", DETECTION_DATASOURCE_PASSWORD);
         ENV.property("spring.jpa.hibernate.ddl-auto", DETECTION_JPA_HIBERNATE_DDL_AUTO);
         ENV.property("detection.frame-retention-seconds", DETECTION_FRAME_RETENTION_SECONDS);
+        ENV.property("detection.frame-max-bytes", DETECTION_FRAME_MAX_BYTES);
         ENV.property("detection.retention-sweep-seconds", DETECTION_RETENTION_SWEEP_SECONDS);
     }
 

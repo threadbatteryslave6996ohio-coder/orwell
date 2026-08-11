@@ -70,7 +70,7 @@ recorders ──POST /frames──> hub ──┬──SSE──> clients connec
                                   │
                              frame_events ──replay──> a client that reconnects
                                   │
-                          FrameRetentionJob drops aged rows
+                    FrameRetentionJob trims to the byte/age budget
 ```
 
 `POST /frames` takes the same body as `/detect` and `/motion`, and answers
@@ -142,11 +142,12 @@ them. Drops are counted and reported on `GET /health`, alongside `connectedClien
 `framesUnstoredTotal`.
 
 > **Sizing.** `frame_events` holds the frame bytes, because replay means a frame must still exist to
-> be re-sent, and the hub stores every frame it is pushed. `DETECTION_FRAME_RETENTION_SECONDS`
-> (default 300) is therefore the only thing bounding the table, and it grows at the full ingest
-> rate: at 40 KB and 5 fps that is ~200 KB/s *per source*, so the default window costs ~60 MB per
-> source. Push less, or keep less. Sending only frames that differ is a producer's decision — it can
-> ask `/motion` first, or make the call locally, which is cheaper than shipping a frame to find out.
+> be re-sent, and the hub stores every frame it is pushed — at 40 KB and 5 fps that is ~200 KB/s
+> *per source*. `DETECTION_FRAME_MAX_BYTES` (2 GiB) is what stops that from becoming a disk
+> problem, so the question is not how much you can store but how much history that budget buys:
+> ~2.8 hours for one such source, ~20 minutes across eight. Raise the budget, or push less —
+> sending only frames that differ is a producer's decision, and it can ask `/motion` first or make
+> the call locally, which is cheaper than shipping a frame to find out.
 >
 > It is a **write** rate too, not just disk: eight cameras at 5 fps is 40 inserts/s through one
 > writer thread and a 512-frame queue. If Postgres stalls long enough to fill that queue — a
@@ -176,9 +177,31 @@ the `POST /frames` ack no longer carries `changed`, `firstFrame`, `changedCells`
 A consumer branching on `frame.changed` reads undefined rather than failing, so it goes quiet
 instead of erroring — grep your viewers for those field names before upgrading.
 
-**Retention wins over catch-up.** The sweep deletes aged frames whether or not every client has
-read them, so a client away longer than the retention window resumes at the oldest surviving frame
-and the ones in between are gone. Widen the window to trade disk for tolerance.
+**Retention wins over catch-up.** The sweep deletes frames whether or not every client has read
+them, so a client away longer than the retained history resumes at the oldest surviving frame and
+the ones in between are gone. Bounded storage beats guaranteed catch-up: the alternative is a table
+that grows at the ingest rate until the disk fills, on an instance shared with every other app in
+the repo.
+
+Two bounds, whichever bites first, swept every `DETECTION_RETENTION_SWEEP_SECONDS` (30):
+
+| | Bounds | Set to 0 to |
+|---|---|---|
+| `DETECTION_FRAME_MAX_BYTES` (2 GiB) | frame bytes retained | disable, and let age alone bound the table |
+| `DETECTION_FRAME_RETENTION_SECONDS` (300) | how stale a retained frame may be | disable, and let the budget alone bound it |
+
+The byte budget is the one that protects the disk on a busy stream, and it makes the **replay
+window variable**: a busy hour buys less history than a quiet one, and the footprint is what stays
+constant. Prefer that to a fixed duration — it is the disk you are actually defending. The budget
+counts frame bytes rather than on-disk table size, so leave headroom for indexes and
+not-yet-vacuumed rows.
+
+`GET /health` reports `retainedFrameBytes`, `framesDroppedByAgeTotal`, `framesDroppedByBudgetTotal`
+and `lastRetentionSweepError` — the last is null when healthy, and is worth alerting on, because a
+sweep that stops working is exactly how the table grows without bound.
+
+The sweep itself lives in [`jarvis-retention`](retention/README.md), which explains why it owns its
+own JDBC transactions rather than being a `@Transactional` Spring bean.
 
 **Cursors are written on a throttle** (at most every couple of seconds, and forced on disconnect),
 because a row write per frame would cost more than the streaming does. Delivery is therefore *at
