@@ -9,9 +9,10 @@ for this app.
 ## Configure and run
 
 `.env.example` holds the committed non-secret defaults. Real credentials —
-`AWS_SECRET_ACCESS_KEY`, `AZURE_CLIENT_SECRET`, `OBJECT_STORAGE_MANAGEMENT_PASSWORD`,
-`OBJECT_STORAGE_MANAGEMENT_SESSION_SECRET` — belong in a `.env` beside it, which is
-gitignored. `docker-compose.all-services.yml` reads both and lets `.env` win, so
+`AWS_SECRET_ACCESS_KEY`, `AZURE_CLIENT_SECRET`, `AUTH_IDENTITY_PROVISIONING_KEY` — belong
+in a `.env` beside it, which is gitignored. The admin panel no longer has a credential here at
+all: it authenticates against the auth deployment at `OBJECT_STORAGE_ADMIN_AUTH_BASE_URL`
+(the `admin-auth-server` service in the stack). `docker-compose.all-services.yml` reads both and lets `.env` win, so
 copy the example once and edit the copy:
 
 ```bash

@@ -10,15 +10,21 @@ set -uo pipefail
 # remote auth server.
 #
 # Usage:
-#   ./local-stack.sh up        # start MinIO + Postgres, create the bucket
-#   ./local-stack.sh auth      # build (if needed) and run the auth server
-#   ./local-stack.sh proxy     # build (if needed) and run the proxy against MinIO
-#   ./local-stack.sh identity <clientId> <secret>   # create an upload identity
-#   ./local-stack.sh status    # show container + endpoint status
-#   ./local-stack.sh down      # stop and remove the containers this script started
-#                              # (MinIO only - the shared `db` is left running)
+#   ./local-stack.sh up          # start MinIO + Postgres, create the bucket
+#   ./local-stack.sh auth        # build (if needed) and run the client auth server
+#   ./local-stack.sh admin-auth  # run the second auth server, the one holding admins
+#   ./local-stack.sh proxy       # build (if needed) and run the proxy against MinIO
+#   ./local-stack.sh identity <clientId> <secret>        # create an upload identity
+#   ./local-stack.sh admin-identity <clientId> <secret>  # create an /admin identity
+#   ./local-stack.sh status      # show container + endpoint status
+#   ./local-stack.sh down        # stop and remove the containers this script started
+#                                # (MinIO only - the shared `db` is left running)
 #
-# `auth` and `proxy` run in the foreground; use separate terminals (or append &).
+# There are two auth servers on purpose: the panel at /admin authenticates against the
+# admin one, so an upload identity cannot sign in and mint more upload identities. They
+# are the same jar over different databases.
+#
+# `auth`, `admin-auth` and `proxy` run in the foreground; use separate terminals (or append &).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROXY_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -34,6 +40,7 @@ MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
 BUCKET="${BUCKET:-keeboarder-recordings}"
 S3_ENDPOINT="${S3_ENDPOINT:-http://localhost:9000}"
 AUTH_PORT="${AUTH_PORT:-8081}"
+ADMIN_AUTH_PORT="${ADMIN_AUTH_PORT:-8082}"
 PROXY_PORT="${PROXY_PORT:-5000}"
 PG_PORT="${PG_PORT:-5432}"
 
@@ -71,22 +78,34 @@ cmd_up() {
     log "Stack up. Next: '$0 auth' then '$0 proxy' (separate terminals)."
 }
 
-cmd_auth() {
+# One jar, two deployments: `auth` holds the upload clients, `admin-auth` holds the identities
+# that may sign in to /admin. Separate databases, so a credential accepted by one is meaningless
+# to the other - that separation is the whole point, not an accident of local setup.
+run_auth_server() {
+    local port="$1" database="$2" role="$3" password="$4" log_name="$5"
     local jar="$REPO_ROOT/auth/http-based/server/target/auth-http-server-0.1.0-SNAPSHOT-exec.jar"
     if [ ! -f "$jar" ]; then
         log "Building auth server jar..."
         (cd "$REPO_ROOT" && mvn -q -Pservers -pl auth/http-based/server -am package -DskipTests) || die "auth build failed"
     fi
-    log "Running auth server on :$AUTH_PORT (Ctrl-C to stop)"
+    log "Running auth server on :$port against '$database' (Ctrl-C to stop)"
     SERVER_ADDRESS=0.0.0.0 \
-    SERVER_PORT="$AUTH_PORT" \
-    AUTH_DATASOURCE_URL="jdbc:postgresql://localhost:${PG_PORT}/auth" \
-    AUTH_DATASOURCE_USERNAME=auth \
-    AUTH_DATASOURCE_PASSWORD=auth \
-    LOGGING_FILE_NAME="$REPO_ROOT/auth/http-based/server/target/auth-spring.log" \
+    SERVER_PORT="$port" \
+    AUTH_DATASOURCE_URL="jdbc:postgresql://localhost:${PG_PORT}/${database}" \
+    AUTH_DATASOURCE_USERNAME="$role" \
+    AUTH_DATASOURCE_PASSWORD="$password" \
+    LOGGING_FILE_NAME="$REPO_ROOT/auth/http-based/server/target/${log_name}" \
     AUTH_JPA_HIBERNATE_DDL_AUTO=update \
     AUTH_JPA_JDBC_TIME_ZONE=UTC \
     exec java -Dcustom.logger.dir="$REPO_ROOT/auth/http-based/server/target" -jar "$jar"
+}
+
+cmd_auth() {
+    run_auth_server "$AUTH_PORT" auth auth auth auth-spring.log
+}
+
+cmd_admin_auth() {
+    run_auth_server "$ADMIN_AUTH_PORT" authadmin authadmin authadmin admin-auth-spring.log
 }
 
 cmd_proxy() {
@@ -106,6 +125,7 @@ cmd_proxy() {
     SERVER_ADDRESS=0.0.0.0 \
     SERVER_PORT="$PROXY_PORT" \
     AUTH_BASE_URL="http://localhost:${AUTH_PORT}" \
+    OBJECT_STORAGE_ADMIN_AUTH_BASE_URL="http://localhost:${ADMIN_AUTH_PORT}" \
     exec java \
         -Dobject-storage.s3.bucket-name="$BUCKET" \
         -Dobject-storage.s3.region=us-east-1 \
@@ -123,6 +143,15 @@ cmd_identity() {
         "http://localhost:${AUTH_PORT}/identities"
 }
 
+cmd_admin_identity() {
+    local client_id="${1:-}" secret="${2:-}"
+    [ -n "$client_id" ] && [ -n "$secret" ] || die "usage: $0 admin-identity <clientId> <secret>  (secret >= 8 chars)"
+    log "Creating admin identity '$client_id' via admin auth server :$ADMIN_AUTH_PORT"
+    curl -s -w '\n-> HTTP %{http_code}\n' -H 'Content-Type: application/json' \
+        -d "{\"clientId\":\"$client_id\",\"secret\":\"$secret\"}" \
+        "http://localhost:${ADMIN_AUTH_PORT}/identities"
+}
+
 cmd_status() {
     require_docker
     echo "Containers:"
@@ -135,6 +164,7 @@ cmd_status() {
     echo "Endpoints:"
     printf '  MinIO S3   %s -> %s\n' "$S3_ENDPOINT" "$(curl -s -o /dev/null -w '%{http_code}' "$S3_ENDPOINT/minio/health/live" 2>/dev/null || echo down)"
     printf '  Auth       http://localhost:%s -> %s\n' "$AUTH_PORT" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"clientId":"x","secret":"x"}' "http://localhost:${AUTH_PORT}/login" 2>/dev/null || echo down)"
+    printf '  Admin auth http://localhost:%s -> %s\n' "$ADMIN_AUTH_PORT" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"clientId":"x","secret":"x"}' "http://localhost:${ADMIN_AUTH_PORT}/login" 2>/dev/null || echo down)"
     printf '  Proxy      http://localhost:%s/health -> %s\n' "$PROXY_PORT" "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PROXY_PORT}/health" 2>/dev/null || echo down)"
 }
 
@@ -152,9 +182,11 @@ cmd_down() {
 case "${1:-}" in
     up) cmd_up ;;
     auth) cmd_auth ;;
+    admin-auth) cmd_admin_auth ;;
     proxy) cmd_proxy ;;
     identity) shift; cmd_identity "$@" ;;
+    admin-identity) shift; cmd_admin_identity "$@" ;;
     status) cmd_status ;;
     down) cmd_down ;;
-    *) echo "usage: $0 {up|auth|proxy|identity <clientId> <secret>|status|down}"; exit 1 ;;
+    *) echo "usage: $0 {up|auth|admin-auth|proxy|identity <clientId> <secret>|admin-identity <clientId> <secret>|status|down}"; exit 1 ;;
 esac

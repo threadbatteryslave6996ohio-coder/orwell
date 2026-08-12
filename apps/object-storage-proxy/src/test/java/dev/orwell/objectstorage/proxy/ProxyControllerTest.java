@@ -19,6 +19,9 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ProxyControllerTest {
+    /** Any cookie the stub accepts; the real encoding is covered by AdminAuthClientTest. */
+    private static final String SIGNED_IN_SESSION = AdminAuthClient.session("admin", "admin-token");
+
     @Test
     void loginPropagatesUpstreamUnauthorizedStatus() {
         ProxyController controller = newController(
@@ -40,10 +43,9 @@ class ProxyControllerTest {
                 new StubS3Service(),
                 properties("http://localhost")
         );
-        String sessionToken = new ManagementSessionService(properties("http://localhost")).createSession("admin", Instant.now().plusSeconds(3600));
 
         ResponseEntity<String> response = controller.createIdentity(
-                sessionToken,
+                SIGNED_IN_SESSION,
                 "new-client",
                 "secret"
         );
@@ -96,7 +98,72 @@ class ProxyControllerTest {
         assertThat(servletResponse.getHeader(HttpHeaders.SET_COOKIE)).contains("Path=/jarvis/");
     }
 
+    @Test
+    void adminLoginRejectsCredentialsTheAdminAuthServerRefuses() {
+        ProxyController controller = newController(
+                new StubAuthServerClient(loginResult(true, HttpStatus.OK.value(), "client", "token")),
+                new StubS3Service(),
+                properties("http://localhost"),
+                loginResult(false, HttpStatus.UNAUTHORIZED.value(), null, null)
+        );
+        MockHttpServletResponse servletResponse = new MockHttpServletResponse();
+
+        ResponseEntity<String> response = controller.adminLogin("admin", "wrong", servletResponse);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody()).contains("Invalid username or password.");
+        assertThat(servletResponse.getHeader(HttpHeaders.SET_COOKIE)).isNull();
+    }
+
+    @Test
+    void adminLoginReportsAnUnreachableAdminAuthServerSeparatelyFromBadCredentials() {
+        ProxyController controller = newController(
+                new StubAuthServerClient(loginResult(true, HttpStatus.OK.value(), "client", "token")),
+                new StubS3Service(),
+                properties("http://localhost"),
+                loginResult(false, HttpStatus.SERVICE_UNAVAILABLE.value(), null, null)
+        );
+
+        ResponseEntity<String> response = controller.adminLogin("admin", "password", new MockHttpServletResponse());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody()).contains("HTTP 503");
+    }
+
+    @Test
+    void adminPageRejectsASessionTheAdminAuthServerDoesNotAccept() {
+        ProxyController controller = newController(
+                new StubAuthServerClient(loginResult(true, HttpStatus.OK.value(), "client", "token")),
+                new StubS3Service(),
+                properties("http://localhost")
+        );
+
+        assertThat(controller.admin(null).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(controller.admin("not-a-session").getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(controller.admin(SIGNED_IN_SESSION).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void createIdentityRequiresASignedInAdmin() {
+        ProxyController controller = newController(
+                new StubAuthServerClient(identityResult(true, HttpStatus.OK.value(), "client", null)),
+                new StubS3Service(),
+                properties("http://localhost")
+        );
+
+        ResponseEntity<String> response = controller.createIdentity("not-a-session", "new-client", "secret");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getBody()).contains("Please sign in.");
+    }
+
     private static ProxyController newController(AuthServerClient authServerClient, BucketStorage storage, ProxyProperties properties) {
+        return newController(authServerClient, storage, properties,
+                loginResult(true, HttpStatus.OK.value(), "admin", "admin-token"));
+    }
+
+    private static ProxyController newController(AuthServerClient authServerClient, BucketStorage storage,
+                                                 ProxyProperties properties, AuthServerClient.AuthCallResult adminLogin) {
         String routePrefix = "";
         if (properties.server() != null && properties.server().url() != null) {
             try {
@@ -114,7 +181,7 @@ class ProxyControllerTest {
                 provider(AuthenticationContext.authenticated("client")),
                 storage,
                 newFileAuditLogger(properties),
-                new ManagementSessionService(properties),
+                new StubAdminAuthClient(properties, adminLogin),
                 routePrefix
         );
     }
@@ -156,7 +223,7 @@ class ProxyControllerTest {
                     new ProxyProperties.S3("bucket", "us-east-1", null, false),
                     new ProxyProperties.Azure("account", "container", null, null),
                     new ProxyProperties.AuthServer("http://localhost:8081", "provisioning-key"),
-                    new ProxyProperties.Management("admin", "password", "session-secret"),
+                    new ProxyProperties.AdminAuth("http://localhost:8082"),
                     new ProxyProperties.Cors(List.of()),
                     new ProxyProperties.Server(serverUrl),
                     new ProxyProperties.Logging(auditFile)
@@ -180,6 +247,27 @@ class ProxyControllerTest {
 
     private static AuthServerClient.AuthCallResult identityResult(boolean success, int statusCode, String clientId, String token) {
         return new AuthServerClient.AuthCallResult(success, statusCode, clientId, token);
+    }
+
+    /** Accepts {@link #SIGNED_IN_SESSION} and nothing else, without calling an auth server. */
+    private static final class StubAdminAuthClient extends AdminAuthClient {
+        private final AuthServerClient.AuthCallResult loginResult;
+
+        private StubAdminAuthClient(ProxyProperties properties, AuthServerClient.AuthCallResult loginResult) {
+            super(new dev.orwell.auth.http.client.HttpAuthenticationStrategy(properties.adminAuth().baseUrl()),
+                    newFileAuditLogger(properties));
+            this.loginResult = loginResult;
+        }
+
+        @Override
+        public AuthServerClient.AuthCallResult login(String clientId, String secret) {
+            return loginResult;
+        }
+
+        @Override
+        public java.util.Optional<String> signedInAdmin(String sessionCookie) {
+            return SIGNED_IN_SESSION.equals(sessionCookie) ? java.util.Optional.of("admin") : java.util.Optional.empty();
+        }
     }
 
     private static final class StubAuthServerClient extends AuthServerClient {

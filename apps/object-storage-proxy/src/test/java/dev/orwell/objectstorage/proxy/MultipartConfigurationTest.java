@@ -16,7 +16,7 @@ class MultipartConfigurationTest {
                 new ProxyProperties.S3("bucket", "us-east-1", null, false),
                 new ProxyProperties.Azure("account", "container", null, null),
                 new ProxyProperties.AuthServer("http://localhost:8081", "provisioning-key"),
-                new ProxyProperties.Management("admin", "password", "session-secret"),
+                new ProxyProperties.AdminAuth("http://localhost:8082"),
                 new ProxyProperties.Cors(List.of()),
                 new ProxyProperties.Server("http://localhost"),
                 new ProxyProperties.Logging("audit.log")

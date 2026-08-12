@@ -17,9 +17,7 @@ public final class ObjectStorageProxyEnvs {
     public static final EnvOption<String> AZURE_STORAGE_ENDPOINT;
     public static final EnvOption<String> AZURE_STORAGE_CONNECTION_STRING;
     public static final EnvOption<String> AUTH_IDENTITY_PROVISIONING_KEY;
-    public static final EnvOption<String> OBJECT_STORAGE_MANAGEMENT_USERNAME;
-    public static final EnvOption<String> OBJECT_STORAGE_MANAGEMENT_PASSWORD;
-    public static final EnvOption<String> OBJECT_STORAGE_MANAGEMENT_SESSION_SECRET;
+    public static final EnvOption<String> OBJECT_STORAGE_ADMIN_AUTH_BASE_URL;
     public static final EnvOption<String> OBJECT_STORAGE_CORS_ALLOWED_ORIGINS;
     public static final EnvOption<String> OBJECT_STORAGE_LOGGING_AUDIT_FILE;
     public static final EnvOption<String> OBJECT_STORAGE_SERVER_URL;
@@ -38,9 +36,10 @@ public final class ObjectStorageProxyEnvs {
         AZURE_STORAGE_ENDPOINT = ENV.optional("AZURE_STORAGE_ENDPOINT", EnvType.string(), "");
         AZURE_STORAGE_CONNECTION_STRING = ENV.optional("AZURE_STORAGE_CONNECTION_STRING", EnvType.string(), "");
         AUTH_IDENTITY_PROVISIONING_KEY = ENV.optional("AUTH_IDENTITY_PROVISIONING_KEY", EnvType.string(), "");
-        OBJECT_STORAGE_MANAGEMENT_USERNAME = ENV.optional("OBJECT_STORAGE_MANAGEMENT_USERNAME", EnvType.string(), "");
-        OBJECT_STORAGE_MANAGEMENT_PASSWORD = ENV.optional("OBJECT_STORAGE_MANAGEMENT_PASSWORD", EnvType.string(), "");
-        OBJECT_STORAGE_MANAGEMENT_SESSION_SECRET = ENV.optional("OBJECT_STORAGE_MANAGEMENT_SESSION_SECRET", EnvType.string(), "");
+        // Required, not optional-with-a-default: the admin panel has no local credential to fall
+        // back on any more, so a blank value is a panel nobody can sign in to. Better a startup
+        // failure naming the key than a login form that rejects everything.
+        OBJECT_STORAGE_ADMIN_AUTH_BASE_URL = ENV.required("OBJECT_STORAGE_ADMIN_AUTH_BASE_URL", EnvType.string());
         OBJECT_STORAGE_CORS_ALLOWED_ORIGINS = ENV.optional("OBJECT_STORAGE_CORS_ALLOWED_ORIGINS", EnvType.string(), "");
         OBJECT_STORAGE_LOGGING_AUDIT_FILE = ENV.optional("OBJECT_STORAGE_LOGGING_AUDIT_FILE", EnvType.string(), "logs/audit.log");
         OBJECT_STORAGE_SERVER_URL = ENV.optional("OBJECT_STORAGE_SERVER_URL", EnvType.string(), "");
@@ -58,9 +57,7 @@ public final class ObjectStorageProxyEnvs {
         ENV.property("object-storage.azure.connection-string", AZURE_STORAGE_CONNECTION_STRING);
         ENV.property("object-storage.auth-server.base-url", ENV.AUTH_BASE_URL);
         ENV.property("object-storage.auth-server.identity-provisioning-key", AUTH_IDENTITY_PROVISIONING_KEY);
-        ENV.property("object-storage.management.username", OBJECT_STORAGE_MANAGEMENT_USERNAME);
-        ENV.property("object-storage.management.password", OBJECT_STORAGE_MANAGEMENT_PASSWORD);
-        ENV.property("object-storage.management.session-secret", OBJECT_STORAGE_MANAGEMENT_SESSION_SECRET);
+        ENV.property("object-storage.admin-auth.base-url", OBJECT_STORAGE_ADMIN_AUTH_BASE_URL);
         ENV.property("object-storage.cors.allowed-origins", OBJECT_STORAGE_CORS_ALLOWED_ORIGINS);
         ENV.property("object-storage.logging.audit-file", OBJECT_STORAGE_LOGGING_AUDIT_FILE);
         ENV.property("object-storage.server.url", OBJECT_STORAGE_SERVER_URL);

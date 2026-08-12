@@ -10,7 +10,7 @@ public record ProxyProperties(
         S3 s3,
         Azure azure,
         AuthServer authServer,
-        Management management,
+        AdminAuth adminAuth,
         Cors cors,
         Server server,
         Logging logging
@@ -23,7 +23,8 @@ public record ProxyProperties(
 
     public record AuthServer(String baseUrl, String identityProvisioningKey) {}
 
-    public record Management(String username, String password, String sessionSecret) {}
+    /** The auth deployment holding admin identities. See {@link AdminAuthClient} for why it is a second one. */
+    public record AdminAuth(String baseUrl) {}
 
     public record Cors(List<String> allowedOrigins) {}
 
