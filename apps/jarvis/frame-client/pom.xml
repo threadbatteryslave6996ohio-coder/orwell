@@ -1,0 +1,43 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.orwell</groupId>
+        <artifactId>jarvis</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>jarvis-frame-client</artifactId>
+
+    <!--
+      The consumer half of the hub's stream, so that "watch the frames" is written once. Every
+      watcher otherwise reimplements the same four things and gets one of them subtly wrong:
+      SSE framing, Last-Event-ID resume, reconnect backoff, and base64+hash decoding.
+
+      Deliberately free of Spring and of any server dependency — a watcher may be a service, a CLI,
+      or a test. It talks to the hub over plain java.net.http.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>primitives</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>logger</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

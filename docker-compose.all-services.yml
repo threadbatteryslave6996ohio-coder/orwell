@@ -175,19 +175,20 @@ services:
   # existed, create them by hand once:
   #   docker compose exec db psql -U postgres \
   #     -c "CREATE ROLE jarvis LOGIN PASSWORD 'jarvis'" -c "CREATE DATABASE jarvis OWNER jarvis"
-  jarvis-detection:
-    image: jarvis-detection:local
+  jarvis-hub:
+    image: jarvis-hub:local
     build:
       context: .
-      dockerfile: apps/jarvis/detection/Dockerfile
+      dockerfile: apps/jarvis/hub/Dockerfile
     # See the object-storage-proxy env_file note: committed defaults, optional gitignored override.
     env_file:
-      - ./apps/jarvis/detection/.env.example
-      - path: ./apps/jarvis/detection/.env
+      - ./apps/jarvis/hub/.env.example
+      - path: ./apps/jarvis/hub/.env
         required: false
-    # Frames are held in memory twice over: the store queue (DETECTION_STORE_QUEUE_DEPTH frames
-    # awaiting a write) and the per-connection stream queues. At the default 512-deep store queue
-    # that is ~20 MB of 40 KB frames — raise this alongside that setting, or a larger frame size.
+    # Frames are held in memory twice over: the store queue (HUB_STORE_QUEUE_DEPTH frames awaiting
+    # a write) and the per-connection stream queues. At the default 512-deep store queue that is
+    # ~20 MB of 40 KB frames — raise this alongside that setting, or a larger frame size. This
+    # limit is now the hub's alone; it used to also have to cover image decoding for /detect.
     mem_limit: 512m
     environment:
       LOKI_URL: "${LOKI_URL:-}"
@@ -195,23 +196,93 @@ services:
       JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
       SERVER_ADDRESS: 0.0.0.0
       SERVER_PORT: "9001"
-      SERVER_ENGINE: spring
-      DETECTION_DATASOURCE_URL: jdbc:postgresql://db/jarvis
-      DETECTION_DATASOURCE_USERNAME: jarvis
-      DETECTION_DATASOURCE_PASSWORD: jarvis
-      DETECTION_JPA_HIBERNATE_DDL_AUTO: update
-      DETECTION_ALERT_URL: http://alerting/alerts
+      HUB_DATASOURCE_URL: jdbc:postgresql://db/jarvis
+      HUB_DATASOURCE_USERNAME: jarvis
+      HUB_DATASOURCE_PASSWORD: jarvis
+      HUB_JPA_HIBERNATE_DDL_AUTO: update
     depends_on:
       db:
         condition: service_healthy
-      alerting:
-        condition: service_started
     healthcheck:
       test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9001 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
+    restart: unless-stopped
+
+  # Bounds frame_events so the hub's replay buffer cannot fill the shared disk. No ports: it
+  # serves nothing, it sweeps on a timer. It is deliberately independent of jarvis-hub — the table
+  # must stay bounded while the hub is restarting, scaling or down.
+  jarvis-retention-worker:
+    image: jarvis-retention-worker:local
+    build:
+      context: .
+      dockerfile: apps/jarvis/retention-worker/Dockerfile
+    env_file:
+      - ./apps/jarvis/retention-worker/.env.example
+      - path: ./apps/jarvis/retention-worker/.env
+        required: false
+    # One JDBC connection every sweep interval and a batch of ids in hand; it never holds frames.
+    mem_limit: 192m
+    environment:
+      LOKI_URL: "${LOKI_URL:-}"
+      LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
+      JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
+      RETENTION_DATASOURCE_URL: jdbc:postgresql://db/jarvis
+      RETENTION_DATASOURCE_USERNAME: jarvis
+      RETENTION_DATASOURCE_PASSWORD: jarvis
+    depends_on:
+      db:
+        condition: service_healthy
+    # No HTTP probe is possible — there is no port. This only proves the JVM is alive; that the
+    # sweep is actually working is a log question ("Frame retention sweep failed").
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "pgrep -f jarvis-retention-worker.jar > /dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # Watches the hub's frame stream, decodes each frame and runs person detection over it, then
+  # POSTs an alert. The CPU-hungry one, and the reason it is not sharing a container with the hub.
+  # It has no ingest route: nothing needs to reach it to feed it, only to read /health.
+  jarvis-person-detection:
+    image: jarvis-person-detection:local
+    build:
+      context: .
+      dockerfile: apps/jarvis/person-detection/Dockerfile
+    env_file:
+      - ./apps/jarvis/person-detection/.env.example
+      - path: ./apps/jarvis/person-detection/.env
+        required: false
+    # Holds one decoded BufferedImage at a time — frames arrive one at a time on the stream
+    # client's reader thread, and none is retained after it is examined. Needs no database.
+    mem_limit: 384m
+    environment:
+      LOKI_URL: "${LOKI_URL:-}"
+      LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
+      JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "9002"
+      PERSON_DETECTION_HUB_URL: http://jarvis-hub:9001
+      PERSON_DETECTION_SUBSCRIPTION: person-detection
+      PERSON_DETECTION_ALERT_URL: http://alerting/alerts
+    depends_on:
+      # It watches the hub rather than being called by it, so the hub must be up first. The stream
+      # client would retry with backoff anyway; this just avoids a minute of reconnect noise on a
+      # cold start.
+      jarvis-hub:
+        condition: service_healthy
+      alerting:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9002 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
   alerting:
@@ -316,7 +387,9 @@ services:
         condition: service_started
       object-storage-proxy:
         condition: service_healthy
-      jarvis-detection:
+      jarvis-hub:
+        condition: service_healthy
+      jarvis-person-detection:
         condition: service_healthy
       alerting:
         condition: service_started

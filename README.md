@@ -12,12 +12,13 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 | Backup | `apps/backup` | Postgres backup runner |
 | Google | `apps/google` | Gmail integration service |
 | Insta | `apps/insta` | CLI for public Instagram follower/following lookups via the Apify marketplace |
-| Jarvis | `apps/jarvis` | Surveillance (recorder clients, streaming, detection) |
+| Jarvis | `apps/jarvis` | Surveillance: frame hub (SSE), person detection, retention worker, recorder clients |
 | Keeboarder | `apps/keeboarder` | Keyboard/message relay |
 | Klippy | `apps/klippy` | Clipboard history sync |
 | Log analyzer | `apps/log-analyzer` | AI-assisted log triage feeding the alerting service |
 | Liveness analyzer | `apps/liveness-analyzer` | Heartbeat dead-man's switch alerting when a client stops running |
 | Object storage proxy | `apps/object-storage-proxy` | Upload proxy fronting S3-compatible or Azure Blob storage, plus the stream analysis worker |
+| Reverse proxy | `apps/reverse-proxy` | Policy-gated reverse proxy in front of one upstream, logging every request |
 | Secrets manager | `apps/secrets-manager` | Secret bundle/environment management |
 
 ## Packages
@@ -61,8 +62,10 @@ See each app's README for run and configuration details.
 
 ## Lightweight server engine
 
-The alerting, log-analyzer, and Jarvis detection services can run on either the
-existing Spring Boot web stack or embedded Undertow. The HTTP contracts and
+The alerting and log-analyzer services can run on either the existing Spring Boot
+web stack or embedded Undertow. (The Jarvis frame hub is Spring-only — it serves
+SSE — while Jarvis person detection and the retention worker are plain programs
+that serve no request routes.) The HTTP contracts and
 business logic are shared; only the server runtime changes.
 
 ```bash

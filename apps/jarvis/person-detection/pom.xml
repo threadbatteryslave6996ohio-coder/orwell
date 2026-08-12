@@ -1,0 +1,76 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.orwell</groupId>
+        <artifactId>jarvis</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>jarvis-person-detection</artifactId>
+
+    <properties>
+        <mainClass>dev.orwell.bucket.person.PersonDetectionApplication</mainClass>
+    </properties>
+
+    <!--
+      A frame watcher, not a server. It takes frames from jarvis-frame-client and holds a port only
+      for GET /health, so Spring went with the intake endpoints: no spring-boot-starter-web, no
+      server-bootstrap, no jarvis-frame-core (nothing here parses a request envelope any more).
+      What is left is the detector, the alert call, and one Undertow route.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>env-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>logger</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>jarvis-frame-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- For the single /health route, and its JSON helpers. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>undertow-bootstrap</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Synthetic frames to detect against. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>jarvis-frame-core</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- A plain program, so the runnable artifact is the shaded
+                 jarvis-person-detection-<version>-exec.jar. There is no Spring context to
+                 repackage; this used to be a Spring Boot app because it served controllers. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <configuration>
+                    <shadedArtifactAttached>true</shadedArtifactAttached>
+                    <shadedClassifierName>exec</shadedClassifierName>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

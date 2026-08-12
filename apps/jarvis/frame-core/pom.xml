@@ -1,0 +1,52 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.orwell</groupId>
+        <artifactId>jarvis</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>jarvis-frame-core</artifactId>
+
+    <!--
+      The frame envelope, and nothing else. All three frame services are pushed the same body by
+      the same producers, so the base64/hash validation lives here rather than being duplicated in
+      three repositories' worth of code and drifting apart. Deliberately has no Spring and no
+      database dependency: whatever ends up here is paid for by every service that takes a frame.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>primitives</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- FrameFixtures builds synthetic frames for the hub and motion, which do not depend
+                 on each other. Publishing the test classes is what lets both use it without one
+                 sibling reaching into another's test tree. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

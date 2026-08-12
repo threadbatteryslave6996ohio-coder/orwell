@@ -1,7 +1,9 @@
 # jarvis-retention
 
-Keeps an append-only table inside a budget. A library, not a service — `jarvis-detection` depends
-on it and drives the sweep from its own scheduler.
+Keeps an append-only table inside a budget. A library, not a service — `jarvis-retention-worker`
+depends on it and drives the sweep from its own scheduler. It is deliberately generic: nothing here
+knows what a frame is, and a second caller would bring its own `RetentionPolicy` rather than a
+second copy of this logic.
 
 ```java
 RetentionPolicy policy = RetentionPolicy.of(

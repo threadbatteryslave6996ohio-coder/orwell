@@ -14,9 +14,23 @@
     <artifactId>jarvis</artifactId>
     <packaging>pom</packaging>
 
+    <!--
+      Libraries first, then the three deployables. The split is by what each one costs to run, not
+      by what it is about: the hub owns Postgres and the frame bytes, person detection burns CPU
+      decoding images and talks to apps/alerting, and the retention worker holds no port at all.
+      They used to be one process, which meant sizing one container for the most expensive.
+
+      Only the hub takes frames over HTTP. Everything else that wants frames *watches* the hub
+      through jarvis-frame-client, so a producer pushes each frame exactly once and the fan-out is
+      the hub's job. That is why person-detection has no ingest endpoint of its own.
+    -->
     <modules>
+        <module>frame-core</module>
+        <module>frame-client</module>
         <module>retention</module>
-        <module>detection</module>
+        <module>hub</module>
+        <module>person-detection</module>
+        <module>retention-worker</module>
     </modules>
 
 </project>

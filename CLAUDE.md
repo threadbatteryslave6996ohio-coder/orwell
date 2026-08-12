@@ -20,7 +20,8 @@ whose runnable jars are the shaded `<artifactId>-<version>-exec.jar`.
 ## Module map
 
 ArtifactIds are derived from directory paths (nested modules compound the path:
-`apps/jarvis/detection` → `jarvis-detection`, `apps/keeboarder/server` → `keeboarder-server`).
+`apps/jarvis/person-detection` → `jarvis-person-detection`, `apps/keeboarder/server` →
+`keeboarder-server`).
 Java packages predate the renames and do NOT always match — use this table, don't guess:
 
 | Directory | artifactId | Java package |
@@ -32,8 +33,12 @@ Java packages predate the renames and do NOT always match — use this table, do
 | `apps/google/gmail-general` | `gmail-general` | `dev.orwell.google.gmail` |
 | `apps/insta` | `insta` | `dev.orwell.insta` (CLI; `insta ui` serves a read-only viewer) |
 | `apps/jarvis` | `jarvis` (aggregator) | — |
-| `apps/jarvis/detection` | `jarvis-detection` | `dev.orwell.bucket.detection` |
+| `apps/jarvis/frame-core` | `jarvis-frame-core` | `dev.orwell.bucket.frame` (library: the ingest envelope) |
+| `apps/jarvis/frame-client` | `jarvis-frame-client` | `dev.orwell.bucket.frame.client` (library: the stream consumer) |
+| `apps/jarvis/hub` | `jarvis-hub` | `dev.orwell.bucket.hub` (`/frames` + SSE; Spring-only; needs Postgres) |
+| `apps/jarvis/person-detection` | `jarvis-person-detection` | `dev.orwell.bucket.person` (stream watcher; `/health` only) |
 | `apps/jarvis/retention` | `jarvis-retention` | `dev.orwell.bucket.retention` (library, not a service) |
+| `apps/jarvis/retention-worker` | `jarvis-retention-worker` | `dev.orwell.bucket.retention.worker` (headless, **no port**) |
 | `apps/keeboarder/server` | `keeboarder-server` | `dev.orwell.keeboarder.server` |
 | `apps/keeboarder/clients/*` | `keeboarder-{client-core,linux-client,mac-client}` | `dev.orwell.keeboarder.*` |
 | `apps/klippy/server` | `klippy-server` | `dev.orwell.server` |
@@ -41,6 +46,7 @@ Java packages predate the renames and do NOT always match — use this table, do
 | `apps/klippy/clients/*` | `klippy-client-core`, `klippy-dummy-client`, `klippy-file-locker`, `klippy-linux-client`, `klippy-mac-client`, `klippy-offline-sync-client` | `dev.orwell.clients.*` |
 | `apps/log-analyzer` | `log-analyzer` | `dev.orwell.loganalyzer` |
 | `apps/object-storage-proxy` | `object-storage-proxy` | `dev.orwell.objectstorage.proxy` |
+| `apps/reverse-proxy` | `reverse-proxy` | `dev.orwell.reverseproxy` |
 | `apps/secrets-manager/server` | `secrets-manager-server` | `dev.orwell.secrets` |
 | `apps/secrets-manager/client` | `secrets-manager-client` | `dev.orwell.secrets.client` |
 | `packages/env/{core,http}` | `env-core`, `env-http` | `dev.orwell.env`, `dev.orwell.env.http` |
@@ -63,6 +69,19 @@ Java packages predate the renames and do NOT always match — use this table, do
   database. Check which of the two you have before touching it.
 - Jarvis's Java packages live under `dev.orwell.bucket.*`; klippy-server's under
   `dev.orwell.server`. Grep by package when tracing code, by artifactId when tracing builds.
+- **`apps/jarvis/detection` was split into three deployables** (`hub`, `person-detection`,
+  `retention-worker`) plus three libraries, because the endpoints it served had unrelated cost
+  profiles and a shared container had to be sized for the most expensive. Don't recreate it, and
+  don't reintroduce a `DETECTION_*` env var — every one was renamed to the service that reads it.
+  `apps/jarvis/README.md` carries the rename table.
+- **Only `jarvis-hub` takes frames over HTTP.** Anything else that wants frames *watches* the hub
+  through `jarvis-frame-client`, so a producer pushes each frame exactly once. Do not add a frame
+  ingest endpoint to another service — that is the shape this deliberately replaced. A new watcher
+  takes `FrameStreamClient` with its own durable `subscription` name rather than writing an SSE
+  reader; see `packages/redis-client` for the same rule applied to Redis.
+- **`apps/jarvis/motion` (`POST /motion`, frame-to-frame change detection) was deleted
+  deliberately**, along with `FrameChangeDetector` and `MotionService`. Don't recreate it; ignore
+  references to it in old commits. Deciding whether a frame is interesting is a producer's job now.
 - `apps/combined-server` was deleted deliberately. Do not recreate it; ignore references to it
   in old commits.
 - `apps/klippy/devops` (Terraform + cloud-init for Azure) was deleted deliberately — it is no
@@ -96,9 +115,12 @@ Java packages predate the renames and do NOT always match — use this table, do
   endpoint, 401 guard, logger, auth strategy) are registered in
   `packages/server-bootstrap/src/main/resources/META-INF/spring/…AutoConfiguration.imports` —
   if you move or rename any of those classes, update that file or the beans silently vanish.
-- Alerting, log-analyzer, and Jarvis detection also support Undertow through
-  `packages/undertow-bootstrap`. Their neutral main classes select the engine with
-  `SERVER_ENGINE=spring|undertow`; keep business logic shared between both engines.
+- Alerting and log-analyzer also support Undertow through `packages/undertow-bootstrap`. Their
+  neutral main classes select the engine with `SERVER_ENGINE=spring|undertow`; keep business logic
+  shared between both engines. Jarvis no longer plays here: `jarvis-hub` serves SSE and so is
+  Spring-only with a single main class (do not add an Undertow path to it), `jarvis-person-detection`
+  is a plain program that uses `UndertowHttp` for one `/health` route, and
+  `jarvis-retention-worker` runs no HTTP server at all.
 - **Logging goes through `dev.orwell.logging.Logger`** (`packages/logger`) — a hand-written
   `@FunctionalInterface`, deliberately **not** slf4j. `log(LogEntry)` is the single abstract
   method (so a test double can be a lambda); `trace/debug/info/warn/error` are defaults, each

@@ -7,7 +7,7 @@ applies nonblank shell overrides.
 
 It is a standalone app: the jarvis recorder clients (`apps/jarvis/clients/`) and insta's HTTP
 picture store upload through it, and it bundles the stream analysis worker described below.
-Person detection lives in `apps/jarvis/detection` and alert delivery in `apps/alerting`.
+Person detection lives in `apps/jarvis/person-detection` and alert delivery in `apps/alerting`.
 
 ## Build And Run
 
@@ -72,6 +72,11 @@ a second mode of this same app rather than a separate application. It reads MJPE
 frames from stdin, extracts individual JPEGs, and POSTs each frame to
 `STREAM_ANALYSIS_ENDPOINT` (blank drains the stream without forwarding). Its
 shell wrappers live in `scripts/`:
+
+It posts to **one** endpoint, so point it at exactly one of the jarvis services —
+`/person-detection/detect`, `/motion/motion`, or `/hub/frames` — not several. Those
+were all one service (`/detection/*`) before jarvis split into four; see
+`apps/jarvis/README.md` if you are updating an existing value.
 
 - `scripts/record_stream.sh` records segmented MP4 files
 - `scripts/analyze_stream.sh` pipes sampled frames from ffmpeg into the worker

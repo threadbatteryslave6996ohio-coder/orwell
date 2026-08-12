@@ -162,16 +162,43 @@ JARVIS_SRV_URL=$(create_env "$JARVIS_GROUP"   "OBJECT_STORAGE_SERVER_URL"       
 JARVIS_AUDIT=$(create_env "$JARVIS_GROUP"     "OBJECT_STORAGE_LOGGING_AUDIT_FILE"              "logs/audit.log")
 
 # ============================================================================
-# 7. JARVIS DETECTION
+# 7. JARVIS PERSON DETECTION
 # ============================================================================
-echo "[jarvis-detection]"
+echo "[jarvis-person-detection]"
 
-DETECT_GROUP=$(create_group "jarvis-detection" "Person detection service (apps/jarvis/detection)")
+DETECT_GROUP=$(create_group "jarvis-person-detection" "Person detection: watches the hub's frame stream (apps/jarvis/person-detection)")
 DETECT_HOST=$(create_env "$DETECT_GROUP"  "SERVER_ADDRESS"       "127.0.0.1")
-DETECT_PORT=$(create_env "$DETECT_GROUP"  "SERVER_PORT"       "9001")
-DETECT_ALERT_URL=$(create_env "$DETECT_GROUP" "DETECTION_ALERT_URL"     "http://127.0.0.1:9000/alerts")
-DETECT_COOLDOWN=$(create_env "$DETECT_GROUP" "DETECTION_ALERT_COOLDOWN_SECONDS" "60")
-DETECT_CONFIDENCE=$(create_env "$DETECT_GROUP" "DETECTION_MIN_CONFIDENCE" "0.0")
+DETECT_PORT=$(create_env "$DETECT_GROUP"  "SERVER_PORT"       "9002")
+DETECT_HUB_URL=$(create_env "$DETECT_GROUP" "PERSON_DETECTION_HUB_URL"       "http://127.0.0.1:9001")
+DETECT_SUBSCRIPTION=$(create_env "$DETECT_GROUP" "PERSON_DETECTION_SUBSCRIPTION" "person-detection")
+DETECT_ALERT_URL=$(create_env "$DETECT_GROUP" "PERSON_DETECTION_ALERT_URL"     "http://127.0.0.1:9000/alerts")
+DETECT_COOLDOWN=$(create_env "$DETECT_GROUP" "PERSON_DETECTION_ALERT_COOLDOWN_SECONDS" "60")
+DETECT_CONFIDENCE=$(create_env "$DETECT_GROUP" "PERSON_DETECTION_MIN_CONFIDENCE" "0.0")
+
+# ============================================================================
+# 7b. JARVIS HUB + RETENTION WORKER
+# ============================================================================
+echo "[jarvis-hub]"
+
+HUB_GROUP=$(create_group "jarvis-hub" "Frame hub: ingest, store, SSE relay (apps/jarvis/hub)")
+HUB_HOST=$(create_env "$HUB_GROUP"  "SERVER_ADDRESS"  "127.0.0.1")
+HUB_PORT=$(create_env "$HUB_GROUP"  "SERVER_PORT"     "9001")
+HUB_DB_URL=$(create_env "$HUB_GROUP" "HUB_DATASOURCE_URL"      "jdbc:postgresql://127.0.0.1:5432/jarvis")
+HUB_DB_USER=$(create_env "$HUB_GROUP" "HUB_DATASOURCE_USERNAME" "jarvis")
+HUB_DB_PASS=$(create_env "$HUB_GROUP" "HUB_DATASOURCE_PASSWORD" "jarvis")
+HUB_STREAM_Q=$(create_env "$HUB_GROUP" "HUB_STREAM_QUEUE_DEPTH" "8")
+HUB_STORE_Q=$(create_env "$HUB_GROUP" "HUB_STORE_QUEUE_DEPTH"   "512")
+
+echo "[jarvis-retention-worker]"
+
+# No SERVER_ADDRESS/SERVER_PORT: this process holds no port.
+RETENTION_GROUP=$(create_group "jarvis-retention-worker" "Bounds frame_events (apps/jarvis/retention-worker)")
+RETENTION_DB_URL=$(create_env "$RETENTION_GROUP" "RETENTION_DATASOURCE_URL"      "jdbc:postgresql://127.0.0.1:5432/jarvis")
+RETENTION_DB_USER=$(create_env "$RETENTION_GROUP" "RETENTION_DATASOURCE_USERNAME" "jarvis")
+RETENTION_DB_PASS=$(create_env "$RETENTION_GROUP" "RETENTION_DATASOURCE_PASSWORD" "jarvis")
+RETENTION_MAX_BYTES=$(create_env "$RETENTION_GROUP" "RETENTION_FRAME_MAX_BYTES"   "2147483648")
+RETENTION_MAX_AGE=$(create_env "$RETENTION_GROUP" "RETENTION_FRAME_MAX_AGE_SECONDS" "300")
+RETENTION_SWEEP=$(create_env "$RETENTION_GROUP" "RETENTION_SWEEP_SECONDS"         "30")
 
 # ============================================================================
 # 8. JARVIS ALERTING
@@ -256,7 +283,7 @@ set_bundle_envs "$MESSAGING_BUNDLE_ID" "$( \
 PORTS_BUNDLE=$(post "/bundles" '{"name":"server-ports","description":"All service ports"}')
 PORTS_BUNDLE_ID=$(echo "$PORTS_BUNDLE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 set_bundle_envs "$PORTS_BUNDLE_ID" "$( \
-  echo '[' "$AUTH_PORT,$KLIP_PORT,$SEC_PORT,$DETECT_PORT,$ALERT_PORT,$KEEB_HTTP_PORT,$KEEB_REDIS_PORT" ']' | sed 's/ //g' \
+  echo '[' "$AUTH_PORT,$KLIP_PORT,$SEC_PORT,$DETECT_PORT,$HUB_PORT,$ALERT_PORT,$KEEB_HTTP_PORT,$KEEB_REDIS_PORT" ']' | sed 's/ //g' \
 )" && echo "  bundle 'server-ports' created"
 
 # --- JPA / Hibernate bundle ---
@@ -270,7 +297,7 @@ set_bundle_envs "$JPA_BUNDLE_ID" "$( \
 JARVIS_FULL=$(post "/bundles" '{"name":"jarvis-full","description":"All Jarvis services configuration"}')
 JARVIS_FULL_ID=$(echo "$JARVIS_FULL" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 set_bundle_envs "$JARVIS_FULL_ID" "$( \
-  json_array=$(get_json "/groups/$JARVIS_GROUP/envs"; get_json "/groups/$DETECT_GROUP/envs"; get_json "/groups/$ALERT_GROUP/envs"; get_json "/groups/$STREAM_GROUP/envs")
+  json_array=$(get_json "/groups/$JARVIS_GROUP/envs"; get_json "/groups/$DETECT_GROUP/envs"; get_json "/groups/$HUB_GROUP/envs"; get_json "/groups/$RETENTION_GROUP/envs"; get_json "/groups/$ALERT_GROUP/envs"; get_json "/groups/$STREAM_GROUP/envs")
   echo "$json_array" | python3 -c "import sys,json; all_ids=[]; [all_ids.extend(e['id'] for e in json.loads(l)) for l in sys.stdin]; print(json.dumps(all_ids))"
 )" && echo "  bundle 'jarvis-full' created"
 
@@ -279,7 +306,8 @@ echo "=== Seeding complete ==="
 echo ""
 echo "Groups created:"
 echo "  auth-server, klippy-server, secrets-manager-server"
-echo "  keeboarder-server, jarvis-proxy, jarvis-detection"
+echo "  keeboarder-server, jarvis-proxy, jarvis-person-detection"
+echo "  jarvis-hub, jarvis-retention-worker"
 echo "  jarvis-alerting, jarvis-streaming, klippy-client"
 echo ""
 echo "Bundles created:"

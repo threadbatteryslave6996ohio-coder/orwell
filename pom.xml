@@ -21,6 +21,7 @@
         <module>apps/klippy</module>
         <module>apps/jarvis</module>
         <module>apps/object-storage-proxy</module>
+        <module>apps/reverse-proxy</module>
         <module>apps/log-analyzer</module>
         <module>apps/liveness-analyzer</module>
         <module>apps/alerting</module>

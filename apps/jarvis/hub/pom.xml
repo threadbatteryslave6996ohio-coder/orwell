@@ -1,0 +1,100 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.orwell</groupId>
+        <artifactId>jarvis</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>jarvis-hub</artifactId>
+
+    <properties>
+        <start-class>dev.orwell.bucket.hub.HubApplication</start-class>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>primitives</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>env-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>server-bootstrap</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>jarvis-frame-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--
+          No undertow-bootstrap, unlike its siblings. The hub serves SSE, which is Spring MVC async
+          plumbing; there is no Undertow path to fall back to, so there is no engine choice to
+          offer and the dependency would only be dead weight. Sizing the frame budget is now the
+          hub's alone: see HUB_STORE_QUEUE_DEPTH and HUB_STREAM_QUEUE_DEPTH.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <!-- Frames are stored so a reconnecting client can replay what it missed. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>jarvis-frame-core</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>server-test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

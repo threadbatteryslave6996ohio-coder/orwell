@@ -1,43 +1,84 @@
 # Refactor backlog
 
-**New debt (jarvis-detection frame hub).** `POST /frames` + `GET /frames/stream` turned detection
+**Done (jarvis: split, then standardised on watching).** Two steps. First the split — see
+below. Then frame *intake* was standardised: only `jarvis-hub` takes frames over HTTP, and
+everything else watches its stream through the new `jarvis-frame-client`. That deleted
+`POST /detect` (person detection is now a stream watcher, so its controller, endpoint, both engine
+main classes and envelope parsing are gone) and deleted `apps/jarvis/motion` outright. A producer
+now pushes each frame exactly once and fan-out is the hub's job. The cost, stated plainly:
+detection is asynchronous — nothing gets a verdict back in a response — and frame-to-frame change
+detection no longer exists anywhere in the repo.
+
+**Done (jarvis split into four deployables).** `apps/jarvis/detection` served `/detect`, `/motion`
+and `/frames` from one jar; it is now `hub`, `person-detection`, `motion` and `retention-worker`,
+with `frame-core` holding the frame envelope they share. What forced it was cost, not tidiness: one
+container had to be sized for image decoding *and* buffered frame bytes, and the retention sweep
+could only run while the video service was up. This closed the first item below (the hub is
+Spring-only by construction now, with no Undertow half to be inconsistent with). Every `DETECTION_*` env var was
+renamed to the service that reads it — see `apps/jarvis/README.md` for the table.
+
+**New debt (jarvis-hub frame hub).** `POST /frames` + `GET /frames/stream` turned detection
 into the push hub: producers push frames, the hub stores them in `frame_events` and streams them
 over SSE to connected clients, replaying from the store for a client that reconnects. Positions of
 named subscriptions live in `frame_cursors`. Note the intermediate commit `e587e06` carries an
 earlier cursor-tracked *webhook* fan-out (`frame_subscriptions`, `FrameDeliveryJob`,
 `FrameSender`) that was replaced by the stream — ignore those names. The hub receives, stores and
 redistributes; it does not inspect a frame, so `DETECTION_RELAY_MODE` and the `changed` columns on
-`frame_events` are gone and change detection is `/motion`'s job alone. Four things are knowingly
-unfinished.
+`frame_events` are gone. (Change detection was `/motion`'s job; that service has since been deleted
+entirely, so it is nobody's.) Four things are knowingly unfinished.
 
-- **The hub is Spring-engine only.** It hands frames to open SSE connections and its retention runs
-  on a scheduled bean, neither of which exists in the Undertow runtime, so `/frames` answers 501
-  there and `/frames/stream` is not served. Detection is the one app whose two engines are not
-  feature-equivalent — either implement the stream on Undertow, or decide detection is Spring-only
-  and drop `DetectionUndertowApplication`. Leaving it half-and-half is the worst of the three.
+- ~~**The hub is Spring-engine only**, so `/frames` answered 501 under Undertow while `/detect` and
+  `/motion` worked — one app whose two engines were not feature-equivalent.~~ **Resolved by the
+  split**: `jarvis-hub` is its own Spring-only deployable with no Undertow main class and no 501
+  branch, and its siblings run on either engine. Implementing SSE on Undertow is still open as a
+  want, but it is no longer an inconsistency.
 - **Both frame routes are unauthenticated**, like `/detect` and `/motion` before them. That mattered
   less for a detection verdict than it does for a video feed anyone who can reach the port can watch
   — and push into. Wanted: `@RequireAuthentication` on the frame routes, which means making
-  `AUTH_BASE_URL` required for detection and is therefore a breaking change to sequence
-  deliberately.
+  `AUTH_BASE_URL` required for the hub and is therefore a breaking change to sequence
+  deliberately. Cheaper than it was: it now lands on the hub alone rather than on all three
+  endpoints at once.
 - **Subscription names are unauthenticated identities.** Any caller can connect with any
   `?subscription=` name and advance someone else's cursor. It should be scoped to the authenticated
   client id — which is blocked on the auth item above.
-- **A frame can be broadcast and never stored.** `DETECTION_STORE_MODE=async` (the default) writes
+- **A frame can be broadcast and never stored.** `HUB_STORE_MODE=async` (the default) writes
   behind the live stream so a database stall cannot stall the video, which means a full write queue
   or a crash leaves a hole in the id sequence — delivered live, not replayable. `framesUnstoredTotal`
   counts it and `sync` mode trades it back for latency, but there is no middle ground yet: a small
   on-disk spool ahead of the database would give one.
 - **Frame bytes live in Postgres `bytea`.** Replay means an unread frame must still exist, so the
-  table is bounded rather than small: `DETECTION_FRAME_MAX_BYTES` caps the bytes retained and
-  `DETECTION_FRAME_RETENTION_SECONDS` caps their age, swept by
-  [`jarvis-retention`](apps/jarvis/retention/README.md). That makes the footprint safe, not free —
+  table is bounded rather than small: `RETENTION_FRAME_MAX_BYTES` caps the bytes retained and
+  `RETENTION_FRAME_MAX_AGE_SECONDS` caps their age, swept by
+  [`jarvis-retention-worker`](apps/jarvis/README.md) out of process. That makes the footprint safe, not free —
   it is still video bytes on the one Postgres the whole repo shares, with the WAL and autovacuum
   churn that implies. The object storage proxy already exists to store jarvis bytes; moving the payload
   there and leaving `(id, source, sha, storageKey)` plus cursors in Postgres is the upgrade, at the
-  cost of a proxy dependency in detection. The trigger to do it is **viewer fan-out or a much
+  cost of a proxy dependency in the hub. The trigger to do it is **viewer fan-out or a much
   longer window**, not table size: the hub currently base64s every frame to every subscriber, so
   serving links instead is what takes it off the hot path.
+
+**A server-side cursor over-advances by one frame on an unclean disconnect.** The hub writes a
+subscription's `last_delivered_id` when it sends, and a TCP write to a dead peer succeeds until the
+RST lands — so the frame in flight when a watcher dies is recorded as delivered and never reaches
+it. Reproduced: push a frame, kill the watcher, push two more, restart; it resumes past the first
+of the two. This was always true of `?subscription=`, but it only started to matter when watching
+became the way services consume frames rather than a convenience for viewers. The options are a
+client-acknowledged cursor (the client sends back what it has processed, which means a second round
+trip or a control channel), or watchers persisting their own position and using `?from=`. Neither
+is free; pick one deliberately rather than leaving the semantics undocumented. The behaviour is
+written up in `apps/jarvis/README.md` under the hub limits.
+
+**`HogPersonDetector` is still untested.** `PersonDetectionServiceTest` now covers the listener
+contract — an undecodable frame is counted rather than thrown, the cooldown collapses a burst to
+one alert, an unreachable alerting service does not stop detection — but the brightness heuristic
+underneath has no test of its own. It is also the piece most likely to be replaced wholesale by a
+real detector, which is the argument for testing its *contract* (what `Detection` boxes mean)
+rather than its current arithmetic.
+
+**Frame subscriptions are still unauthenticated, and it matters more now.** Watching is the
+supported way to consume frames, so `?subscription=` being an unauthenticated identity means any
+caller can both read the video and advance another watcher's cursor. Listed below under the hub;
+repeated here because the split raised its severity rather than lowering it.
 
 Also: a hung-up client is only noticed on the next failed write, so `connectedClients` and the
 `recipients` count lag a disconnect by one frame. Harmless in practice, but it is why the
@@ -240,7 +281,7 @@ re-parented to the root.
 
 ## 3. Live duplication (folded in from the retired removing-redundant-code.md)
 
-- **Two cooldown-tracker variants**: `apps/jarvis/detection/.../CooldownTracker.java` and
+- **Two cooldown-tracker variants**: `apps/jarvis/person-detection/.../CooldownTracker.java` and
   `apps/log-analyzer/.../AlertCooldownTracker.java` implement the same concept with different
   code — log-analyzer's has evolved reservation semantics, jarvis's has not. (The third copy that
   used to live in `apps/alerting` is gone; that app has no cooldown tracker.) Extract one shared
