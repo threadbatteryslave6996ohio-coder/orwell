@@ -28,6 +28,7 @@ public final class PersonDetectionEnvs {
     public static final EnvOption<String> PERSON_DETECTION_ALERT_URL;
     public static final EnvOption<Integer> PERSON_DETECTION_ALERT_COOLDOWN_SECONDS;
     public static final EnvOption<Double> PERSON_DETECTION_MIN_CONFIDENCE;
+    public static final EnvOption<String> LOGGER;
     public static final EnvOption<String> LOKI_URL;
     public static final EnvOption<String> LOKI_TENANT_ID;
 
@@ -52,6 +53,9 @@ public final class PersonDetectionEnvs {
                 BUILDER.optional("PERSON_DETECTION_ALERT_COOLDOWN_SECONDS", EnvType.integer(), 60);
         PERSON_DETECTION_MIN_CONFIDENCE =
                 BUILDER.optional("PERSON_DETECTION_MIN_CONFIDENCE", doubleType, 0.35);
+        // Which sinks the logger gets; blank keeps the repo default (Loki when LOKI_URL is set,
+        // console otherwise). LoggerSetup parses it — see LoggerMode for the values.
+        LOGGER = BUILDER.optional("LOGGER", EnvType.string(), "");
         LOKI_URL = BUILDER.optional("LOKI_URL", EnvType.string(), "");
         LOKI_TENANT_ID = BUILDER.optional("LOKI_TENANT_ID", EnvType.string(), "");
         SCHEMA = BUILDER.build();

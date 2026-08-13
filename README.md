@@ -82,11 +82,14 @@ database-backed services remain Spring-based for now.
 Every server logs through `dev.orwell.logging.Logger`. The default sink writes human-readable
 text to stdout for humans, and pushes structured entries straight to Loki from inside the JVM —
 asynchronously, from a bounded queue, so a slow or unreachable Loki never delays a request path.
-There is no log collector and no log file to scrape; set `LOKI_URL` (see `.env.example`), and
-entries arrive labelled `{stream_type="app", app=..., level=...}`.
+There is no log collector to scrape; set `LOKI_URL` (see `.env.example`), and entries arrive
+labelled `{stream_type="app", app=..., level=...}`.
 
-Leave `LOKI_URL` empty and logs stay on the console, with a warning at startup so the choice is
-visible. Two services consume that stream through Grafana: `apps/log-analyzer` triages error logs
+`LOGGER` chooses the sinks, the same way in every service: `console`, `disk`, `loki`,
+`loki-with-fallback` (Loki, with a JSON-lines file catching only what Loki refused) or `both`.
+The console is in all of them, so `docker logs` never goes quiet. Left unset it stays what it
+always was — Loki when `LOKI_URL` is set, console with a startup warning when it is
+not. Two services consume that stream through Grafana: `apps/log-analyzer` triages error logs
 with an AI model, and `apps/liveness-analyzer` watches for client heartbeat lines and alerts when
 a client stops beating. Label scheme and cardinality rules are in `apps/log-analyzer/README.md`;
 the sink design is in `packages/logger/README.md`.

@@ -33,8 +33,12 @@ field now settles.
 Each server pushes its own logs directly. The shared `Logger` bean
 (`packages/server-bootstrap`, `LoggerConfiguration`) fans out to a console sink and a
 `LokiLogger` that batches entries onto a bounded queue and ships them to `LOKI_URL` from a
-background thread. There is no collector and no log file — see
-[`packages/logger/README.md`](../../packages/logger/README.md).
+background thread. There is no collector, and no log file unless a service's `LOGGER` asks for
+one — see [`packages/logger/README.md`](../../packages/logger/README.md).
+
+That last point matters for what this analyzer can see: a service running `LOGGER=disk` ships
+nothing to Loki, so its errors never reach this triage. Anything meant to be analyzed here needs
+`loki`, `loki-with-fallback` or `both`.
 
 **`LOKI_URL` and `GRAFANA_LOKI_DATASOURCE_UID` must point at the same Loki.** If they diverge,
 this analyzer queries an instance nothing writes to and reports zero errors forever. Nothing

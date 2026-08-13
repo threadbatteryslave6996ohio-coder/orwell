@@ -143,11 +143,18 @@ Java packages predate the renames and do NOT always match — use this table, do
   bean comes from `dev.orwell.bootstrap.logging.LoggerConfiguration`); clients build one in
   `main` and pass it down. `PollInterval` holds a static `CustomLogger` — that is the one
   outlier, not the pattern to copy.
-- The Spring `Logger` bean defaults to `FailSafeLogger(Composite(Console, Loki))` when
-  `LOKI_URL` is set, and console-only with a warning when it isn't. Override by declaring your
-  own `Logger` bean. `LOKI_URL`/`LOKI_TENANT_ID`/`LOGGING_FILE_NAME` are common keys on
-  `AppServerEnv`. **Servers no longer write an app log file by default** — the default sink is
-  console plus Loki push.
+- **Which sinks a process gets is the `LOGGER` env var's choice, not per-app code.**
+  `dev.orwell.logging.LoggerSetup.fromConfiguration(appName, LOGGER, LOKI_URL, LOKI_TENANT_ID)`
+  is the one place the tree is assembled — `console`, `disk`, `loki`, `loki-with-fallback`
+  (Loki, with the file catching only what Loki refused) or `both`. `ConsoleLogger` is in every
+  mode; a mode names what is added to it. **Do not hand-roll an `if (LOKI_URL is set)` in a new
+  `main`** — call the factory, as `jarvis-person-detection` and `jarvis-retention-worker` do. It
+  returns a `ManagedLogger`, which is the `Logger` plus the `close()` that flushes Loki's queue.
+  `LOGGER`/`LOKI_URL`/`LOKI_TENANT_ID`/`LOGGING_FILE_NAME` are common keys on `AppServerEnv`;
+  an `EnvSchema`-only app declares `LOGGER` as an optional string and passes it through.
+  Unset, the default is unchanged: Loki when `LOKI_URL` is set, console with a warning when not.
+  Override the whole thing by declaring your own `Logger` bean. **Servers still write no app log
+  file by default** — a `.jsonl` file appears only where `LOGGER` asks for one.
 - A synchronous network or database sink is not an acceptable addition: it would put a round
   trip on every request path, and `FailSafeLogger` protects against a sink being *down*, not
   against it being *slow*. `DatabaseLogger` was deleted for this reason — don't reintroduce it.

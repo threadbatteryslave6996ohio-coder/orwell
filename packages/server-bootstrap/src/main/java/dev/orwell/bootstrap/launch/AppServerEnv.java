@@ -5,6 +5,7 @@ import dev.orwell.env.EnvClassBuilder;
 import dev.orwell.env.EnvOption;
 import dev.orwell.env.EnvSchema;
 import dev.orwell.env.EnvType;
+import dev.orwell.logging.LoggerMode;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -19,8 +20,22 @@ public final class AppServerEnv {
     public static final String SERVER_PORT_PROPERTY = "server.port";
     public static final String LOGGING_FILE_PROPERTY = "logging.file.name";
     public static final String AUTH_BASE_URL_PROPERTY = "orwell.auth.base-url";
+    public static final String LOGGER_MODE_PROPERTY = "orwell.logger.mode";
     public static final String LOKI_URL_PROPERTY = "orwell.loki.url";
     public static final String LOKI_TENANT_ID_PROPERTY = "orwell.loki.tenant-id";
+
+    /**
+     * {@code LOGGER} stays a string all the way to {@link dev.orwell.logging.LoggerSetup}, which is
+     * what parses it — but it is validated here, so a typo is an env validation error naming the
+     * legal values rather than a failure later during context startup.
+     */
+    private static final EnvType<String> LOGGER_MODE = EnvType.of(
+            String.class,
+            "logger mode (console|disk|loki|loki-with-fallback|both)",
+            value -> {
+                LoggerMode.parse(value);
+                return value;
+            });
 
     private final EnvClassBuilder builder = EnvSchema.builder();
     private final Map<String, EnvOption<?>> springProperties = new LinkedHashMap<>();
@@ -29,6 +44,7 @@ public final class AppServerEnv {
     public final EnvOption<Integer> SERVER_PORT;
     public final EnvOption<String> LOGGING_FILE_NAME;
     public final EnvOption<String> AUTH_BASE_URL;
+    public final EnvOption<String> LOGGER;
     public final EnvOption<String> LOKI_URL;
     public final EnvOption<String> LOKI_TENANT_ID;
 
@@ -47,6 +63,7 @@ public final class AppServerEnv {
 
         // Every server ships its own logs now, so the Loki endpoint is a common key rather
         // than something each app redeclares.
+        LOGGER = builder.optional("LOGGER", LOGGER_MODE);
         LOKI_URL = builder.optional("LOKI_URL", EnvType.string());
         LOKI_TENANT_ID = builder.optional("LOKI_TENANT_ID", EnvType.string());
 
@@ -54,6 +71,7 @@ public final class AppServerEnv {
         property(SERVER_PORT_PROPERTY, SERVER_PORT);
         property(LOGGING_FILE_PROPERTY, LOGGING_FILE_NAME);
         property(AUTH_BASE_URL_PROPERTY, AUTH_BASE_URL);
+        property(LOGGER_MODE_PROPERTY, LOGGER);
         property(LOKI_URL_PROPERTY, LOKI_URL);
         property(LOKI_TENANT_ID_PROPERTY, LOKI_TENANT_ID);
     }

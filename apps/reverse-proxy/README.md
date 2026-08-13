@@ -98,8 +98,11 @@ followed — the `Location` goes back to the client, which is whose decision it 
 | `PROXY_MAX_BODY_BYTES` | `10485760` (10 MiB) | Largest body buffered for replay; over it, `413` |
 
 `SERVER_ADDRESS`, `SERVER_PORT` and `PROXY_UPSTREAM_URL` are `required`: unset, the app exits at
-startup with a validation error. `LOKI_URL`/`LOKI_TENANT_ID` come from `AppServerEnv` as with every
-other server. There is no `SERVER_ENGINE` here — this app is Spring/Tomcat only, because it relies
+startup with a validation error. `LOGGER`/`LOKI_URL`/`LOKI_TENANT_ID` come from `AppServerEnv` as
+with every other server — `LOGGER` chooses the sinks (`console`, `disk`, `loki`,
+`loki-with-fallback`, `both`), which matters more here than elsewhere: the audit trail this proxy
+produces is its whole point, so a deployment that cares about it wants `loki-with-fallback` rather
+than records dropped during a Loki outage. There is no `SERVER_ENGINE` here — this app is Spring/Tomcat only, because it relies
 on servlet streaming for arbitrary request bodies.
 
 ## Build and run

@@ -3,14 +3,10 @@ package dev.orwell.bucket.person;
 import dev.orwell.bucket.frame.client.FrameStreamClient;
 import dev.orwell.bucket.frame.client.FrameStreamOptions;
 import dev.orwell.env.Env;
-import dev.orwell.logging.CompositeLogger;
-import dev.orwell.logging.ConsoleLogger;
-import dev.orwell.logging.FailSafeLogger;
 import dev.orwell.logging.Logger;
-import dev.orwell.logging.LokiLogger;
+import dev.orwell.logging.LoggerSetup;
 import dev.orwell.undertow.UndertowHttp;
 
-import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -29,6 +25,9 @@ import java.util.Map;
  * failure this is here to make visible — without it, "running" and "working" look identical.
  */
 public final class PersonDetectionApplication {
+    /** The logger name and the Loki {@code app} label; matches the artifactId. */
+    private static final String APP_NAME = "jarvis-person-detection";
+
     public static void main(String[] args) {
         Env env;
         try {
@@ -77,23 +76,16 @@ public final class PersonDetectionApplication {
     }
 
     /**
-     * Console plus Loki when {@code LOKI_URL} is set, console only when it is not — the same
-     * default the Spring servers get from {@code LoggerConfiguration}, built by hand because there
-     * is no Spring context here to build it.
+     * The sinks {@code LOGGER} asks for, assembled by the same {@code LoggerSetup} the Spring
+     * servers use — so this process answers to the same configuration as the rest of the repo
+     * even though there is no Spring context here to build the bean.
      */
     private static Logger loggerFrom(Env env) {
-        ConsoleLogger console = new ConsoleLogger("jarvis-person-detection");
-        String lokiUrl = env.get(PersonDetectionEnvs.LOKI_URL);
-        if (lokiUrl == null || lokiUrl.isBlank()) {
-            console.warn("LOKI_URL is not set; detections stay on the console.",
-                    Map.of("app", "jarvis-person-detection"));
-            return new FailSafeLogger(console);
-        }
-        LokiLogger loki = new LokiLogger(
-                "jarvis-person-detection",
-                URI.create(lokiUrl),
+        return LoggerSetup.fromConfiguration(
+                APP_NAME,
+                env.get(PersonDetectionEnvs.LOGGER),
+                env.get(PersonDetectionEnvs.LOKI_URL),
                 env.get(PersonDetectionEnvs.LOKI_TENANT_ID));
-        return new FailSafeLogger(new CompositeLogger(console, loki));
     }
 
     private PersonDetectionApplication() {

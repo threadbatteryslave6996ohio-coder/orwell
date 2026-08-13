@@ -188,6 +188,8 @@ re-parented to the root.
   `LokiLogger` drops and counts while every service stays healthy and `log-analyzer` sees zero
   errors — indistinguishable from a clean stack. Drops go to stderr on an interval, which beats
   silence but is not an alert. Wanted: a deadman check that the stream is still receiving.
+  Half-addressed: `LOGGER=loki-with-fallback` means an outage no longer *loses* the records (they
+  land in `<log dir>/<app>.jsonl`), but nothing still tells anyone the outage is happening.
 - **Detection alert client**: `DetectionService.detect()` hand-builds its alert POST (no
   timeout, no blank-URL guard, no transient/terminal outcome split) while `log-analyzer`'s
   `AlertClient` already encapsulates all of that for the same `/alerts` endpoint. Promote
@@ -207,8 +209,10 @@ re-parented to the root.
   failing fast instead, or deriving from `spring.application.name`.
 - **Client logging stops at the console**: the klippy clients now build a `ConsoleLogger` from
   `dev.orwell.logging` in `main`, but no client ships anything to Loki, so client-side failures
-  are invisible to `log-analyzer` while every server is covered. Add the `LokiLogger` sink to
-  client logging (composed behind `FailSafeLogger`, as the servers do), gated on `LOKI_URL`.
+  are invisible to `log-analyzer` while every server is covered. The work is now a one-liner:
+  call `LoggerSetup.fromConfiguration(name, LOGGER, LOKI_URL, LOKI_TENANT_ID)` in `main` instead
+  of constructing `ConsoleLogger`, and close the returned `ManagedLogger` on shutdown. A client is
+  also the strongest case for `loki-with-fallback` — it logs from a laptop that is often offline.
 - **Route prefixes**: klippy's placeholder is gone. Four `${x.server.route-prefix:}` placeholders
   remain — auth (`orwell.auth.route-prefix`), secrets (`secrets.route-prefix`, on both the admin
   and accessor controllers), the jarvis proxy (`jarvis.server.route-prefix`), and keeboarder

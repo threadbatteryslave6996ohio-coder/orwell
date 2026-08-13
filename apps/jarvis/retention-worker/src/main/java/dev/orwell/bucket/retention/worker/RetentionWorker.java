@@ -1,15 +1,9 @@
 package dev.orwell.bucket.retention.worker;
 
 import dev.orwell.env.Env;
-import dev.orwell.logging.CompositeLogger;
-import dev.orwell.logging.ConsoleLogger;
-import dev.orwell.logging.FailSafeLogger;
 import dev.orwell.logging.Logger;
-import dev.orwell.logging.LokiLogger;
+import dev.orwell.logging.LoggerSetup;
 import org.postgresql.ds.PGSimpleDataSource;
-
-import java.net.URI;
-import java.util.Map;
 
 /**
  * Bounds {@code frame_events}, and nothing else.
@@ -32,6 +26,9 @@ import java.util.Map;
  * without the table going unbounded while it is gone.
  */
 public final class RetentionWorker {
+    /** The logger name and the Loki {@code app} label; matches the artifactId. */
+    private static final String APP_NAME = "jarvis-retention-worker";
+
     public static void main(String[] args) {
         Env env;
         try {
@@ -62,23 +59,19 @@ public final class RetentionWorker {
     }
 
     /**
-     * Console plus Loki when {@code LOKI_URL} is set, console only when it is not — the same
-     * default the Spring servers get from {@code LoggerConfiguration}, built by hand because there
-     * is no Spring context here to build it.
+     * The sinks {@code LOGGER} asks for, assembled by the same {@code LoggerSetup} the Spring
+     * servers use — so this process answers to the same configuration as the rest of the repo
+     * even though there is no Spring context here to build the bean.
+     *
+     * <p>Sweep results are the only record this process leaves, so {@code loki-with-fallback} is
+     * worth considering here: a Loki outage would otherwise take the evidence with it.
      */
     private static Logger loggerFrom(Env env) {
-        ConsoleLogger console = new ConsoleLogger("jarvis-retention-worker");
-        String lokiUrl = env.get(RetentionWorkerEnvs.LOKI_URL);
-        if (lokiUrl == null || lokiUrl.isBlank()) {
-            console.warn("LOKI_URL is not set; sweep results stay on the console.",
-                    Map.of("app", "jarvis-retention-worker"));
-            return new FailSafeLogger(console);
-        }
-        LokiLogger loki = new LokiLogger(
-                "jarvis-retention-worker",
-                URI.create(lokiUrl),
+        return LoggerSetup.fromConfiguration(
+                APP_NAME,
+                env.get(RetentionWorkerEnvs.LOGGER),
+                env.get(RetentionWorkerEnvs.LOKI_URL),
                 env.get(RetentionWorkerEnvs.LOKI_TENANT_ID));
-        return new FailSafeLogger(new CompositeLogger(console, loki));
     }
 
     private RetentionWorker() {

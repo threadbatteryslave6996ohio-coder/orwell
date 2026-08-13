@@ -37,6 +37,9 @@ that takes its caller down.
 | `CompositeLogger` | fans out to several sinks | combining the above |
 | `FailSafeLogger` | contains sink failures | wrapping any sink used from a request path |
 
+Which of them a **server** gets is configuration, not code — see [Choosing sinks with
+`LOGGER`](#choosing-sinks-with-logger) below.
+
 Text sinks render as `<timestamp> [name] [LEVEL] message key=value`. Values containing
 whitespace, `=`, or a quote are quoted, so a field like `error="Connection refused: connect"`
 survives as one field. Metadata keys are sorted, so the same entry always renders identically —
@@ -51,33 +54,93 @@ the property (typically a standalone `main`).
 Metadata keys colliding with those three reserved names are dropped rather than allowed to
 overwrite them.
 
+## Choosing sinks with `LOGGER`
+
+One environment variable decides what a process logs to. `LoggerSetup` turns it into the sink
+tree; `LoggerMode` is the enum of legal values.
+
+| `LOGGER` | Sinks | For |
+|---|---|---|
+| `console` | console | local development; the default when no `LOKI_URL` is set |
+| `disk` | console + `<log dir>/<app>.jsonl` | a collector that tails files, or logs that must survive without a network |
+| `loki` | console + Loki | the default when `LOKI_URL` is set — what every server did before this key existed |
+| `loki-with-fallback` | console + Loki, disk catching **only what Loki refused** | when losing records to a Loki outage is unacceptable |
+| `both` | console + Loki + disk, every record to each | two complete copies, at the price of a disk write per call |
+
+Three things hold across all of them:
+
+- **The console is always attached.** stdout is what `docker logs` reads, and no configuration
+  should be able to make a container silent. So `LOGGER` names what happens *in addition* to the
+  console, and `console` is the mode that adds nothing.
+- **`loki-with-fallback` is not `both`.** The fallback file gets only the entries Loki did not
+  take — a full queue, a failed push, an error response — so it reads as an outage record rather
+  than a duplicate of everything, and a healthy Loki costs no disk I/O at all. The cost: while
+  Loki is failing, the caller may pay for the fallback's disk write, which is precisely what
+  asking for a fallback means.
+- **Leaving `LOGGER` unset changes nothing.** The default is `loki` when `LOKI_URL` is set and
+  `console` when it is not — the behavior every server had before the key existed.
+
+Case and `_` vs `-` are forgiven (`LOKI_WITH_FALLBACK` works). Anything else fails at startup
+naming the legal values, because a typo that quietly became the default would ship nothing while
+looking configured.
+
+Two failure rules, drawn deliberately in different places:
+
+- A **contradiction between configured values** — `LOGGER=loki` with no `LOKI_URL` — fails
+  startup. It costs nothing to detect, and the alternative is a deployment that believes it is
+  shipping logs and is not.
+- A **sink that will not open** — an unwritable log file — is reported loudly on the console and
+  skipped. Logging must not be why a server refuses to boot, and the records still reach the
+  sinks that work.
+
+The file sinks write `<log dir>/<app>.jsonl`, with the directory resolved by `LogFiles` as
+described above — set `LOGGING_FILE_NAME` to move it. There is no separate key for the log file.
+
 ## Wiring
 
 **Spring servers** get a `Logger` bean automatically from `packages/server-bootstrap`
 (`LoggerConfiguration`, registered in that module's `AutoConfiguration.imports`). Just declare
 `Logger` as a constructor parameter. To override, declare your own `Logger` bean;
-`@ConditionalOnMissingBean` steps aside.
+`@ConditionalOnMissingBean` steps aside. `LOGGER` is a common key on `AppServerEnv`, so no app
+declares it.
 
-The default fans out to two sinks with deliberately different audiences:
+Whatever the mode, the shape is the same:
 
 ```
 FailSafeLogger( CompositeLogger( ConsoleLogger,   → stdout, human, quick debug
-                                 LokiLogger ) )   → pushed straight to Loki
+                                 JsonLogger,      → disk / both
+                                 LokiLogger ) )   → loki / loki-with-fallback / both
 ```
 
 `LokiLogger` never blocks its caller. `log()` does a non-blocking offer onto a bounded queue and
 returns; one daemon thread batches and ships. When the queue is full — Loki down, slow, or a
-burst — entries are **dropped and counted**, never queued at the cost of a request thread. The
-buffer is in memory, so entries queued but unshipped are lost if the process dies; that is the
-accepted cost of pushing directly instead of writing a file for a collector to tail.
-
-With `LOKI_URL` unset the bean falls back to console-only and warns at startup, because
-console-only is both a legitimate local setup and exactly what a misconfigured deployment looks
-like.
+burst — entries are **dropped and counted** rather than queued at the cost of a request thread,
+or handed to the fallback sink if one is configured. The buffer is in memory, so entries queued
+but unshipped are lost if the process dies; that is the accepted cost of pushing directly instead
+of writing a file for a collector to tail, and `loki-with-fallback` is the answer where that cost
+is too high.
 
 `FailSafeLogger` is not optional decoration: controllers log unguarded inside request paths, so
 without it a full disk turns a valid login into an HTTP 500. Sink failures are contained and
 reported once to stderr.
+
+**Standalone `main`s** call the same factory rather than rebuilding the tree by hand — this is
+what `jarvis-person-detection` and `jarvis-retention-worker` do, so they answer to `LOGGER`
+exactly like the Spring servers:
+
+```java
+Logger logger = LoggerSetup.fromConfiguration(
+        "jarvis-retention-worker",
+        env.get(RetentionWorkerEnvs.LOGGER),
+        env.get(RetentionWorkerEnvs.LOKI_URL),
+        env.get(RetentionWorkerEnvs.LOKI_TENANT_ID));
+```
+
+It takes plain strings, never an `Env` — this module stays free of the env framework, so tests and
+desktop clients can call it with literals. What comes back is a `ManagedLogger`: a `Logger` to
+every call site, plus the `close()` that flushes `LokiLogger`'s queue on shutdown. Spring calls it
+via the bean's `destroyMethod`; a `main` can use try-with-resources or a shutdown hook. Before it
+existed the Loki sink was unreachable inside the composite, so nothing ever flushed it.
 
 **Clients and standalone `main`s** have no context to inject from: construct one `ConsoleLogger`
 named after the artifactId in `main` and pass it down through constructors.
@@ -115,8 +178,10 @@ labelled `stream_type="app"`, so the app stream is structured by construction an
 interleaved with framework prose. stdout still carries both, and stays useful for a quick
 `docker logs` without being anybody's ingestion path.
 
-App logs go straight to Loki from the JVM; there is no collector and no `.jsonl` file. See
-[`apps/log-analyzer/README.md`](../../apps/log-analyzer/README.md) for the label scheme.
+App logs go straight to Loki from the JVM by default; there is no collector in the picture. A
+`.jsonl` file appears only where `LOGGER` asks for one (`disk`, `both`, or an outage under
+`loki-with-fallback`). See [`apps/log-analyzer/README.md`](../../apps/log-analyzer/README.md) for
+the label scheme.
 
 **The name you pass here becomes a query dimension.** `orwell.app.name` becomes Loki's `app`
 label directly, so renaming an app renames a label that dashboards and alerts select on. That is

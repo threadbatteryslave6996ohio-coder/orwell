@@ -26,11 +26,14 @@ their own options on top. The validated env is published as Spring properties by
 | `SERVER_PORT` | `server.port` | always |
 | `LOGGING_FILE_NAME` | `logging.file.name` | per-app (constructor flag) |
 | `AUTH_BASE_URL` | `orwell.auth.base-url` | per-app (constructor flag) |
+| `LOGGER` | `orwell.logger.mode` | optional |
 | `LOKI_URL` | `orwell.loki.url` | optional |
 | `LOKI_TENANT_ID` | `orwell.loki.tenant-id` | optional |
 
-`LOKI_URL` decides whether app logs ship at all: unset, the `Logger` bean falls back to
-console-only and warns at startup. See `packages/logger/README.md`.
+`LOGGER` picks the sinks behind the `Logger` bean — `console`, `disk`, `loki`,
+`loki-with-fallback` or `both`. An unknown value fails env validation naming the legal ones.
+Unset, it stays what it always was: `loki` when `LOKI_URL` is set, `console` with a startup
+warning when it is not. See `packages/logger/README.md` for what each mode costs.
 
 ### Why these are published as Spring properties
 

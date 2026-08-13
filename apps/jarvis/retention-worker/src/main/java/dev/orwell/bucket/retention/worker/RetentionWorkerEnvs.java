@@ -25,6 +25,7 @@ public final class RetentionWorkerEnvs {
     public static final EnvOption<Long> RETENTION_FRAME_MAX_BYTES;
     public static final EnvOption<Integer> RETENTION_FRAME_MAX_AGE_SECONDS;
     public static final EnvOption<Integer> RETENTION_SWEEP_SECONDS;
+    public static final EnvOption<String> LOGGER;
     public static final EnvOption<String> LOKI_URL;
     public static final EnvOption<String> LOKI_TENANT_ID;
 
@@ -46,6 +47,9 @@ public final class RetentionWorkerEnvs {
         RETENTION_FRAME_MAX_AGE_SECONDS =
                 BUILDER.optional("RETENTION_FRAME_MAX_AGE_SECONDS", EnvType.integer(), 300);
         RETENTION_SWEEP_SECONDS = BUILDER.optional("RETENTION_SWEEP_SECONDS", EnvType.integer(), 30);
+        // Which sinks the logger gets; blank keeps the repo default (Loki when LOKI_URL is set,
+        // console otherwise). LoggerSetup parses it — see LoggerMode for the values.
+        LOGGER = BUILDER.optional("LOGGER", EnvType.string(), "");
         LOKI_URL = BUILDER.optional("LOKI_URL", EnvType.string(), "");
         LOKI_TENANT_ID = BUILDER.optional("LOKI_TENANT_ID", EnvType.string(), "");
         SCHEMA = BUILDER.build();

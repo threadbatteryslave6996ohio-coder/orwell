@@ -125,6 +125,42 @@ class LokiLoggerTest {
         }
     }
 
+    @Test
+    void aFallbackCatchesTheEntriesLokiCouldNotTake() throws Exception {
+        // A Loki that holds the worker inside its request, so the bounded queue fills behind it.
+        CountDownLatch release = new CountDownLatch(1);
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/loki/api/v1/push", exchange -> {
+            try {
+                release.await(30, TimeUnit.SECONDS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            exchange.sendResponseHeaders(503, -1);
+            exchange.close();
+        });
+        server.start();
+
+        List<LogEntry> caught = new CopyOnWriteArrayList<>();
+        URI endpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/loki/api/v1/push");
+        LokiLogger logger = new LokiLogger("auth-server", endpoint, null, 4, 1, Duration.ofMillis(10),
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build(), caught::add);
+        try {
+            for (int i = 0; i < 1_000; i++) {
+                logger.info("entry " + i);
+            }
+
+            // Without a fallback these are counted and gone; with one they are somewhere durable.
+            assertTrue(logger.droppedEntries() > 0, "expected drops once the bounded queue filled");
+            assertEquals(logger.droppedEntries(), caught.size(), "every dropped entry should be caught");
+        } finally {
+            // Let the held push finish before closing, so shutdown does not wait out the timeout.
+            release.countDown();
+            logger.close();
+            server.stop(0);
+        }
+    }
+
     private static LokiLogger logger(HttpServer server, int capacity, int batch, Duration flush) {
         URI endpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/loki/api/v1/push");
         return new LokiLogger("auth-server", endpoint, null, capacity, batch, flush,

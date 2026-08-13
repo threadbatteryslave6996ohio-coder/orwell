@@ -54,19 +54,25 @@ All values are required unless marked optional. These values provide a local con
 | `AUTH_DATASOURCE_PASSWORD` | `auth` | Database password. |
 | `AUTH_JPA_HIBERNATE_DDL_AUTO` | `update` | Hibernate schema-management mode. |
 | `AUTH_JPA_JDBC_TIME_ZONE` | `UTC` | Hibernate JDBC timezone. |
+| `LOGGER` | `` | Optional. Which sinks the logger gets: `console`, `disk`, `loki`, `loki-with-fallback`, `both`. |
 | `LOKI_URL` | `http://loki:3100` | Optional. Loki endpoint for log push. Console-only when unset. |
 | `LOKI_TENANT_ID` | `orwell` | Optional. Loki tenant header. |
 
 ## Logging
 
-Records go through the shared `dev.orwell.logging.Logger` bean — console plus an
-async Loki push when `LOKI_URL` is set, console only when it is not. Login,
-token issuance, and token-check events travel that path, as does the
-local-database notice at startup. Raw secrets and bearer tokens are never
-logged.
+Records go through the shared `dev.orwell.logging.Logger` bean. Login, token
+issuance, and token-check events travel that path, as does the local-database
+notice at startup. Raw secrets and bearer tokens are never logged.
 
-The server writes no log file of its own. `LOGGING_FILE_NAME` is accepted as a
-common key but is not set by the compose stack and is not needed here.
+`LOGGER` chooses the sinks; unset, it is console plus an async Loki push when
+`LOKI_URL` is set and console only when it is not. Where losing an
+authentication trail to a Loki outage is unacceptable, `loki-with-fallback`
+keeps those records on disk instead. See
+[`packages/logger/README.md`](../../../../packages/logger/README.md).
+
+The server writes no log file of its own unless `LOGGER` asks for one.
+`LOGGING_FILE_NAME` is accepted as a common key — it moves the log directory —
+but is not set by the compose stack.
 
 The service uses Hibernate `ddl-auto: update`, so it creates or updates the local schema on startup. The persistent tables are:
 

@@ -28,6 +28,7 @@ services:
     command: ["java", "-jar", "/app/auth-server.jar"]
     mem_limit: 384m
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
@@ -55,6 +56,7 @@ services:
     command: ["java", "-jar", "/app/auth-server.jar"]
     mem_limit: 384m
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
@@ -79,6 +81,7 @@ services:
     command: ["java", "-jar", "/app/klippy-server.jar"]
     mem_limit: 384m
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
@@ -105,6 +108,7 @@ services:
       dockerfile: apps/secrets-manager/server/Dockerfile
     mem_limit: 384m
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
@@ -142,6 +146,7 @@ services:
         required: false
     mem_limit: 512m
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
@@ -196,6 +201,7 @@ services:
     # limit is now the hub's alone; it used to also have to cover image decoding for /detect.
     mem_limit: 512m
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
@@ -231,6 +237,7 @@ services:
     # One JDBC connection every sweep interval and a batch of ids in hand; it never holds frames.
     mem_limit: 192m
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
@@ -266,6 +273,7 @@ services:
     # client's reader thread, and none is retained after it is examined. Needs no database.
     mem_limit: 384m
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
@@ -303,6 +311,7 @@ services:
       - path: ./apps/alerting/.env
         required: false
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
@@ -323,6 +332,7 @@ services:
       - path: ./apps/log-analyzer/.env
         required: false
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
@@ -364,6 +374,7 @@ services:
         required: false
     mem_limit: 256m
     environment:
+      LOGGER: "${LOGGER:-}"
       LOKI_URL: "${LOKI_URL:-}"
       LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
       JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"

@@ -50,7 +50,9 @@ points at the same Loki the servers push to via `LOKI_URL`.
 | `GRAFANA_LOKI_DATASOURCE_UID` | `` | UID of the Loki datasource in Grafana. |
 | `ALERT_URL` | `http://127.0.0.1:9000/alerts` | Alert service endpoint. |
 
-Common `AppServerEnv` keys (`SERVER_ADDRESS`, `SERVER_PORT`, `LOKI_URL`, …) apply as well.
+Common `AppServerEnv` keys (`SERVER_ADDRESS`, `SERVER_PORT`, `LOGGER`, `LOKI_URL`, …) apply as
+well — `LOGGER` chooses this service's own sinks (`console`, `disk`, `loki`, `loki-with-fallback`,
+`both`) and has nothing to do with the Loki it queries.
 
 ## Endpoints
 

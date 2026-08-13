@@ -394,7 +394,8 @@ not-yet-vacuumed rows.
 > they go to the logger instead: set `LOKI_URL` and alert on `Frame retention sweep failed`. A
 > sweep that stops working is exactly how the table grows without bound, so this is the one thing
 > here worth paging on. The container healthcheck only proves the JVM is alive — it cannot tell
-> you the sweep is working.
+> you the sweep is working. Since the log is now the only record, `LOGGER=loki-with-fallback` is
+> worth setting here: a Loki outage would otherwise take the evidence of what was deleted with it.
 
 The sweep itself lives in [`jarvis-retention`](retention/README.md), a generic library that trims
 any append-only table; the worker is just the schedule plus the `frame_events` policy. That README

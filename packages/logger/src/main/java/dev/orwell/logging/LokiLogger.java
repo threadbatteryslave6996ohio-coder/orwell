@@ -32,6 +32,14 @@ import java.util.concurrent.atomic.AtomicLong;
  * dies. That is the accepted cost of pushing directly rather than writing a file for a collector
  * to tail.
  *
+ * <p>Where losing them is not acceptable, give the sink a <strong>fallback</strong>: every entry
+ * Loki did not take — because the queue was full, because the push failed, or because Loki
+ * answered an error — is handed to that logger instead of only being counted. {@code
+ * LoggerMode.LOKI_WITH_FALLBACK} wires a {@link JsonLogger} in there, so an outage costs a file on
+ * disk rather than the records themselves. The fallback is only touched on the failure path, so a
+ * healthy Loki costs no disk I/O at all. One batch still escapes it: the one in flight when
+ * {@link #close()} interrupts the worker, since a file write on an interrupted thread fails too.
+ *
  * <p>Loki requires entries within a stream to be ordered by timestamp, so each entry is stamped on
  * arrival, and a batch is grouped by label set and sorted before it is sent.
  */
@@ -54,6 +62,8 @@ public final class LokiLogger implements Logger, AutoCloseable {
     private final Duration flushInterval;
     private final HttpClient http;
     private final ObjectMapper mapper;
+    /** Where entries go when Loki will not take them. Null means they are only counted. */
+    private final Logger fallback;
 
     private final AtomicLong dropped = new AtomicLong();
     private volatile long lastDropReport;
@@ -61,8 +71,14 @@ public final class LokiLogger implements Logger, AutoCloseable {
     private final Thread worker;
 
     public LokiLogger(String appName, URI endpoint, String tenantId) {
+        this(appName, endpoint, tenantId, null);
+    }
+
+    /** With a sink for the entries Loki does not take; null keeps the drop-and-count behavior. */
+    public LokiLogger(String appName, URI endpoint, String tenantId, Logger fallback) {
         this(appName, endpoint, tenantId, DEFAULT_QUEUE_CAPACITY, DEFAULT_BATCH_SIZE,
-                DEFAULT_FLUSH_INTERVAL, HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT).build());
+                DEFAULT_FLUSH_INTERVAL, HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT).build(),
+                fallback);
     }
 
     public LokiLogger(
@@ -74,6 +90,20 @@ public final class LokiLogger implements Logger, AutoCloseable {
             Duration flushInterval,
             HttpClient http
     ) {
+        this(appName, endpoint, tenantId, queueCapacity, batchSize, flushInterval, http, null);
+    }
+
+    public LokiLogger(
+            String appName,
+            URI endpoint,
+            String tenantId,
+            int queueCapacity,
+            int batchSize,
+            Duration flushInterval,
+            HttpClient http,
+            Logger fallback
+    ) {
+        this.fallback = fallback;
         this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
         this.tenantId = tenantId == null || tenantId.isBlank() ? null : tenantId;
         this.baseLabels = Map.of("app", Objects.requireNonNull(appName, "appName"), "stream_type", "app");
@@ -93,6 +123,7 @@ public final class LokiLogger implements Logger, AutoCloseable {
         Objects.requireNonNull(entry, "entry");
         if (!queue.offer(new Queued(Instant.now(), entry))) {
             noteDrop();
+            divert(entry);
         }
     }
 
@@ -109,7 +140,11 @@ public final class LokiLogger implements Logger, AutoCloseable {
         drainOnce();
     }
 
-    /** Entries dropped because the queue was full. Exposed for tests and diagnostics. */
+    /**
+     * Entries Loki did not receive — queued behind a full buffer, or in a batch it refused.
+     * Exposed for tests and diagnostics. A configured fallback was given those entries, so this
+     * counts what Loki missed, not necessarily what was lost.
+     */
     public long droppedEntries() {
         return dropped.get();
     }
@@ -162,12 +197,15 @@ public final class LokiLogger implements Logger, AutoCloseable {
             HttpResponse<Void> response = http.send(request.build(), HttpResponse.BodyHandlers.discarding());
             if (response.statusCode() >= 300) {
                 // No retry: entries are already stamped, and holding a batch to retry it would
-                // stall newer entries behind it. Dropping keeps the pipeline moving.
+                // stall newer entries behind it. Dropping keeps the pipeline moving — and where a
+                // fallback is configured, the batch lands there rather than nowhere.
                 dropped.addAndGet(batch.size());
+                divert(batch);
                 noteFailure(new IOException("Loki push returned HTTP " + response.statusCode()));
             }
         } catch (IOException failure) {
             dropped.addAndGet(batch.size());
+            divert(batch);
             noteFailure(failure);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
@@ -225,6 +263,32 @@ public final class LokiLogger implements Logger, AutoCloseable {
 
     private static String epochNanos(Instant at) {
         return Long.toString(at.getEpochSecond() * 1_000_000_000L + at.getNano());
+    }
+
+    private void divert(List<Queued> batch) {
+        for (Queued queued : batch) {
+            divert(queued.entry());
+        }
+    }
+
+    /**
+     * Hands an entry Loki could not take to the fallback sink.
+     *
+     * <p>On the queue-full path this runs on the calling thread, so a caller can pay for a disk
+     * write — but only while Loki is failing, and only because that is what asking for a fallback
+     * means: the record matters more than the microseconds. The sink's promise not to block on the
+     * network is unchanged.
+     */
+    private void divert(LogEntry entry) {
+        if (fallback == null) {
+            return;
+        }
+        try {
+            fallback.log(entry);
+        } catch (RuntimeException failure) {
+            // Both sinks are now failing; stderr is all that is left, as in FailSafeLogger.
+            System.err.println("Loki fallback sink failed; entry dropped: " + failure);
+        }
     }
 
     private void noteDrop() {

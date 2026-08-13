@@ -51,10 +51,11 @@ SPRING_JPA_HIBERNATE_DDL_AUTO=update
 SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE=UTC
 ```
 
-Every value above is required. Two further keys come from `AppServerEnv` and are
-optional:
+Every value above is required. Three further keys come from `AppServerEnv` and
+are optional:
 
 ```text
+LOGGER=
 LOKI_URL=http://localhost:3100
 LOKI_TENANT_ID=orwell
 ```
@@ -62,6 +63,10 @@ LOKI_TENANT_ID=orwell
 `LOKI_URL` enables the Loki log sink described below; `LOKI_TENANT_ID` is sent as
 the `X-Scope-OrgID` header when Loki is multi-tenant. Without `LOKI_URL` the
 server logs to the console only.
+
+`LOGGER` picks the sinks explicitly — `console`, `disk`, `loki`,
+`loki-with-fallback` or `both` — and overrides that default. See
+[`packages/logger/README.md`](../../../packages/logger/README.md).
 
 ## Endpoint
 
