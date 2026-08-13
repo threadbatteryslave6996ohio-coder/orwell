@@ -1,6 +1,5 @@
 package dev.orwell.objectstorage.proxy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.orwell.auth.http.api.LoginHttpResponse;
 import dev.orwell.auth.http.client.HttpAuthenticationException;
 import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
@@ -14,7 +13,6 @@ import org.springframework.web.client.RestClientResponseException;
 public class AuthServerClient {
     private final HttpAuthenticationStrategy authClient;
     private final RestClient restClient;
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private final FileAuditLogger audit;
     private final String identityProvisioningKey;
 

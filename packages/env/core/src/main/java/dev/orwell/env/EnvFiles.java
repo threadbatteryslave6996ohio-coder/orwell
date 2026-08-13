@@ -27,10 +27,6 @@ public final class EnvFiles {
         return values;
     }
 
-    public static Map<String, String> loadDotenvOnly(Path startDirectory) throws IOException {
-        return loadDotenv(startDirectory);
-    }
-
     public static Map<String, String> loadFile(Path dotenvFile) throws IOException {
         return loadDotenv(dotenvFile);
     }

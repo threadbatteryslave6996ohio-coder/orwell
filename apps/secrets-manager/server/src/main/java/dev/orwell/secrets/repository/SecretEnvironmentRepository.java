@@ -9,11 +9,7 @@ import java.util.Optional;
 public interface SecretEnvironmentRepository extends JpaRepository<SecretEnvironment, Long> {
     List<SecretEnvironment> findByGroupId(Long groupId);
 
-    Optional<SecretEnvironment> findByGroupIdAndId(Long groupId, Long id);
-
     Optional<SecretEnvironment> findByGroupIdAndName(Long groupId, String name);
 
     boolean existsByGroupIdAndName(Long groupId, String name);
-
-    long countByGroupId(Long groupId);
 }

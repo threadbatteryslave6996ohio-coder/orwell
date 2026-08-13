@@ -86,17 +86,15 @@ named after the artifactId in `main` and pass it down through constructors.
 Logger logger = new ConsoleLogger("klippy-mac-client");
 ```
 
-Four places construct a sink instead of receiving one. Three are legitimate:
+Three places construct a sink instead of receiving one. Two are legitimate:
 
 - `AnalysisWorker` — a standalone `main`, so there is nothing to inject from. Types the variable
   as `Logger`.
 - `AlertService` (`apps/alerting`) — `new JsonLogger(...)` at `${alert.log-file}`. This is a
   second, deliberately separate sink: the alert trail is its own on-disk contract, not the
   app-wide `Logger` bean. Held as `Logger` so the sink stays swappable.
-- `EnvSnapshotLogger` (`packages/env`) — `new CustomLogger(this.name)`. It runs during env
-  validation, before any logger bean can exist.
 
-The fourth is the known outlier, not a pattern to copy: `PollInterval`
+The third is the known outlier, not a pattern to copy: `PollInterval`
 (`apps/klippy/clients/client-core`) holds a `private static final CustomLogger LOGGER` — static,
 and typed as the concrete sink rather than as `Logger`, so its sink cannot be swapped or
 substituted in a test. It is called out as an outlier in the root `CLAUDE.md`; new code passes a

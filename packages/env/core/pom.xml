@@ -18,11 +18,6 @@
             <artifactId>primitives</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.orwell</groupId>
-            <artifactId>logger</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>

@@ -278,39 +278,6 @@ public class InstagramService {
         return Math.min(requested, maxLimit);
     }
 
-    /**
-     * The connections actor can finish <em>successfully</em> with an empty dataset and report the
-     * real outcome only in its {@code OUTPUT} record — a free-plan daily quota does exactly that,
-     * exiting 0 with {@code status=FREE_API_DAILY_LIMIT_REACHED}.
-     *
-     * <p>Left unchecked that is indistinguishable from "this account has no followers", and a
-     * <em>complete</em> walk of zero followers is an instruction to retire every edge the account
-     * has. The retirement fuse would refuse an implausible wipe, but a small account would slip
-     * under it, so the honest fix is to fail the lookup here rather than believe an empty answer
-     * the actor already said was not one.
-     */
-    private void refuseIfTheActorReportedFailure(
-            JsonNode output, String username, ConnectionType type) {
-        if (output == null || !output.isObject()) {
-            return;
-        }
-        JsonNode success = output.get("success");
-        if (success == null || !success.isBoolean() || success.asBoolean()) {
-            return;
-        }
-        String status = DatasetFields.text(output, "status");
-        String message = DatasetFields.text(output, "message");
-        logger.error("The connections actor reported a failed run.", Map.of(
-                "username", username,
-                "type", type.name(),
-                "status", String.valueOf(status),
-                "message", String.valueOf(message)));
-        throw new ApifyException(
-                "The Apify actor returned no accounts and reported "
-                        + (status == null ? "a failure" : status) + ".",
-                ApifyException.Kind.RATE_LIMITED);
-    }
-
     private List<InstagramAccount> accountsIn(
             List<JsonNode> items, String username, ConnectionType type) {
         List<InstagramAccount> accounts = new ArrayList<>(items.size());

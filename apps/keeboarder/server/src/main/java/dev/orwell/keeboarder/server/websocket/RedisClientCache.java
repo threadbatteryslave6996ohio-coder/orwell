@@ -61,15 +61,6 @@ public class RedisClientCache {
         return redis.getSetMembers(CLIENT_SET_KEY);
     }
 
-    public Optional<String> findClientIdByName(String name) {
-        for (String clientId : redis.getSetMembers(CLIENT_SET_KEY)) {
-            if (redis.getHashField(getClientKey(clientId), "name").filter(name::equals).isPresent()) {
-                return Optional.of(clientId);
-            }
-        }
-        return Optional.empty();
-    }
-
     public void close() {
         redis.close();
     }

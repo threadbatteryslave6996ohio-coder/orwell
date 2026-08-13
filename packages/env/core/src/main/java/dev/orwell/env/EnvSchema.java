@@ -25,14 +25,6 @@ public final class EnvSchema {
     }
 
     public Env from(Map<String, String> source) {
-        return from(source, null);
-    }
-
-    public Env fromSystem(EnvSnapshotLogger logger) {
-        return from(System.getenv(), logger);
-    }
-
-    public Env from(Map<String, String> source, EnvSnapshotLogger logger) {
         Objects.requireNonNull(source, "source");
         Map<EnvOption<?>, Object> values = new LinkedHashMap<>();
 
@@ -46,19 +38,11 @@ public final class EnvSchema {
             values.put(option, parse(option, rawValue));
         }
 
-        Env env = new Env(this, values);
-        if (logger != null) {
-            logger.log(this, env);
-        }
-        return env;
+        return new Env(this, values);
     }
 
     boolean contains(EnvOption<?> option) {
         return optionsByName.get(option.name()) == option;
-    }
-
-    Collection<EnvOption<?>> options() {
-        return optionsByName.values();
     }
 
     private static <T> void addMissingValue(EnvOption<T> option, Map<EnvOption<?>, Object> values) {

@@ -39,7 +39,7 @@ recorders ──POST /frames──> hub ──SSE──┬──> person-detecti
 
 | Directory | artifactId | Port | Serves | Needs Postgres |
 |---|---|---|---|---|
-| `hub` | `jarvis-hub` | 9001 | `POST /frames`, `GET /frames/stream` | **yes** |
+| `hub` | `jarvis-hub` | 9001 | `POST /frames`, `GET /frames/stream`, `GET /frames` | **yes** |
 | `person-detection` | `jarvis-person-detection` | 9002 | `GET /health` only — it *watches* | no |
 | `retention-worker` | `jarvis-retention-worker` | **none** | — | **yes** |
 
@@ -151,7 +151,8 @@ hub is a pipe, so the payload does not even have to be an image it could decode.
 ```
 recorders ──POST /frames──> hub ──┬──SSE──> clients connected now
                                   │
-                             frame_events ──replay──> a client that reconnects
+                             frame_events ──┬──replay──> a client that reconnects
+                                  │         └──GET /frames──> a window that has already passed
                                   │
               jarvis-retention-worker (separate process) trims it to budget
 ```
@@ -225,6 +226,57 @@ them. Drops are counted and reported on `GET /health`, alongside `connectedClien
 `framesReceivedTotal`, `framesDistributedTotal`, `framesReplayedTotal`, `framesPendingWrite` and
 `framesUnstoredTotal`.
 
+#### Reading back a window: `GET /frames`
+
+The stream answers "what happens next"; this answers "what happened between 10:00 and 10:05". They
+read the same `frame_events` table and return the same frame objects, but they are asked different
+questions and so take different coordinates. The stream resumes by **frame id**, which works only
+for a caller that remembers where it got to — nobody holds the id of a frame they have never seen.
+So the window here is in **capture time**, which is what an operator actually has.
+
+| Parameter | Effect |
+|---|---|
+| `?from=<instant>` | Inclusive lower bound on `capturedAt`, ISO-8601 (`2026-08-12T10:00:00Z`). Omitted: the oldest frame still kept |
+| `?to=<instant>` | **Exclusive** upper bound. Omitted: open-ended |
+| `?source=cam1` | Only that camera; omitted spans every source |
+| `?limit=<n>` | Frames in this page, 1–500. Default 100 |
+| `?after=<frameId>` | Exclusive cursor — the previous page's `nextAfter` |
+
+```bash
+curl 'http://localhost:9001/frames?from=2026-08-12T10:00:00Z&to=2026-08-12T10:05:00Z&source=cam1'
+```
+
+```json
+{"success":true,"source":"cam1","from":"2026-08-12T10:00:00Z","to":"2026-08-12T10:05:00Z",
+ "after":null,"limit":100,"returned":100,"hasMore":true,"nextAfter":1300,
+ "frames":[{"frameId":1201,"source":"cam1","frameIndex":42,"capturedAt":"2026-08-12T10:00:00Z",
+            "sha256":"9f2c…","frameBase64":"…"}]}
+```
+
+A frame here is byte-identical to the same frame over SSE — same fields, same base64 — so anything
+that can decode the stream can decode a page.
+
+**Paging is the caller's job.** Follow `nextAfter` while `hasMore` is true, and stop when it is
+false. The upper bound is exclusive so adjacent windows neither overlap nor skip the frame on the
+boundary, and the cursor is exclusive for the same reason between pages.
+
+**Filtered by time, paged by id**, which are not quite the same order: an id is allocated before
+`capturedAt` is stamped, so concurrent ingest can invert the two by a frame. It costs nothing here —
+the time bounds decide *which* frames are in the window and the id cursor decides the order they
+come back in, so nothing in the window is skipped or repeated. A timestamp cursor could not promise
+that, because frames sharing a `capturedAt` would fall on both sides of a page boundary.
+
+**A limit above 500 is a 400, not a clamp.** A caller that asks for 5000 and silently receives 500
+reads the short page as the end of the window and stops early — losing frames with no error
+anywhere. The ceiling itself is a memory limit rather than a courtesy: a page is materialised whole,
+rows and then base64, so 500 frames of 40 KB is ~20 MB of rows plus ~27 MB of base64 per concurrent
+request against a container running with `mem_limit: 512m`. Raise `MAX_LIMIT` and that `mem_limit`
+together or not at all — the hub dying takes the recording down with it.
+
+Retention is not consulted: this reads what is in the table now, and
+`jarvis-retention-worker` may delete rows out from under a caller that is paging. Because pages are
+read forward by id, that shows up as a short page, never as a repeat.
+
 > **Sizing.** `frame_events` holds the frame bytes, because replay means a frame must still exist to
 > be re-sent, and the hub stores every frame it is pushed — at 40 KB and 5 fps that is ~200 KB/s
 > *per source*. `RETENTION_FRAME_MAX_BYTES` (2 GiB) is what stops that from becoming a disk
@@ -257,6 +309,9 @@ curl http://localhost:8080/person-detection/health
 docker compose -f docker-compose.all-services.yml logs -f jarvis-retention-worker   # no /health
 
 curl -N http://localhost:8080/hub/frames/stream              # -N: don't buffer the stream
+
+# What was on cam1 five minutes ago. Page with ?after=<nextAfter> while hasMore is true.
+curl 'http://localhost:8080/hub/frames?source=cam1&from=2026-08-12T10:00:00Z&to=2026-08-12T10:05:00Z'
 
 # One push. The hub stores it, relays it to every watcher, and person detection examines it.
 curl -X POST http://localhost:8080/hub/frames \

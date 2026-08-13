@@ -1,6 +1,5 @@
 package dev.orwell.primitives;
 
-import java.util.Objects;
 
 public class NonEmptyString {
 

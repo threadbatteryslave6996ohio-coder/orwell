@@ -20,7 +20,8 @@ renamed to the service that reads it — see `apps/jarvis/README.md` for the tab
 **New debt (jarvis-hub frame hub).** `POST /frames` + `GET /frames/stream` turned detection
 into the push hub: producers push frames, the hub stores them in `frame_events` and streams them
 over SSE to connected clients, replaying from the store for a client that reconnects. Positions of
-named subscriptions live in `frame_cursors`. Note the intermediate commit `e587e06` carries an
+named subscriptions live in `frame_cursors`. `GET /frames` reads the same table by capture time, for
+a caller who wants a window that has already passed rather than a feed to follow. Note the intermediate commit `e587e06` carries an
 earlier cursor-tracked *webhook* fan-out (`frame_subscriptions`, `FrameDeliveryJob`,
 `FrameSender`) that was replaced by the stream — ignore those names. The hub receives, stores and
 redistributes; it does not inspect a frame, so `DETECTION_RELAY_MODE` and the `changed` columns on
@@ -32,10 +33,12 @@ entirely, so it is nobody's.) Four things are knowingly unfinished.
   split**: `jarvis-hub` is its own Spring-only deployable with no Undertow main class and no 501
   branch, and its siblings run on either engine. Implementing SSE on Undertow is still open as a
   want, but it is no longer an inconsistency.
-- **Both frame routes are unauthenticated**, like `/detect` and `/motion` before them. That mattered
+- **Every frame route is unauthenticated**, like `/detect` and `/motion` before them. That mattered
   less for a detection verdict than it does for a video feed anyone who can reach the port can watch
-  — and push into. Wanted: `@RequireAuthentication` on the frame routes, which means making
-  `AUTH_BASE_URL` required for the hub and is therefore a breaking change to sequence
+  — and push into. The `GET /frames` range query sharpens it: watching the stream gets an intruder
+  what happens from now on, while a time-ranged read hands them the recorded history, which is the
+  part with evidentiary value. Wanted: `@RequireAuthentication` on the frame routes, which means
+  making `AUTH_BASE_URL` required for the hub and is therefore a breaking change to sequence
   deliberately. Cheaper than it was: it now lands on the hub alone rather than on all three
   endpoints at once.
 - **Subscription names are unauthenticated identities.** Any caller can connect with any
@@ -159,7 +162,7 @@ Not backlog items, but worth knowing:
 - **DEPLOY ACTION — servers no longer write an app log file at all.** The Spring default sink is
   console + Loki push. Any external log rotation, volume mount, or shipping config keyed to
   `<app>.txt` or `<app>.jsonl` now watches a file nobody writes. `CustomLogger` still writes
-  `.txt` where it is used directly (`EnvSnapshotLogger`, `PollInterval`).
+  `.txt` where it is used directly (`PollInterval`).
 
 ## 1. `spring-boot-maven-plugin` block → root pluginManagement — DONE
 

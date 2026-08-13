@@ -1,7 +1,6 @@
 package dev.orwell.auth.http.client;
 
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import dev.orwell.auth.http.api.LoginHttpResponse;
 import org.junit.jupiter.api.AfterEach;

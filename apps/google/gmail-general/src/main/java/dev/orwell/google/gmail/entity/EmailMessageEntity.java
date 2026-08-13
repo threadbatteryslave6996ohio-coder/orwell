@@ -133,10 +133,6 @@ public class EmailMessageEntity {
         return messageId;
     }
 
-    public long getImapUid() {
-        return imapUid;
-    }
-
     public String getSubject() {
         return subject;
     }

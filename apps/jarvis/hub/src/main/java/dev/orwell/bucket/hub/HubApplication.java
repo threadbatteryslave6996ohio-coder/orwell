@@ -10,7 +10,9 @@ import java.util.LinkedHashMap;
 /**
  * The frame hub: producers push frames to {@code POST /frames}, and every client holding
  * {@code GET /frames/stream} open receives them. A client that was away reconnects and is replayed
- * what it missed from {@code frame_events} before rejoining the live stream.
+ * what it missed from {@code frame_events} before rejoining the live stream. {@code GET /frames}
+ * reads that same table by capture time, for the caller who wants a window that has already passed
+ * rather than a feed to follow.
  *
  * <p>Spring only, and so it has a single main class rather than the neutral launcher its siblings
  * use: SSE is Spring MVC async plumbing with no Undertow equivalent here. Under the old shared
@@ -31,8 +33,9 @@ public class HubApplication {
     }
 
     @Bean
-    HubEndpoint hubEndpoint(FrameIngestService ingestService, FrameHub hub, FrameStoreWriter store) {
-        return new HubEndpoint(ingestService, hub, store);
+    HubEndpoint hubEndpoint(FrameIngestService ingestService, FrameQueryService queryService,
+            FrameHub hub, FrameStoreWriter store) {
+        return new HubEndpoint(ingestService, queryService, hub, store);
     }
 
     @Bean

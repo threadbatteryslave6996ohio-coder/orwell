@@ -3,7 +3,6 @@ package dev.orwell.clients.core.env;
 import dev.orwell.env.Env;
 import dev.orwell.env.EnvFiles;
 import dev.orwell.env.EnvOption;
-import dev.orwell.env.EnvSnapshotLogger;
 import dev.orwell.env.EnvSchema;
 import dev.orwell.env.EnvType;
 
@@ -49,15 +48,7 @@ public final class ClientEnvs {
         return from(EnvFiles.load());
     }
 
-    public static Env load(EnvSnapshotLogger logger) throws IOException {
-        return from(EnvFiles.load(), logger);
-    }
-
     public static Env from(Map<String, String> source) {
         return ENV.from(source);
-    }
-
-    public static Env from(Map<String, String> source, EnvSnapshotLogger logger) {
-        return logger == null ? ENV.from(source) : ENV.from(source, logger);
     }
 }

@@ -238,16 +238,6 @@ class ChatEndpointReconnectTest {
         }
 
         @Override
-        public java.util.Optional<String> findClientIdByName(String name) {
-            for (var entry : infos.entrySet()) {
-                if (entry.getValue().name.equals(name)) {
-                    return java.util.Optional.of(entry.getKey());
-                }
-            }
-            return java.util.Optional.empty();
-        }
-
-        @Override
         public void close() {
             clients.clear();
             infos.clear();

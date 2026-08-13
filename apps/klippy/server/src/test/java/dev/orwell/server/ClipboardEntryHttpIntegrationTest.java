@@ -2,7 +2,6 @@ package dev.orwell.server;
 
 import dev.orwell.auth.AuthenticationStrategy;
 import dev.orwell.server.application.KlippyServerApplication;
-import dev.orwell.server.dto.ClipboardEntryResponse;
 import dev.orwell.server.model.ClipboardEntry;
 import dev.orwell.server.repository.ClipboardEntryRepository;
 import dev.orwell.testing.PostgresIntegrationTest;

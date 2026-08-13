@@ -52,10 +52,6 @@ public class SecretsManagerClient implements AutoCloseable {
         return get("/groups/" + groupId + "/envs/by-name/" + name, Environment.class);
     }
 
-    public Environment getEnvironmentById(long groupId, long envId) {
-        return get("/groups/" + groupId + "/envs/" + envId, Environment.class);
-    }
-
     public List<Bundle> listBundles() {
         return get("/bundles", new TypeReference<List<Bundle>>() {});
     }

@@ -28,10 +28,6 @@ public record SweepResult(
         return rowsDroppedByAge + rowsDroppedByBytes;
     }
 
-    public long bytesReclaimed() {
-        return bytesBefore - bytesAfter;
-    }
-
     /** Shape for a log metadata map or a health payload. */
     public Map<String, Object> asMetadata() {
         Map<String, Object> metadata = new LinkedHashMap<>();

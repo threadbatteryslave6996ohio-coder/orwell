@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Instant;
-import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -149,7 +148,7 @@ public class FrameHub {
     public int broadcast(FrameEventEntity frame) {
         String payload;
         try {
-            payload = json.writeValueAsString(message(frame));
+            payload = json.writeValueAsString(FrameMessage.of(frame));
         } catch (Exception exception) {
             logger.error("Could not serialize a frame for the stream.", Map.of(
                     "frameId", frame.getId(),
@@ -165,18 +164,6 @@ public class FrameHub {
             }
         }
         return recipients;
-    }
-
-    /** The wire form of a frame, shared by the live path and the replay path. */
-    private static Map<String, Object> message(FrameEventEntity frame) {
-        Map<String, Object> message = new LinkedHashMap<>();
-        message.put("frameId", frame.getId());
-        message.put("source", frame.getSource());
-        message.put("frameIndex", frame.getFrameIndex());
-        message.put("capturedAt", frame.getCapturedAt().toString());
-        message.put("sha256", frame.getSha256());
-        message.put("frameBase64", Base64.getEncoder().encodeToString(frame.getFrameBytes()));
-        return message;
     }
 
     private void disconnect(long id) {
@@ -283,7 +270,7 @@ public class FrameHub {
                     emitter.send(SseEmitter.event()
                             .id(String.valueOf(frame.getId()))
                             .name("frame")
-                            .data(json.writeValueAsString(message(frame))));
+                            .data(json.writeValueAsString(FrameMessage.of(frame))));
                     lastSentId = frame.getId();
                     framesReplayedTotal.incrementAndGet();
                     persistCursor(false);

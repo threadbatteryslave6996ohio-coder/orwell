@@ -39,8 +39,4 @@ public class ApifyException extends RuntimeException {
     public Kind kind() {
         return kind;
     }
-
-    public boolean timedOut() {
-        return kind == Kind.TIMED_OUT;
-    }
 }

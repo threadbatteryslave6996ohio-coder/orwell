@@ -2,7 +2,6 @@ package dev.orwell.keeboarder.server.websocket;
 
 import dev.orwell.auth.AuthenticationStrategy;
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import jakarta.websocket.OnClose;

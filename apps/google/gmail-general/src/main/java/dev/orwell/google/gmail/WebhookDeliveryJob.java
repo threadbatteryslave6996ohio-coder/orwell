@@ -7,7 +7,6 @@ import dev.orwell.google.gmail.repository.EmailMessageRepository;
 import dev.orwell.google.gmail.repository.UserRepository;
 import dev.orwell.google.gmail.repository.WebhookSubscriptionRepository;
 import dev.orwell.logging.Logger;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;

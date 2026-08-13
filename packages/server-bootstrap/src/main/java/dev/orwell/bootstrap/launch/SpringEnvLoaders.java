@@ -3,8 +3,6 @@ package dev.orwell.bootstrap.launch;
 import dev.orwell.env.EnvFiles;
 import dev.orwell.env.http.EnvLoader;
 
-import java.io.IOException;
-import java.util.Map;
 
 final class SpringEnvLoaders {
     private static final String DEFAULT_REMOTE_URL = "http://localhost:8080/v1/env";
@@ -27,9 +25,5 @@ final class SpringEnvLoaders {
                         "Unknown env loader: " + args[0] + " (expected 'file', 'url', or 'remote')");
             };
         };
-    }
-
-    public static SpringEnvLoader fileOnly() {
-        return args -> EnvFiles.load();
     }
 }
