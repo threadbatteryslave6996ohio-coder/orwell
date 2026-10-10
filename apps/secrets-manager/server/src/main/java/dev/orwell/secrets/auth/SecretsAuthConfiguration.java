@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import dev.orwell.logging.Logger;
 
 /**
  * Binds the two auth deployments this service checks against: admins live in one, ordinary clients
@@ -27,12 +28,22 @@ public class SecretsAuthConfiguration {
     }
 
     @Bean
-    AdminAuth adminAuth(@Value("${secrets.admin-auth-base-url}") String adminAuthBaseUrl) {
-        return new AdminAuth(new HttpAuthenticationStrategy(adminAuthBaseUrl));
+    AdminAuth adminAuth(@Value("${secrets.admin-auth-base-url}") String adminAuthBaseUrl, Logger logger) {
+        return new AdminAuth(new HttpAuthenticationStrategy(adminAuthBaseUrl, logger));
     }
 
+    /**
+     * The client strategy honours {@code AUTH_WORKSPACE}. Built with the base-url-only constructor
+     * it silently validated against {@code def} however the key was set, so the module published a
+     * setting it then ignored. Admin identities are a separate deployment and keep their own
+     * workspace — see object-storage-proxy, which carries a distinct key for that side.
+     */
     @Bean
-    ClientAuth clientAuth(@Value("${orwell.auth.base-url:http://localhost:8081}") String clientAuthBaseUrl) {
-        return new ClientAuth(new HttpAuthenticationStrategy(clientAuthBaseUrl));
+    ClientAuth clientAuth(
+            @Value("${orwell.auth.base-url:http://localhost:8081}") String clientAuthBaseUrl,
+            @Value("${orwell.auth.workspace:}") String clientAuthWorkspace,
+            Logger logger) {
+        return new ClientAuth(
+                new HttpAuthenticationStrategy(clientAuthBaseUrl, clientAuthWorkspace, logger));
     }
 }

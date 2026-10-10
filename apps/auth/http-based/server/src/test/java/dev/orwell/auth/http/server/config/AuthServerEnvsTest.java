@@ -63,6 +63,46 @@ class AuthServerEnvsTest {
 
     @Test
     void exposesResolvedValuesAsSpringApplicationProperties() {
+        Env env = AuthServerEnvs.ENV.schema().from(Map.ofEntries(
+                Map.entry("AUTH_DATASOURCE_URL", "jdbc:postgresql://database/auth"),
+                Map.entry("AUTH_DATASOURCE_USERNAME", "user"),
+                Map.entry("AUTH_DATASOURCE_PASSWORD", "password"),
+                Map.entry("SERVER_ADDRESS", "0.0.0.0"),
+                Map.entry("SERVER_PORT", "9091"),
+                Map.entry("AUTH_JPA_HIBERNATE_DDL_AUTO", "validate"),
+                Map.entry("AUTH_JPA_JDBC_TIME_ZONE", "UTC"),
+                Map.entry("AUTH_ROUTE_PREFIX", "/auth"),
+                Map.entry("AUTH_ADMIN_BOOTSTRAP_CLIENT_ID", "ops-admin"),
+                Map.entry("AUTH_ADMIN_BOOTSTRAP_SECRET", "super-secret"),
+                Map.entry("AUTH_TOKEN_CLEANUP_ENABLED", "false"),
+                Map.entry("AUTH_TOKEN_CLEANUP_INTERVAL_SECONDS", "900"),
+                Map.entry("AUTH_TOKEN_CLEANUP_IDLE_SECONDS", "7200")
+        ));
+
+        assertEquals(Map.ofEntries(
+                Map.entry("spring.datasource.url", "jdbc:postgresql://database/auth"),
+                Map.entry("spring.datasource.username", "user"),
+                Map.entry("spring.datasource.password", "password"),
+                Map.entry("server.address", "0.0.0.0"),
+                Map.entry("server.port", 9091),
+                Map.entry("spring.jpa.hibernate.ddl-auto", "validate"),
+                Map.entry("spring.jpa.properties.hibernate.jdbc.time_zone", "UTC"),
+                Map.entry("orwell.auth.route-prefix", "/auth"),
+                Map.entry("orwell.auth.admin-bootstrap.client-id", "ops-admin"),
+                Map.entry("orwell.auth.admin-bootstrap.secret", "super-secret"),
+                Map.entry("orwell.auth.token-cleanup.enabled", false),
+                Map.entry("orwell.auth.token-cleanup.interval-seconds", 900),
+                Map.entry("orwell.auth.token-cleanup.idle-seconds", 7200)
+        ), AuthServerEnvs.ENV.springProperties(env));
+    }
+
+    /**
+     * The cleanup knobs carry their defaults through to Spring even when nobody sets them, which is
+     * what makes the job run on a server whose configuration predates it — the one that has been
+     * accumulating token rows since it was deployed.
+     */
+    @Test
+    void publishesTokenCleanupDefaultsWhenNothingConfiguresThem() {
         Env env = AuthServerEnvs.ENV.schema().from(Map.of(
                 "AUTH_DATASOURCE_URL", "jdbc:postgresql://database/auth",
                 "AUTH_DATASOURCE_USERNAME", "user",
@@ -70,19 +110,13 @@ class AuthServerEnvsTest {
                 "SERVER_ADDRESS", "0.0.0.0",
                 "SERVER_PORT", "9091",
                 "AUTH_JPA_HIBERNATE_DDL_AUTO", "validate",
-                "AUTH_JPA_JDBC_TIME_ZONE", "UTC",
-                "AUTH_ROUTE_PREFIX", "/auth"
+                "AUTH_JPA_JDBC_TIME_ZONE", "UTC"
         ));
 
-        assertEquals(Map.of(
-                "spring.datasource.url", "jdbc:postgresql://database/auth",
-                "spring.datasource.username", "user",
-                "spring.datasource.password", "password",
-                "server.address", "0.0.0.0",
-                "server.port", 9091,
-                "spring.jpa.hibernate.ddl-auto", "validate",
-                "spring.jpa.properties.hibernate.jdbc.time_zone", "UTC",
-                "orwell.auth.route-prefix", "/auth"
-        ), AuthServerEnvs.ENV.springProperties(env));
+        Map<String, Object> properties = AuthServerEnvs.ENV.springProperties(env);
+
+        assertEquals(true, properties.get("orwell.auth.token-cleanup.enabled"));
+        assertEquals(3600, properties.get("orwell.auth.token-cleanup.interval-seconds"));
+        assertEquals(86400, properties.get("orwell.auth.token-cleanup.idle-seconds"));
     }
 }

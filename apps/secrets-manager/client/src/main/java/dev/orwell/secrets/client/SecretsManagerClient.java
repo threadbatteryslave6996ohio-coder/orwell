@@ -2,6 +2,9 @@ package dev.orwell.secrets.client;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.orwell.http.LoggingHttpClient;
+import dev.orwell.logging.ConsoleLogger;
+import dev.orwell.logging.Logger;
 import dev.orwell.secrets.client.dto.Bundle;
 import dev.orwell.secrets.client.dto.BundleDetail;
 import dev.orwell.secrets.client.dto.Environment;
@@ -24,12 +27,21 @@ public class SecretsManagerClient implements AutoCloseable {
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Records its calls to the console. This is a client library reached from CLIs and short-lived
+     * programs, so a caller that has said nothing about logging still gets to see what it sent —
+     * {@link #SecretsManagerClient(String, SecretsAuthProvider, Logger)} is the one to use where a
+     * process already has a logger of its own.
+     */
     public SecretsManagerClient(String baseUrl, SecretsAuthProvider auth) {
+        this(baseUrl, auth, new ConsoleLogger("secrets-manager-client"));
+    }
+
+    public SecretsManagerClient(String baseUrl, SecretsAuthProvider auth, Logger logger) {
         this.baseUrl = normalizeBaseUrl(Objects.requireNonNull(baseUrl, "baseUrl"));
         this.auth = Objects.requireNonNull(auth, "auth");
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(TIMEOUT)
-                .build();
+        this.httpClient = LoggingHttpClient.wrap(
+                HttpClient.newBuilder().connectTimeout(TIMEOUT).build(), logger);
         this.objectMapper = new ObjectMapper();
     }
 

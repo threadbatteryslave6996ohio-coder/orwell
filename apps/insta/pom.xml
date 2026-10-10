@@ -11,6 +11,10 @@
         <mainClass>dev.orwell.insta.InstaCli</mainClass>
     </properties>
     <dependencies>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>env-core</artifactId></dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>logger</artifactId></dependency>
         <!-- The shared Redis handle, same as keeboarder-server: one Redis client in the repo, not two. -->
@@ -29,9 +33,12 @@
              still logs through dev.orwell.logging.Logger; this only silences the transitive noise. -->
         <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-nop</artifactId><scope>runtime</scope></dependency>
         <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+        <!-- JsonStubServer, which ApifyStubServer is built on. -->
+        <dependency><groupId>dev.orwell</groupId><artifactId>test-support</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.assertj</groupId><artifactId>assertj-core</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.testcontainers</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
         <dependency><groupId>org.testcontainers</groupId><artifactId>postgresql</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>dev.orwell</groupId><artifactId>server-test-support</artifactId><scope>test</scope></dependency>
     </dependencies>
     <build>
         <plugins>

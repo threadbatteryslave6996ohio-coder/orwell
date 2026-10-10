@@ -4,6 +4,7 @@ import dev.orwell.auth.AuthenticationContext;
 import dev.orwell.auth.AuthenticationStrategy;
 import dev.orwell.auth.http.client.HttpAuthenticationException;
 import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
+import dev.orwell.logging.Logger;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -19,9 +20,11 @@ public class AuthenticationStrategyConfiguration {
     @Bean
     @ConditionalOnMissingBean(AuthenticationStrategy.class)
     AuthenticationStrategy sharedHttpAuthenticationStrategy(
-            @Value("${orwell.auth.base-url:http://localhost:8081}") String authBaseUrl
+            @Value("${orwell.auth.base-url:http://localhost:8081}") String authBaseUrl,
+            @Value("${orwell.auth.workspace:def}") String authWorkspace,
+            Logger logger
     ) {
-        return new HttpAuthenticationStrategy(authBaseUrl);
+        return new HttpAuthenticationStrategy(authBaseUrl, authWorkspace, logger);
     }
 
     @Bean

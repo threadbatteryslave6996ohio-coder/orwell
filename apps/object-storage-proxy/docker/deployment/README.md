@@ -9,7 +9,7 @@ for this app.
 ## Configure and run
 
 `.env.example` holds the committed non-secret defaults. Real credentials —
-`AWS_SECRET_ACCESS_KEY`, `AZURE_CLIENT_SECRET`, `AUTH_IDENTITY_PROVISIONING_KEY` — belong
+`AWS_SECRET_ACCESS_KEY`, `AZURE_CLIENT_SECRET`, `AUTH_ADMIN_SECRET` — belong
 in a `.env` beside it, which is gitignored. The admin panel no longer has a credential here at
 all: it authenticates against the auth deployment at `OBJECT_STORAGE_ADMIN_AUTH_BASE_URL`
 (the `admin-auth-server` service in the stack). `docker-compose.all-services.yml` reads both and lets `.env` win, so
@@ -26,8 +26,9 @@ optional — the stack starts on the example defaults without one. Then, from th
 repository root:
 
 ```bash
-docker compose -f docker-compose.all-services.yml up --build -d object-storage-proxy nginx
-docker compose -f docker-compose.all-services.yml ps
+docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml \
+  up --build -d object-storage-proxy nginx
+docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml ps
 curl http://localhost:8080/jarvis/health
 ```
 
@@ -46,14 +47,14 @@ auth configuration is needed.
 Spring Boot application output is written to the container's stdout/stderr:
 
 ```bash
-docker compose -f docker-compose.all-services.yml logs -f object-storage-proxy
+docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml logs -f object-storage-proxy
 ```
 
 Auth-server audit events are JSON Lines in `/app/logs/audit.log`. The directory
 is persisted in the `all-services-proxy-audit-logs` Docker volume:
 
 ```bash
-docker compose -f docker-compose.all-services.yml exec object-storage-proxy tail -f /app/logs/audit.log
+docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml exec object-storage-proxy tail -f /app/logs/audit.log
 docker volume inspect orwell_all-services-proxy-audit-logs
 ```
 
@@ -68,7 +69,7 @@ does not record successful upload, list, metadata, or delete operations.
 ## Stop
 
 ```bash
-docker compose -f docker-compose.all-services.yml down
+docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml down
 ```
 
 Add `--volumes` only when the persisted audit log should also be deleted.

@@ -1,12 +1,11 @@
 package dev.orwell.logging;
 
+import dev.orwell.testing.http.JsonStubServer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
@@ -27,7 +26,7 @@ class LokiLoggerTest {
     void shipsEntriesToLokiAsAPushPayload() throws Exception {
         List<String> bodies = new CopyOnWriteArrayList<>();
         CountDownLatch received = new CountDownLatch(1);
-        HttpServer server = stubLoki(200, bodies, received);
+        JsonStubServer server = stubLoki(200, bodies, received);
         try (LokiLogger logger = logger(server, 10_000, 500, Duration.ofMillis(50))) {
             logger.info("Login request received.", Map.of("clientId", "linux-clip"));
 
@@ -44,7 +43,7 @@ class LokiLoggerTest {
             assertEquals("Login request received.", line.get("message").asText());
             assertEquals("linux-clip", line.get("clientId").asText());
         } finally {
-            server.stop(0);
+            server.close();
         }
     }
 
@@ -58,7 +57,7 @@ class LokiLoggerTest {
         CountDownLatch warmUpArrived = new CountDownLatch(1);
         CountDownLatch releaseWarmUp = new CountDownLatch(1);
         CountDownLatch batchArrived = new CountDownLatch(1);
-        HttpServer server = gatedLoki(bodies, warmUpArrived, releaseWarmUp, batchArrived);
+        JsonStubServer server = gatedLoki(bodies, warmUpArrived, releaseWarmUp, batchArrived);
         try (LokiLogger logger = logger(server, 10_000, 500, Duration.ofMillis(100))) {
             logger.info("warm-up");
             assertTrue(warmUpArrived.await(5, TimeUnit.SECONDS), "worker never sent the warm-up entry");
@@ -79,22 +78,21 @@ class LokiLoggerTest {
             assertEquals(3, total);
             assertTrue(streams.size() <= 2, "expected at most one stream per level, got " + streams.size());
         } finally {
-            server.stop(0);
+            server.close();
         }
     }
 
     @Test
     void dropsRatherThanBlockingWhenTheQueueIsFull() throws Exception {
         // A Loki that never answers: the worker blocks on its request, so the queue fills.
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/loki/api/v1/push", exchange -> {
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/loki/api/v1/push", exchange -> {
             try {
                 Thread.sleep(60_000);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
         });
-        server.start();
         try (LokiLogger logger = logger(server, 4, 1, Duration.ofMillis(10))) {
             long start = System.nanoTime();
             for (int i = 0; i < 5_000; i++) {
@@ -106,7 +104,7 @@ class LokiLoggerTest {
             assertTrue(elapsedMillis < 2_000, "logging blocked for " + elapsedMillis + "ms");
             assertTrue(logger.droppedEntries() > 0, "expected drops once the bounded queue filled");
         } finally {
-            server.stop(0);
+            server.close();
         }
     }
 
@@ -114,14 +112,14 @@ class LokiLoggerTest {
     void aRejectingLokiNeverFailsTheCaller() throws Exception {
         List<String> bodies = new CopyOnWriteArrayList<>();
         CountDownLatch received = new CountDownLatch(1);
-        HttpServer server = stubLoki(429, bodies, received);
+        JsonStubServer server = stubLoki(429, bodies, received);
         try (LokiLogger logger = logger(server, 10_000, 500, Duration.ofMillis(50))) {
             logger.info("Login request received.");
             assertTrue(received.await(5, TimeUnit.SECONDS));
             // Rejected batches are counted as dropped, and the caller saw nothing.
             logger.info("still accepting calls");
         } finally {
-            server.stop(0);
+            server.close();
         }
     }
 
@@ -129,8 +127,8 @@ class LokiLoggerTest {
     void aFallbackCatchesTheEntriesLokiCouldNotTake() throws Exception {
         // A Loki that holds the worker inside its request, so the bounded queue fills behind it.
         CountDownLatch release = new CountDownLatch(1);
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/loki/api/v1/push", exchange -> {
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/loki/api/v1/push", exchange -> {
             try {
                 release.await(30, TimeUnit.SECONDS);
             } catch (InterruptedException interrupted) {
@@ -139,10 +137,9 @@ class LokiLoggerTest {
             exchange.sendResponseHeaders(503, -1);
             exchange.close();
         });
-        server.start();
 
         List<LogEntry> caught = new CopyOnWriteArrayList<>();
-        URI endpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/loki/api/v1/push");
+        URI endpoint = URI.create(server.baseUrl() + "/loki/api/v1/push");
         LokiLogger logger = new LokiLogger("auth-server", endpoint, null, 4, 1, Duration.ofMillis(10),
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build(), caught::add);
         try {
@@ -157,12 +154,12 @@ class LokiLoggerTest {
             // Let the held push finish before closing, so shutdown does not wait out the timeout.
             release.countDown();
             logger.close();
-            server.stop(0);
+            server.close();
         }
     }
 
-    private static LokiLogger logger(HttpServer server, int capacity, int batch, Duration flush) {
-        URI endpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/loki/api/v1/push");
+    private static LokiLogger logger(JsonStubServer server, int capacity, int batch, Duration flush) {
+        URI endpoint = URI.create(server.baseUrl() + "/loki/api/v1/push");
         return new LokiLogger("auth-server", endpoint, null, capacity, batch, flush,
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build());
     }
@@ -172,14 +169,14 @@ class LokiLoggerTest {
      * entries knowing the worker cannot pick them up yet. The worker is the only client and it is
      * single-threaded, so "first request" is unambiguous and blocking the handler is safe.
      */
-    private static HttpServer gatedLoki(
+    private static JsonStubServer gatedLoki(
             List<String> bodies,
             CountDownLatch warmUpArrived,
             CountDownLatch releaseWarmUp,
             CountDownLatch batchArrived
     ) throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/loki/api/v1/push", exchange -> {
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/loki/api/v1/push", exchange -> {
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             boolean warmUp = bodies.isEmpty();
             bodies.add(body);
@@ -197,19 +194,17 @@ class LokiLoggerTest {
                 batchArrived.countDown();
             }
         });
-        server.start();
         return server;
     }
 
-    private static HttpServer stubLoki(int status, List<String> bodies, CountDownLatch received) throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/loki/api/v1/push", exchange -> {
+    private static JsonStubServer stubLoki(int status, List<String> bodies, CountDownLatch received) throws IOException {
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/loki/api/v1/push", exchange -> {
             bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             exchange.sendResponseHeaders(status, -1);
             exchange.close();
             received.countDown();
         });
-        server.start();
         return server;
     }
 }

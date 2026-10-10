@@ -44,6 +44,10 @@
         </dependency>
         <dependency>
             <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
             <artifactId>auth-core</artifactId>
         </dependency>
         <dependency>
@@ -89,6 +93,17 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>server-test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JsonStubServer, for the tests that stand a real auth server up on a loopback port. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>test-support</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

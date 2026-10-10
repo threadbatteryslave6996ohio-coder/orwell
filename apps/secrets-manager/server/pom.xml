@@ -19,6 +19,15 @@
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>logger</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
             <artifactId>server-bootstrap</artifactId>
         </dependency>
         <dependency>

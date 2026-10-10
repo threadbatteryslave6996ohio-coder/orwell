@@ -1,0 +1,36 @@
+[
+  {
+    "_comment": "A lamp. MEAN_LUMINANCE over the wall it lights, with a reference patch of the same wall it does not light — the reference is what makes one threshold work at noon and at midnight. Calibrate by flipping the switch and reading GET /fixtures.",
+    "name": "living-room-lamp",
+    "source": "cam1",
+    "region":    {"x": 0.62, "y": 0.18, "width": 0.10, "height": 0.12},
+    "reference": {"x": 0.20, "y": 0.18, "width": 0.10, "height": 0.12},
+    "metric": "MEAN_LUMINANCE",
+    "onAbove": 22,
+    "offBelow": 10,
+    "confirmFrames": 3
+  },
+  {
+    "_comment": "A gas burner. SATURATED_BRIGHT_FRACTION because a flame is coloured light, which is what distinguishes it from somebody switching the kitchen light on over the same hob. brightCutoff is lowered from the default 200 because a flame is not as bright as a bulb. Values are small: 0.02 means 2% of the region is lit flame.",
+    "name": "stove-burner",
+    "source": "cam1",
+    "region": {"x": 0.40, "y": 0.70, "width": 0.14, "height": 0.10},
+    "metric": "SATURATED_BRIGHT_FRACTION",
+    "brightCutoff": 110,
+    "saturationCutoff": 0.35,
+    "onAbove": 0.02,
+    "offBelow": 0.005,
+    "confirmFrames": 2
+  },
+  {
+    "_comment": "A furnace status LED. BRIGHT_FRACTION, because a single small indicator barely moves the mean of any region you can draw around it by hand. confirmFrames 2 is enough — an LED does not flicker like a flame.",
+    "name": "furnace-running",
+    "source": "cam2",
+    "region": {"x": 0.48, "y": 0.55, "width": 0.06, "height": 0.06},
+    "metric": "BRIGHT_FRACTION",
+    "brightCutoff": 210,
+    "onAbove": 0.03,
+    "offBelow": 0.008,
+    "confirmFrames": 2
+  }
+]

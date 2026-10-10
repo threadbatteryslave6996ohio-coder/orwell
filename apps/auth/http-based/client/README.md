@@ -14,6 +14,24 @@ LoginHttpResponse login = auth.login("dummy", "change-me-please");
 boolean valid = auth.isTokenValidForClient("dummy", login.token());
 ```
 
+## Workspaces
+
+A strategy talks to one workspace, named at construction and used as the first path segment of
+every call. The constructors that omit it use `def`, which is where identities created before
+workspaces existed live — so existing call sites need no change.
+
+```java
+HttpAuthenticationStrategy team = new HttpAuthenticationStrategy("http://localhost:8081", "team-a");
+HttpAuthenticationStrategy admins = new HttpAuthenticationStrategy("http://localhost:8081", "admin");
+
+// Provisioning needs an admin's credential; the identity lands in `team`'s workspace.
+String adminToken = admins.login("ops-admin", "change-me-please").token();
+team.createIdentity("ops-admin", adminToken, "dummy", "change-me-please");
+```
+
+`ClientAuthSession` takes a workspace the same way, and holds the token for a caller that needs
+one repeatedly — it logs in again when the server stops accepting it.
+
 The shared request and response records are provided by the transitive
 `auth-http-api` dependency.
 

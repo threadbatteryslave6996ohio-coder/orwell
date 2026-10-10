@@ -1,7 +1,6 @@
 package dev.orwell.google.gmail;
 
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 import dev.orwell.google.gmail.entity.EmailMessageEntity;
 import dev.orwell.google.gmail.entity.UserEntity;
 import dev.orwell.google.gmail.entity.WebhookSubscriptionEntity;
@@ -9,25 +8,29 @@ import dev.orwell.google.gmail.repository.EmailMessageRepository;
 import dev.orwell.google.gmail.repository.UserRepository;
 import dev.orwell.google.gmail.repository.WebhookSubscriptionRepository;
 import dev.orwell.logging.Logger;
+import dev.orwell.testing.http.JsonStubServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static dev.orwell.testing.http.JsonStubServer.respond;
 import static dev.orwell.google.gmail.GmailTestFixtures.mail;
 import static dev.orwell.google.gmail.GmailTestFixtures.subscription;
 import static dev.orwell.google.gmail.GmailTestFixtures.user;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -42,8 +45,8 @@ class WebhookDeliveryJobTest {
     private static final Logger NO_OP_LOGGER = entry -> {
     };
 
-    private HttpServer authServer;
-    private HttpServer webhookServer;
+    private JsonStubServer authServer;
+    private JsonStubServer webhookServer;
     private final Map<String, List<String>> received = new ConcurrentHashMap<>();
 
     private WebhookSubscriptionRepository subscriptions;
@@ -61,21 +64,19 @@ class WebhookDeliveryJobTest {
         when(subscriptions.save(any(WebhookSubscriptionEntity.class)))
                 .thenAnswer(call -> call.getArgument(0));
 
-        authServer = HttpServer.create(new InetSocketAddress(0), 0);
-        authServer.createContext("/login", exchange -> {
+        authServer = JsonStubServer.start();
+        authServer.on("/def/login", exchange -> {
             exchange.getRequestBody().readAllBytes();
             respond(exchange, 200, "{\"clientId\":\"gmail-general\",\"token\":\"token\"}");
         });
-        authServer.start();
 
-        webhookServer = HttpServer.create(new InetSocketAddress(0), 0);
-        webhookServer.start();
+        webhookServer = JsonStubServer.start();
     }
 
     @AfterEach
     void stopServers() {
-        authServer.stop(0);
-        webhookServer.stop(0);
+        authServer.close();
+        webhookServer.close();
     }
 
     @Test
@@ -172,10 +173,66 @@ class WebhookDeliveryJobTest {
         assertThat(received.get("/sink").get(0)).contains("\"account\":\"bob@example.com\"");
     }
 
+    /**
+     * A subscriber that accepts the connection and then never answers must cost one timeout, not
+     * the round. The per-subscription {@code catch} in {@code deliverPending} isolates a
+     * subscription that <em>fails</em>, but a hang is not an exception — before the sender bounded
+     * its requests, this loop never advanced, so one subscriber stopped delivery for everyone. The
+     * delivery job also shares its {@code @Scheduled} thread with {@code ImapMailPoller}, so the
+     * same stall stopped mail arriving at all.
+     */
+    @Test
+    void aSubscriberThatNeverRespondsDoesNotBlockTheOthers() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        // Its own server on purpose: JsonStubServer dispatches on a single thread, so a handler
+        // that blocks would stall every other route on the same instance and this test would be
+        // proving the harness rather than the sender.
+        JsonStubServer blackHole = JsonStubServer.start();
+        blackHole.on("/black-hole", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            // Accept, then hold the connection open without answering, exactly as a dead-but-
+            // listening host does. Released in the finally below so the server can shut down.
+            try {
+                release.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            exchange.close();
+        });
+        webhook("/sink", exchange -> 200);
+
+        WebhookSubscriptionEntity hung = subscription(
+                1L, bob, "http://127.0.0.1:" + blackHole.port() + "/black-hole", 0L);
+        WebhookSubscriptionEntity healthy = subscription(2L, bob, url("/sink"), 0L);
+        EmailMessageEntity message = mail(1L, bob, "<a@example.com>", "Hello");
+        when(subscriptions.findByActiveTrueOrderByIdAsc()).thenReturn(List.of(hung, healthy));
+        when(mails.findByUserIdAndIdGreaterThanOrderByIdAsc(eq(1L), any(), any()))
+                .thenAnswer(call -> (long) call.getArgument(1) < 1L ? List.of(message) : List.of());
+
+        try {
+            assertTimeoutPreemptively(Duration.ofSeconds(20),
+                    () -> job(Duration.ofMillis(500)).deliverPending(),
+                    "a hung subscriber blocked the delivery round");
+        } finally {
+            release.countDown();
+            blackHole.close();
+        }
+
+        // The point: the subscription behind the hung one still got its mail...
+        assertThat(subjectsReceivedOn("/sink")).containsExactly("Hello");
+        assertThat(healthy.getLastDeliveredId()).isEqualTo(1L);
+        // ...and the hung one kept its cursor, so it retries rather than losing the message.
+        assertThat(hung.getLastDeliveredId()).isEqualTo(0L);
+    }
+
     private WebhookDeliveryJob job() {
+        return job(Duration.ofSeconds(30));
+    }
+
+    private WebhookDeliveryJob job(Duration requestTimeout) {
         WebhookSender sender = new WebhookSender(
-                "http://127.0.0.1:" + authServer.getAddress().getPort(),
-                "gmail-general", "gmail-secret", NO_OP_LOGGER);
+                "http://127.0.0.1:" + authServer.port(),
+                "gmail-general", "gmail-secret", NO_OP_LOGGER, requestTimeout);
         return new WebhookDeliveryJob(subscriptions, mails, users, sender,
                 GmailTestFixtures.payloads(), NO_OP_LOGGER);
     }
@@ -203,7 +260,7 @@ class WebhookDeliveryJobTest {
     }
 
     private void webhook(String path, StatusDecider status) {
-        webhookServer.createContext(path, exchange -> {
+        webhookServer.on(path, exchange -> {
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             int code = status.statusFor(exchange);
             if (code >= 200 && code < 300) {
@@ -215,16 +272,9 @@ class WebhookDeliveryJobTest {
     }
 
     private String url(String path) {
-        return "http://127.0.0.1:" + webhookServer.getAddress().getPort() + path;
+        return "http://127.0.0.1:" + webhookServer.port() + path;
     }
 
-    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(status, bytes.length);
-        exchange.getResponseBody().write(bytes);
-        exchange.close();
-    }
 
     @FunctionalInterface
     private interface StatusDecider {

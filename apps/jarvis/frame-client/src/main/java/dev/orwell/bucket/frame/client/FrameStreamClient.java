@@ -2,6 +2,7 @@ package dev.orwell.bucket.frame.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.orwell.http.LoggingHttpClient;
 import dev.orwell.logging.Logger;
 import dev.orwell.primitives.Sha256;
 
@@ -78,7 +79,8 @@ public final class FrameStreamClient implements AutoCloseable {
         // No connect timeout on the response: this is a stream that is *meant* to stay open and be
         // silent whenever the scene is still. A read timeout here would drop a working watcher
         // pointed at a quiet camera.
-        this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+        this.http = LoggingHttpClient.wrap(
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(), logger);
     }
 
     /** True while a stream is open. False between a drop and the next successful connect. */

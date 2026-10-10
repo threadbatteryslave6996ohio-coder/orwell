@@ -10,8 +10,11 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import dev.orwell.logging.Logger;
 
 class ClientConfigTest {
+    private static final Logger NO_OP_LOGGER = entry -> {
+    };
     @Test
     void loadsEndpointAuthAndDefaultClientId() {
         Env env = ClientEnvs.from(Map.of(
@@ -19,7 +22,7 @@ class ClientConfigTest {
                 "CLIENT_TOKEN", "token"
         ));
 
-        ClientConfig config = ClientConfig.load(env, "client-host");
+        ClientConfig config = ClientConfig.load(env, "client-host", NO_OP_LOGGER);
 
         assertEquals(URI.create("http://localhost:8080/clipboard"), config.endpoint());
         assertEquals("client-host", config.clientId());
@@ -36,7 +39,7 @@ class ClientConfigTest {
                 "CLIENT_TOKEN", "token"
         ));
 
-        ClientConfig config = ClientConfig.load(env, "fallback");
+        ClientConfig config = ClientConfig.load(env, "fallback", NO_OP_LOGGER);
 
         assertEquals("configured", config.clientId());
     }

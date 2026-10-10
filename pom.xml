@@ -15,21 +15,26 @@
         <module>packages/undertow-bootstrap</module>
         <module>packages/primitives</module>
         <module>packages/redis-client</module>
+        <module>packages/http-client</module>
         <module>packages/server-parent</module>
         <module>packages/server-test-support</module>
+        <module>packages/test-support</module>
         <module>apps/auth</module>
         <module>apps/klippy</module>
         <module>apps/jarvis</module>
         <module>apps/object-storage-proxy</module>
         <module>apps/reverse-proxy</module>
+        <module>apps/api-key-cycler</module>
         <module>apps/log-analyzer</module>
         <module>apps/liveness-analyzer</module>
+        <module>apps/health-monitor</module>
         <module>apps/alerting</module>
         <module>apps/keeboarder</module>
         <module>apps/secrets-manager</module>
         <module>apps/backup</module>
         <module>apps/google</module>
         <module>apps/insta</module>
+        <module>apps/insta-scraper</module>
         <module>apps/analyzer</module>
     </modules>
 
@@ -129,12 +134,22 @@
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
+                <artifactId>http-client</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.orwell</groupId>
                 <artifactId>secrets-manager-server</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>dev.orwell</groupId>
                 <artifactId>server-test-support</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.orwell</groupId>
+                <artifactId>test-support</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

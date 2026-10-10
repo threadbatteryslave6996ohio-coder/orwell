@@ -25,6 +25,10 @@
     <dependencies>
         <dependency>
             <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
             <artifactId>env-core</artifactId>
         </dependency>
         <dependency>
@@ -53,6 +57,12 @@
             <artifactId>jarvis-frame-core</artifactId>
             <version>${project.version}</version>
             <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
+        <!-- JsonStubServer, for the tests that stand a real HTTP server up on a loopback port. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>test-support</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

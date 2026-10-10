@@ -4,18 +4,20 @@ import dev.orwell.env.Env;
 import dev.orwell.insta.apify.ApifyClient;
 import dev.orwell.insta.apify.ApifyException;
 import dev.orwell.insta.cache.DisabledScrapeCache;
+import dev.orwell.insta.graph.BlockCommand;
 import dev.orwell.insta.graph.SyncCommand;
 import dev.orwell.insta.ui.UiCommand;
 import dev.orwell.insta.cache.RedisScrapeCache;
 import dev.orwell.insta.cache.ScrapeCache;
 import dev.orwell.insta.instagram.ConnectionType;
-import dev.orwell.insta.instagram.ConnectionsAdapters;
+import dev.orwell.insta.instagram.ConnectionsSources;
 import dev.orwell.insta.instagram.ConnectionsPage;
 import dev.orwell.insta.instagram.InstagramAccount;
 import dev.orwell.insta.instagram.InstagramProfile;
 import dev.orwell.insta.instagram.InstagramService;
 import dev.orwell.insta.instagram.ProfileNotFoundException;
 import dev.orwell.logging.Logger;
+import dev.orwell.logging.ManagedLogger;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -53,6 +55,9 @@ public final class InstaCli {
               followers <username>            the accounts following them
               following <username>            the accounts they follow
               sync      <username>            walk the followers and record them in Postgres
+              block     <username>            stop syncing this account's lists
+              unblock   <username>            start syncing them again
+              blocks                          list every blocked account
               ui                              serve the graph viewer (default 0.0.0.0:5554)
 
             options (list commands only):
@@ -61,9 +66,16 @@ public final class InstaCli {
               --cursor C    resume from a previous run's nextCursor
               --json        print raw JSON instead of a readable list
 
+            options (block / unblock):
+              --followers   only the follower list
+              --following   only the following list
+              --both        both lists (the default)
+              --reason R    why, kept alongside the block (block only)
+
             APIFY_TOKEN must be set, in the environment or a .env file.
-            `sync` also needs INSTA_DATABASE_URL. It always walks the whole list, because a
-            partial walk cannot tell an unfollow from a page it never reached.
+            `sync`, `block`, `unblock` and `blocks` also need INSTA_DATABASE_URL. `sync` always
+            walks the whole list, because a partial walk cannot tell an unfollow from a page it
+            never reached. A block stops the walk, not the profile lookup.
             """;
 
     private InstaCli() {
@@ -93,8 +105,13 @@ public final class InstaCli {
         }
 
         Env env;
+        ManagedLogger logger;
         try {
             env = InstaEnvs.load();
+            // Built here rather than in the try-with-resources below so that an unusable LOGGER or
+            // a LOKI_URL that contradicts it reads as the configuration error it is, alongside a
+            // missing APIFY_TOKEN, instead of falling through to "Unexpected failure".
+            logger = InstaLogger.from(env, err);
         } catch (Exception exception) {
             // A missing APIFY_TOKEN lands here, before anything can be spent.
             err.println("Configuration error: " + exception.getMessage());
@@ -103,7 +120,7 @@ public final class InstaCli {
 
         // The logger is closed alongside the cache: its Loki sink batches on a daemon thread, so
         // a program this short-lived would otherwise exit with records still queued.
-        try (InstaLogger logger = InstaLogger.from(env, err);
+        try (logger;
              ScrapeCache cache = cacheFrom(env, logger)) {
             InstagramService instagram = serviceFrom(env, cache, logger);
             return switch (arguments.command()) {
@@ -114,6 +131,14 @@ public final class InstaCli {
                         instagram, arguments, ConnectionType.FOLLOWING, out, err);
                 case SYNC -> new SyncCommand(env, instagram, logger)
                         .run(arguments.username(), arguments.limit(), out, err);
+                case BLOCK -> new BlockCommand(env, logger).run(
+                        BlockCommand.Action.BLOCK, arguments.username(),
+                        arguments.directions(), arguments.reason(), out, err);
+                case UNBLOCK -> new BlockCommand(env, logger).run(
+                        BlockCommand.Action.UNBLOCK, arguments.username(),
+                        arguments.directions(), null, out, err);
+                case BLOCKS -> new BlockCommand(env, logger).run(
+                        BlockCommand.Action.LIST, null, List.of(), null, out, err);
                 case UI -> new UiCommand(env, logger).run(err);
             };
         } catch (IllegalArgumentException exception) {
@@ -205,12 +230,35 @@ public final class InstaCli {
         return new InstagramService(
                 apify, cache,
                 env.get(InstaEnvs.APIFY_PROFILE_ACTOR),
-                ConnectionsAdapters.parse(
+                ConnectionsSources.parse(
                         env.get(InstaEnvs.APIFY_CONNECTIONS_ACTORS),
-                        env.get(InstaEnvs.INSTA_INSTAGRAM_COOKIES)),
+                        connectionsSettings(env), apify, logger),
                 env.get(InstaEnvs.INSTA_DEFAULT_LIMIT),
                 env.get(InstaEnvs.INSTA_MAX_LIMIT),
                 logger);
+    }
+
+    /**
+     * Gathers what the connections sources need out of the environment. Kept here rather than in
+     * {@code ConnectionsSources} so that package stays unaware of {@link InstaEnvs}, under the same
+     * rule that keeps it unaware a command line exists.
+     */
+    private static ConnectionsSources.Settings connectionsSettings(Env env) {
+        return new ConnectionsSources.Settings(
+                env.get(InstaEnvs.INSTA_INSTAGRAM_COOKIES),
+                env.get(InstaEnvs.INSTA_SELFHOSTED_URL),
+                env.get(InstaEnvs.INSTA_SELFHOSTED_TOKEN),
+                env.get(InstaEnvs.INSTA_SELFHOSTED_PAGINATES),
+                env.get(InstaEnvs.INSTA_RAPIDAPI_HOST),
+                env.get(InstaEnvs.INSTA_RAPIDAPI_KEY),
+                env.get(InstaEnvs.INSTA_RAPIDAPI_FOLLOWERS_PATH),
+                env.get(InstaEnvs.INSTA_RAPIDAPI_FOLLOWING_PATH),
+                env.get(InstaEnvs.INSTA_RAPIDAPI_USER_PARAM),
+                env.get(InstaEnvs.INSTA_RAPIDAPI_LIMIT_PARAM),
+                env.get(InstaEnvs.INSTA_RAPIDAPI_CURSOR_PARAM),
+                env.get(InstaEnvs.INSTA_RAPIDAPI_PAGINATES),
+                env.get(InstaEnvs.INSTA_RAPIDAPI_READS_FOLLOWING),
+                env.get(InstaEnvs.INSTA_HTTP_TIMEOUT_SECONDS));
     }
 
     private static ScrapeCache cacheFrom(Env env, Logger logger) {
@@ -231,31 +279,36 @@ public final class InstaCli {
     }
 
     enum Command {
-        PROFILE, FOLLOWERS, FOLLOWING, SYNC, UI
+        PROFILE, FOLLOWERS, FOLLOWING, SYNC, BLOCK, UNBLOCK, BLOCKS, UI
     }
 
     /**
-     * One invocation's arguments. Hand-parsed rather than pulling in a CLI library: three commands
-     * and four flags do not justify a dependency.
+     * One invocation's arguments. Hand-parsed rather than pulling in a CLI library: a handful of
+     * commands and flags do not justify a dependency.
      */
     record Arguments(
             Command command, String username, Integer limit, boolean all, String cursor,
-            boolean json, boolean help) {
+            boolean json, List<ConnectionType> directions, String reason, boolean help) {
 
         static Arguments parse(String[] args) {
             if (args.length == 0 || "--help".equals(args[0]) || "-h".equals(args[0])) {
-                return new Arguments(Command.PROFILE, null, null, false, null, false, true);
+                return new Arguments(
+                        Command.PROFILE, null, null, false, null, false, List.of(), null, true);
             }
             Command command = switch (args[0]) {
                 case "profile" -> Command.PROFILE;
                 case "followers" -> Command.FOLLOWERS;
                 case "following" -> Command.FOLLOWING;
                 case "sync" -> Command.SYNC;
+                case "block" -> Command.BLOCK;
+                case "unblock" -> Command.UNBLOCK;
+                case "blocks" -> Command.BLOCKS;
                 case "ui" -> Command.UI;
                 default -> throw new IllegalArgumentException("Unknown command: " + args[0]);
             };
-            // `ui` serves whatever is already in the database, so it names no account.
-            boolean needsUsername = command != Command.UI;
+            // `ui` and `blocks` both read whatever is already in the database, so neither names an
+            // account.
+            boolean needsUsername = command != Command.UI && command != Command.BLOCKS;
             if (needsUsername && (args.length < 2 || args[1].startsWith("-"))) {
                 throw new IllegalArgumentException("Missing username for '" + args[0] + "'.");
             }
@@ -264,12 +317,21 @@ public final class InstaCli {
             boolean all = false;
             boolean json = false;
             String cursor = null;
+            String reason = null;
+            // Null until a flag names one, so "the default is both" and "the user asked for both"
+            // stay distinguishable while the other options are being validated.
+            List<ConnectionType> directions = null;
             for (int index = needsUsername ? 2 : 1; index < args.length; index++) {
                 switch (args[index]) {
                     case "--all" -> all = true;
                     case "--json" -> json = true;
                     case "--limit" -> limit = positive(value(args, ++index, "--limit"));
                     case "--cursor" -> cursor = value(args, ++index, "--cursor");
+                    case "--reason" -> reason = value(args, ++index, "--reason");
+                    case "--followers" -> directions = List.of(ConnectionType.FOLLOWERS);
+                    case "--following" -> directions = List.of(ConnectionType.FOLLOWING);
+                    case "--both" -> directions =
+                            List.of(ConnectionType.FOLLOWERS, ConnectionType.FOLLOWING);
                     default -> throw new IllegalArgumentException("Unknown option: " + args[index]);
                 }
             }
@@ -277,6 +339,25 @@ public final class InstaCli {
                 // --all starts from the beginning and keeps going; a cursor says where to start.
                 // Honouring both would silently ignore one, so say so instead.
                 throw new IllegalArgumentException("--all and --cursor cannot be combined.");
+            }
+            boolean blockCommand =
+                    command == Command.BLOCK || command == Command.UNBLOCK
+                            || command == Command.BLOCKS;
+            if (!blockCommand && (directions != null || reason != null)) {
+                throw new IllegalArgumentException("--followers, --following, --both and --reason "
+                        + "only apply to 'block' and 'unblock'.");
+            }
+            if (blockCommand && (limit != null || all || cursor != null || json)) {
+                throw new IllegalArgumentException(
+                        "'" + args[0] + "' reads no lists; --limit, --all, --cursor and --json "
+                                + "do not apply.");
+            }
+            if (command == Command.UNBLOCK && reason != null) {
+                // Lifting a block deletes the row, so there is nowhere for a reason to go.
+                throw new IllegalArgumentException("'unblock' takes no --reason.");
+            }
+            if (command == Command.BLOCKS && directions != null) {
+                throw new IllegalArgumentException("'blocks' lists every direction.");
             }
             if (command == Command.PROFILE && (limit != null || all || cursor != null)) {
                 throw new IllegalArgumentException(
@@ -292,7 +373,11 @@ public final class InstaCli {
                 throw new IllegalArgumentException(
                         "'sync' always walks the whole list; --all and --cursor do not apply.");
             }
-            return new Arguments(command, username, limit, all, cursor, json, false);
+            if (directions == null) {
+                directions = List.of(ConnectionType.FOLLOWERS, ConnectionType.FOLLOWING);
+            }
+            return new Arguments(
+                    command, username, limit, all, cursor, json, directions, reason, false);
         }
 
         private static String value(String[] args, int index, String option) {

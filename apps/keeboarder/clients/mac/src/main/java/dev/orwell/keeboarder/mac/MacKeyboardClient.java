@@ -59,7 +59,7 @@ public final class MacKeyboardClient {
         this.logger = logger;
         this.log = new KeeboarderClientLog(logger);
         this.currentClientId = new AtomicReference<>(config.clientId());
-        this.authClient = new HttpAuthenticationStrategy(config.authBaseUrl());
+        this.authClient = new HttpAuthenticationStrategy(config.authBaseUrl(), logger);
     }
 
     public void run() throws Exception {

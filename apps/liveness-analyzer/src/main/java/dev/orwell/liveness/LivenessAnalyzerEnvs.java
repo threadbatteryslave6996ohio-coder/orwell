@@ -21,6 +21,7 @@ public final class LivenessAnalyzerEnvs {
     public static final EnvOption<String> LOKI_QUERY;
     public static final EnvOption<String> ALERT_URL;
     public static final EnvOption<Integer> ALERT_COOLDOWN_SECONDS;
+    public static final EnvOption<Integer> MAX_DOWN_PERCENT;
 
     static {
         CHECK_INTERVAL_SECONDS = ENV.optional("LIVENESS_CHECK_INTERVAL_SECONDS", EnvType.integer(), 5);
@@ -35,6 +36,12 @@ public final class LivenessAnalyzerEnvs {
                 "{stream_type=\"app\"} | json | message=\"Client heartbeat.\"");
         ALERT_URL = ENV.optional("ALERT_URL", EnvType.string(), "http://127.0.0.1:9000/alerts");
         ALERT_COOLDOWN_SECONDS = ENV.optional("LIVENESS_ALERT_COOLDOWN_SECONDS", EnvType.integer(), 300);
+        // The fuse. A check finding at or above this share of clients down is not believed: an
+        // empty answer from Loki is a flawless impression of every client dying at once, and the
+        // cheapest way to send one alert per client is to point this service at the wrong Loki.
+        // 100 (the default) refuses only a total wipeout, so any partial outage still alerts
+        // normally. 0 disables the fuse. Never applies below MIN_CLIENTS_FOR_FUSE clients.
+        MAX_DOWN_PERCENT = ENV.optional("LIVENESS_MAX_DOWN_PERCENT", EnvType.integer(), 100);
 
         ENV.property("liveness.check-interval-seconds", CHECK_INTERVAL_SECONDS);
         ENV.property("liveness.lookback-seconds", LOOKBACK_SECONDS);
@@ -47,6 +54,7 @@ public final class LivenessAnalyzerEnvs {
         ENV.property("liveness.loki-query", LOKI_QUERY);
         ENV.property("liveness.alert-url", ALERT_URL);
         ENV.property("liveness.alert-cooldown-seconds", ALERT_COOLDOWN_SECONDS);
+        ENV.property("liveness.max-down-percent", MAX_DOWN_PERCENT);
     }
 
     private LivenessAnalyzerEnvs() {

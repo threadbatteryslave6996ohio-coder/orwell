@@ -7,6 +7,25 @@ that should be running stops beating. It is a dead-man's switch: the alert comes
 It is the liveness counterpart to [`log-analyzer`](../log-analyzer/README.md) (which does AI error
 triage). Both read the same Loki through the same Grafana datasource proxy.
 
+**It is not [`health-monitor`](../health-monitor/README.md), and neither subsumes the other.** This app
+infers liveness from the *absence* of heartbeat log lines, which is the only option for something
+nothing can reach to poll — a desktop client behind a home router. That app actively probes `/health`
+over HTTP, which catches a server that is up but broken, and which no amount of watching logs would
+reveal. A new "is X alive" check belongs in whichever of the two matches how X can be observed.
+
+**The two can cover each other**, and this is the one case where they should. `health-monitor`'s own
+failure announces nothing — silence is its normal output — so it publishes a heartbeat to
+`stream_type="heartbeat"` with `clientId=health-monitor` for this app to alert on the absence of:
+
+```bash
+LIVENESS_LOKI_QUERY='{stream_type="heartbeat"} | json | message="Health monitor heartbeat."'
+LIVENESS_EXPECTED_CLIENTS=health-monitor
+LIVENESS_THRESHOLD_SECONDS=180
+```
+
+Note that is a *different* query from the default, so watching the monitor and watching the klippy
+clients means two deployments of this app rather than one — `LIVENESS_LOKI_QUERY` is one selector.
+
 ## How it works
 
 1. The Klippy desktop clients (macOS and Linux, via the shared `DesktopClientRunner`) post
@@ -20,6 +39,24 @@ triage). Both read the same Loki through the same Grafana datasource proxy.
 4. Each down client raises one alert to `ALERT_URL`, gated by `LIVENESS_ALERT_COOLDOWN_SECONDS` so
    a client that stays down does not alert every check. When a client recovers, its cooldown is
    cleared so the next outage alerts immediately.
+
+### The fuse: an empty Loki looks exactly like everything dying
+
+A heartbeat source that answers with nothing is indistinguishable from every client going silent in
+the same second, and the ways to get an empty answer are mundane: Loki restarted, its retention is
+shorter than `LIVENESS_LOOKBACK_SECONDS`, a label changed, or this analyzer is pointed at a different
+Loki than the one clients push to. Without a guard, any of those sends one alert per client at once.
+
+So a check that finds at least `LIVENESS_MAX_DOWN_PERCENT` of clients down is **not believed**: no
+alerts are dispatched, `/health` reports `alertsSuppressed` with the reason, and the run response
+carries the same. The status map still shows every client as down — only the fan-out is held, so an
+operator sees more, not less.
+
+The default is `100`, so this only ever withholds on a total wipeout; **any partial outage alerts
+exactly as before**. It never applies below three clients, where "all of them" is an ordinary outage
+rather than a statement about the source. Set `0` to disable it, or a lower percentage to be
+stricter. This is the same reasoning as insta's `INSTA_MAX_RETIRE_PERCENT`, which refuses to believe
+a follower walk that would retire implausibly many accounts at once.
 
 Because a client that never starts produces no log line, set `LIVENESS_EXPECTED_CLIENTS` to the
 client ids that must be alive — those are checked even when Loki has never seen them. Clients not
@@ -45,6 +82,7 @@ points at the same Loki the servers push to via `LOKI_URL`.
 | `LIVENESS_EXPECTED_CLIENTS` | `` | Comma-separated client ids that must be alive. |
 | `LIVENESS_LOKI_QUERY` | `{stream_type="app"} \| json \| message="Client heartbeat."` | Selector for heartbeat lines. |
 | `LIVENESS_ALERT_COOLDOWN_SECONDS` | `300` | Minimum gap between repeat alerts for the same client. |
+| `LIVENESS_MAX_DOWN_PERCENT` | `100` | A check finding at least this share of clients down is refused rather than alerted on. `0` disables the fuse. |
 | `GRAFANA_URL` | `http://127.0.0.1:3000` | Grafana base URL. |
 | `GRAFANA_API_TOKEN` | `` | Bearer token for the Grafana proxy. |
 | `GRAFANA_LOKI_DATASOURCE_UID` | `` | UID of the Loki datasource in Grafana. |

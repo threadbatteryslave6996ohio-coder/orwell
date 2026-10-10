@@ -12,12 +12,13 @@ test commands; the Android client is built with Gradle instead, as its README de
 
 ## Run Locally
 
-The simplest way to run the servers is the whole-stack Docker Compose file at the
-repository root, which brings up the shared PostgreSQL, the auth and clipboard
-servers, and an Nginx entrypoint together:
+The simplest way to run the servers is the whole-stack Docker Compose at the repository root. It
+is two files — `docker-compose.storages.yml` holds the shared PostgreSQL and Redis,
+`docker-compose.all-services.yml` the applications — and they declare one project, so passing both
+brings up storage, the auth and clipboard servers, and an Nginx entrypoint together:
 
 ```bash
-docker compose -f docker-compose.all-services.yml up --build
+docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml up --build
 ```
 
 Nginx is the single entrypoint (port 8080 by default, overridable with
@@ -40,13 +41,30 @@ mvn -pl apps/klippy/clients/linux -am package && java -jar apps/klippy/clients/l
 
 ## Client Authentication
 
-Create an identity once on the auth server:
+Create an identity once on the auth server. Identities live in a workspace, and creating one needs
+a token from the server's `admin` workspace.
+
+**The klippy desktop clients are pinned to `def`.** `ClientAuthSession` accepts a workspace, but no
+klippy entry point reads one from the environment, so setting `AUTH_WORKSPACE` for a client does
+nothing — create its identity in `def`. (The `AUTH_WORKSPACE` in `scripts/test-dummy-client.sh` is
+that script's own shell variable, steering the `curl` URLs it builds, not something the client
+reads.) `CODE_REFACTOR.md` tracks lifting this.
 
 ```bash
-curl -i http://localhost:8080/auth/identities \
+ADMIN_TOKEN=$(curl -s http://localhost:8080/auth/admin/login \
   -H 'Content-Type: application/json' \
+  -d '{"clientId":"ops-admin","secret":"change-me-please"}' | jq -r .token)
+
+curl -i http://localhost:8080/auth/def/identities \
+  -H 'Content-Type: application/json' \
+  -H "X-Client-Id: ops-admin" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{"clientId":"dummy","secret":"change-me-please"}'
 ```
+
+The first admin comes from `AUTH_ADMIN_BOOTSTRAP_CLIENT_ID` / `AUTH_ADMIN_BOOTSTRAP_SECRET` on
+the auth server — see
+[its README](../auth/http-based/server/README.md).
 
 Java clients can log in and refresh tokens automatically with this
 repository-root `.env` configuration:

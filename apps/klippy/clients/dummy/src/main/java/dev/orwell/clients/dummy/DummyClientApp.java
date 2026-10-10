@@ -30,7 +30,7 @@ public final class DummyClientApp {
     private final Logger logger;
 
     private DummyClientApp(URI endpoint, String clientId, ClientAuthSession authSession, Logger logger) {
-        this(new ClipboardApiClient(endpoint, authSession, Duration.ofSeconds(10)), endpoint, clientId, logger);
+        this(new ClipboardApiClient(endpoint, authSession, Duration.ofSeconds(10), logger), endpoint, clientId, logger);
     }
 
     DummyClientApp(ClipboardApiClient apiClient, URI endpoint, String clientId, Logger logger) {
@@ -43,7 +43,7 @@ public final class DummyClientApp {
     public static void main(String[] args) throws IOException, InterruptedException {
         Logger logger = new ConsoleLogger("klippy-dummy-client");
         Env env = ClientEnvs.load();
-        ClientConfig config = ClientConfig.load(env, "dummy-" + ClientIdentity.hostnameOrRandom(""));
+        ClientConfig config = ClientConfig.load(env, "dummy-" + ClientIdentity.hostnameOrRandom(""), logger);
         ClientAuthInitializer.initialize(config.authSession(), config, logger);
 
         DummyClientApp app =

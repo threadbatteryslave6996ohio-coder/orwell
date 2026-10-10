@@ -8,8 +8,11 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import dev.orwell.logging.Logger;
 
 class DesktopClientRunnerTest {
+    private static final Logger NO_OP_LOGGER = entry -> {
+    };
     @Test
     void buildsMacStyleStartupFields() {
         Env env = ClientEnvs.from(Map.of(
@@ -17,7 +20,7 @@ class DesktopClientRunnerTest {
                 "CLIENT_ID", "mac-host",
                 "CLIENT_TOKEN", "token"
         ));
-        ClientConfig config = ClientConfig.load(env, "fallback");
+        ClientConfig config = ClientConfig.load(env, "fallback", NO_OP_LOGGER);
 
         Map<String, Object> fields = DesktopClientRunner.startupFields(config, 1L, Map.of());
 
@@ -41,7 +44,7 @@ class DesktopClientRunnerTest {
                 "AUTH_SERVER_URL", "http://localhost:9090",
                 "CLIENT_SECRET", "secret"
         ));
-        ClientConfig config = ClientConfig.load(env, "fallback");
+        ClientConfig config = ClientConfig.load(env, "fallback", NO_OP_LOGGER);
 
         Map<String, Object> fields =
                 DesktopClientRunner.startupFields(config, 1000L, Map.of("clipboardBackend", "awt"));

@@ -125,8 +125,8 @@ without it a full disk turns a valid login into an HTTP 500. Sink failures are c
 reported once to stderr.
 
 **Standalone `main`s** call the same factory rather than rebuilding the tree by hand — this is
-what `jarvis-person-detection` and `jarvis-retention-worker` do, so they answer to `LOGGER`
-exactly like the Spring servers:
+what `jarvis-person-detection`, `jarvis-retention-worker` and `jarvis-frame-viewer` do, so they
+answer to `LOGGER` exactly like the Spring servers:
 
 ```java
 Logger logger = LoggerSetup.fromConfiguration(
@@ -180,7 +180,45 @@ interleaved with framework prose. stdout still carries both, and stays useful fo
 
 App logs go straight to Loki from the JVM by default; there is no collector in the picture. A
 `.jsonl` file appears only where `LOGGER` asks for one (`disk`, `both`, or an outage under
-`loki-with-fallback`). See [`apps/log-analyzer/README.md`](../../apps/log-analyzer/README.md) for
+`loki-with-fallback`).
+
+### A second stream, for records the app stream should not carry
+
+`stream_type` is a **label**, which is what a consumer selects on — `apps/log-analyzer` queries
+`{stream_type="app"} | json | level="ERROR"`, and a selector on a *field* would make Loki read every
+stream to find it. It takes a handful of values across the whole deployment, which is what labels are
+for; per-user or per-request values would not be (see the cardinality table in
+[`apps/log-analyzer/README.md`](../../apps/log-analyzer/README.md)).
+
+Everything a `Logger` produces is `stream_type="app"`. One case wants its own:
+
+```java
+// A heartbeat channel: Loki-only, its own stream, empty when LOKI_URL is unset.
+Optional<ManagedLogger> heartbeat =
+        LoggerSetup.heartbeatChannel("heartbeat", appName, lokiUrl, lokiTenantId);
+```
+
+**Use it for records that are high-volume and low-information**, where mixing them into the app stream
+would swamp the thing that reads it. A liveness heartbeat is the case it exists for: one line per
+interval per process is thousands a day, all of them saying "still here", and the app stream is what
+gets triaged for errors. `apps/health-monitor` publishes one so that
+[`apps/liveness-analyzer`](../../apps/liveness-analyzer/README.md) can alert on its *absence* — the two
+apps then cover each other.
+
+Three properties of that channel are deliberate:
+
+- **Loki-only, no console sink.** A heartbeat exists to be absent, and a copy on stdout would put the
+  same thousands of lines in `docker logs` where nobody is watching for a gap.
+- **No fallback file.** If Loki cannot be reached the heartbeat does not arrive and the dead-man's
+  switch fires — which is correct, because nobody can currently verify the process is doing its job. A
+  file recording it locally would make the switch fire while claiming the opposite on disk.
+- **Still wrapped in `FailSafeLogger`.** A heartbeat that threw would take down the scheduled work it is
+  evidence of.
+
+Everything else about it is an ordinary `LokiLogger`: same batching, same bounded queue, same
+never-blocks-the-caller guarantee. `LokiLogger.onStream` validates the label value — letters, digits,
+`_` and `-` only, because a value with a quote in it produces a stream nothing can write a selector
+for. The identity a consumer groups by (`clientId`) belongs in the line **body**, not in a label. See [`apps/log-analyzer/README.md`](../../apps/log-analyzer/README.md) for
 the label scheme.
 
 **The name you pass here becomes a query dimension.** `orwell.app.name` becomes Loki's `app`

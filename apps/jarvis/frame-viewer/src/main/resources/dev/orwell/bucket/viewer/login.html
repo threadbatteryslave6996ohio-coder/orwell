@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jarvis — sign in</title>
+<!--
+  Deliberately one file with no script. It is served under the same Content-Security-Policy as the
+  viewer (`script-src 'self'`, and `form-action 'self'` for this form), and a plain form POST needs
+  no JavaScript — so the page an unauthenticated visitor can reach has no moving parts at all.
+
+  The one placeholder, %MESSAGE%, is filled from a fixed set of the server's own strings and
+  HTML-escaped on the way in. It never carries anything the visitor typed.
+-->
+<style>
+  :root { --bg: #0f1115; --panel: #171a21; --line: #262b35; --ink: #e6e9ef; --dim: #8b93a3;
+          --active: #4c8dff; --gone: #ff5c7a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+         background: var(--bg); color: var(--ink);
+         font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { width: 320px; background: var(--panel); border: 1px solid var(--line);
+         border-radius: 10px; padding: 22px; }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  p.sub { color: var(--dim); font-size: 12px; margin: 0 0 18px; }
+  label { display: block; color: var(--dim); font-size: 12px; margin-bottom: 12px; }
+  input { display: block; width: 100%; margin-top: 4px; background: #10131a; color: var(--ink);
+          border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font: inherit; }
+  button { width: 100%; margin-top: 6px; background: var(--active); color: #06101f; border: 0;
+           border-radius: 6px; padding: 8px; font: inherit; font-weight: 600; cursor: pointer; }
+  .message { color: var(--gone); font-size: 12px; margin: 0 0 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>jarvis stored frames</h1>
+  <p class="sub">Sign in with an identity the auth server issued.</p>
+  %MESSAGE%
+  <form method="post" action="login">
+    <label>client id
+      <input name="clientId" autocomplete="username" autofocus required>
+    </label>
+    <label>secret
+      <input name="secret" type="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit">Sign in</button>
+  </form>
+</main>
+</body>
+</html>

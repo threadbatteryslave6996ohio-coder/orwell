@@ -26,9 +26,14 @@ their own options on top. The validated env is published as Spring properties by
 | `SERVER_PORT` | `server.port` | always |
 | `LOGGING_FILE_NAME` | `logging.file.name` | per-app (constructor flag) |
 | `AUTH_BASE_URL` | `orwell.auth.base-url` | per-app (constructor flag) |
+| `AUTH_WORKSPACE` | `orwell.auth.workspace` | optional |
 | `LOGGER` | `orwell.logger.mode` | optional |
 | `LOKI_URL` | `orwell.loki.url` | optional |
 | `LOKI_TENANT_ID` | `orwell.loki.tenant-id` | optional |
+
+`AUTH_WORKSPACE` names the auth-server workspace an app's identities live in; it is the first
+path segment of every auth call. Unset, it is `def`, which is where identities created before
+workspaces existed are — so an app that never sets it behaves exactly as it did.
 
 `LOGGER` picks the sinks behind the `Logger` bean — `console`, `disk`, `loki`,
 `loki-with-fallback` or `both`. An unknown value fails env validation naming the legal ones.
@@ -58,7 +63,9 @@ in sync if you move or rename these classes:
 - `health.HealthEndpointConfiguration` — registers the shared `GET /health` endpoint
   (`SharedHealthController`) on every servlet app. Apps add response fields by contributing
   `HealthDetailsProvider` beans, or replace the endpoint by defining their own
-  `SharedHealthController` bean.
+  `SharedHealthController` bean. **`engine: spring` is stamped by the controller**, mirroring
+  `UndertowHttp.health` on the other engine — an app must not add it itself. It goes on last, so a
+  provider cannot claim an engine other than the one that ran it.
 - `web.WebContractConfiguration` — the invalid-JSON 400 envelope (`InvalidJsonBodyAdvice`) and
   the `@RequireAuthentication` 401 guard.
 - `logging.LoggerConfiguration` — the app-wide `Logger` bean, named from `orwell.app.name`. The
@@ -86,4 +93,34 @@ in sync if you move or rename these classes:
 | `launch.SpringServerBootstrap` | Low-level Spring startup shell used by `AppServer` |
 | `auth.RequireAuthentication` | 401-guard annotation for controllers/methods |
 | `health.HealthDetailsProvider` | App hook to add fields to `GET /health` |
+| `schedule.ScheduledJob` | Single-flight guard + run/alert/error counters for a scheduled service |
 | `web.SharedJson` | Shared static `ObjectMapper` |
+
+### `schedule.ScheduledJob`
+
+For a service that runs a job on a schedule, can also be poked on demand, and reports what it has
+been doing on `/health`. log-analyzer and liveness-analyzer are both that shape and had it written
+out twice — the same `AtomicBoolean` single-flight, the same four counters, the same
+`lastRunAt`/`lastAlertAt`/`lastError` triple, the same eight health keys.
+
+```java
+private final ScheduledJob job = new ScheduledJob("poll");   // -> pollsTotal, "A poll is already…"
+
+@Scheduled(fixedRateString = "…")
+void scheduledPoll() {
+    job.runSafely(this::runPoll);          // a failure is recorded, the schedule survives
+}
+
+public Map<String, Object> pollOnce() throws IOException, InterruptedException {
+    return job.runOnce(this::runPoll);     // busy envelope if one is already running
+}
+
+private Map<String, Object> runPoll(Instant startedAt) throws IOException, InterruptedException { … }
+```
+
+It is a collaborator, not a base class: neither service's run body has to be bent into a template
+method to share the counters around it. The **noun** keeps each app's wire contract intact —
+`"poll"` yields `pollsTotal`, `"check"` yields `checksTotal` — so adopting it changed no payload
+either service already served. `runSafely` matters more than it looks: an exception escaping a
+`@Scheduled` method cancels every future execution of that task, which is the quiet way one of
+these services stops working altogether.

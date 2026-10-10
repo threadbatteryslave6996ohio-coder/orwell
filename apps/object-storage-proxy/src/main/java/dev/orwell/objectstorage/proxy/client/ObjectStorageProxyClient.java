@@ -11,10 +11,16 @@ import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
+import dev.orwell.http.LoggingHttpClient;
+import dev.orwell.logging.ConsoleLogger;
+import dev.orwell.logging.Logger;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.util.UriUtils;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -22,13 +28,29 @@ import java.util.List;
 import java.util.function.Supplier;
 
 public final class ObjectStorageProxyClient {
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+
     private static final ParameterizedTypeReference<ListResponse> LIST_RESPONSE_TYPE = new ParameterizedTypeReference<>() {};
 
     private final RestClient restClient;
 
+    /** Records to the console; the constructor taking a {@link Logger} is the one to prefer. */
     public ObjectStorageProxyClient(String baseUrl) {
+        this(baseUrl, new ConsoleLogger("object-storage-proxy-client"));
+    }
+
+    public ObjectStorageProxyClient(String baseUrl, Logger logger) {
         this(RestClient.builder()
                 .baseUrl(baseUrl)
+                // Naming the JDK request factory is what lets the client underneath it be the
+                // wrapped one; it is the same transport Spring would have chosen here anyway.
+                // Connect timeout only, deliberately: upload() and batchUpload() stream files
+                // whose transfer can legitimately outlast any read timeout worth setting, so
+                // bounding the read would break exactly the calls this client exists for. The
+                // connect bound still stops a host that never accepts from hanging forever.
+                .requestFactory(new JdkClientHttpRequestFactory(
+                        LoggingHttpClient.wrap(
+                                HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build(), logger)))
                 .messageConverters(converters -> converters.add(new MappingJackson2HttpMessageConverter(new ObjectMapper().findAndRegisterModules())))
                 .build());
     }

@@ -74,7 +74,7 @@ class GraphSchemaMigrationTest extends GraphTest {
         try (Statement statement = connection.createStatement()) {
             statement.execute("""
                     DROP TABLE IF EXISTS post_media, post_metric, post_caption, post, unfollows,
-                        follows, follow_edge, account_profile_picture, account_bio,
+                        follows, follow_edge, scrape_block, account_profile_picture, account_bio,
                         account_username, account CASCADE;
 
                     CREATE TABLE account (

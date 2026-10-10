@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Keeboarder macOS Client - Installation Script
+# Jarvis macOS recorder - installation script.
 # Sets up the FFmpeg recorder (record-only client)
 
 set -e
@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Keeboarder macOS Client Installer${NC}"
+echo -e "${BLUE}Jarvis macOS Recorder Installer${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -115,6 +115,9 @@ echo -e "${YELLOW}Installing scripts to $SCRIPTS_DIR...${NC}"
 cp "$SCRIPT_DIR/start_recorder.sh" "$SCRIPTS_DIR/start_recorder.sh"
 cp "$SCRIPT_DIR/setup-launchagent.sh" "$SCRIPTS_DIR/setup-launchagent.sh"
 cp "$SCRIPT_DIR/config.sh" "$SCRIPTS_DIR/config.sh"
+# start_recorder.sh sources this. The install layout is flat, so it lands beside the script rather
+# than in a lib/ directory; the recorder looks for both names.
+cp "$SCRIPT_DIR/../lib/recorder.sh" "$SCRIPTS_DIR/recorder-lib.sh"
 
 chmod +x "$SCRIPTS_DIR/start_recorder.sh"
 chmod +x "$SCRIPTS_DIR/setup-launchagent.sh"
@@ -158,11 +161,11 @@ echo "   $SCRIPT_DIR/config.sh"
 echo ""
 
 echo "3. Start recording:"
-echo "   launchctl load ~/Library/LaunchAgents/com.keeboarder.recorder.plist"
+echo "   launchctl load ~/Library/LaunchAgents/$LAUNCHAGENT_LABEL.plist"
 echo ""
 
 echo "4. Check status:"
-echo "   launchctl list | grep keeboarder"
+echo "   launchctl list | grep $LAUNCHAGENT_LABEL"
 echo "   ps aux | grep ffmpeg"
 echo ""
 

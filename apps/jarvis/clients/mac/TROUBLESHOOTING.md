@@ -1,4 +1,8 @@
-# Keeboarder macOS - Troubleshooting Guide
+# Jarvis macOS recorder - troubleshooting
+
+> The LaunchAgent is still labelled `com.keeboarder.recorder`, so that is what the commands below
+> use. It is a plist filename on disk rather than a name in code; see `config.sh` for why renaming
+> it needs a migration.
 
 Complete troubleshooting for common issues with this **record-only** client. Uploading is handled
 by the separate syncer client at `apps/jarvis/clients/syncer/` — see its own README for

@@ -64,7 +64,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path == "/":
             path = "/index.html"
         fpath = os.path.join(STATIC_DIR, path.lstrip("/"))
-        if not os.path.abspath(fpath).startswith(os.path.abspath(STATIC_DIR)):
+        # commonpath, not startswith: a prefix test accepts a sibling directory whose name merely
+        # begins with the root's ("/x/static-evil" passes a "/x/static" root). No such sibling
+        # exists today, which is exactly why the wrong shape would survive until one did.
+        root = os.path.abspath(STATIC_DIR)
+        resolved = os.path.abspath(fpath)
+        if os.path.commonpath([root, resolved]) != root:
             self.send_response(403)
             self.end_headers()
             return
@@ -89,14 +94,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self._proxy("GET"):
             self._static()
 
+    # _proxy returns False when no backend prefix matched. Ignoring that answered nothing at all:
+    # the handler returned, the connection closed, and the caller saw a dropped connection rather
+    # than a status. Only GET has somewhere else to go (the static files); the rest are a 404.
     def do_POST(self):
-        self._proxy("POST")
+        if not self._proxy("POST"):
+            self.send_error(404, "No backend for this path")
 
     def do_PUT(self):
-        self._proxy("PUT")
+        if not self._proxy("PUT"):
+            self.send_error(404, "No backend for this path")
 
     def do_DELETE(self):
-        self._proxy("DELETE")
+        if not self._proxy("DELETE"):
+            self.send_error(404, "No backend for this path")
 
     def log_message(self, fmt, *args):
         pass

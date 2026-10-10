@@ -1,136 +1,127 @@
 package dev.orwell.insta;
 
 import dev.orwell.env.Env;
-import dev.orwell.logging.CompositeLogger;
-import dev.orwell.logging.ConsoleLogger;
-import dev.orwell.logging.FailSafeLogger;
-import dev.orwell.logging.JsonLogger;
-import dev.orwell.logging.LogEntry;
-import dev.orwell.logging.Logger;
-import dev.orwell.logging.LokiLogger;
+import dev.orwell.logging.LoggerMode;
+import dev.orwell.logging.LoggerSetup;
+import dev.orwell.logging.ManagedLogger;
 
+import java.io.OutputStream;
 import java.io.PrintStream;
-import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 
 /**
- * The program's logger: which sinks it writes to, chosen from the environment.
+ * Maps insta's environment onto {@link LoggerSetup}, which is where every process in this repo
+ * assembles its sinks.
  *
- * <p>Everything inside the program already takes a {@link Logger} and knows nothing about where
- * records end up — {@link dev.orwell.insta.apify.ApifyClient},
- * {@link dev.orwell.insta.instagram.InstagramService} and the cache are all constructor-injected.
- * This class is the one place a concrete sink is named, so changing what production does is a
- * change to configuration, not to code.
+ * <p>This class used to build the sink tree itself, and had drifted: it never learned {@code
+ * LOGGER}, so none of the repo's modes worked here, and it called the three-argument
+ * {@link dev.orwell.logging.LokiLogger} constructor, so {@code loki-with-fallback} — the mode that
+ * catches records Loki refused in a file — could not be reached from insta at all. Everything
+ * below is now a translation into {@link LoggerSetup#create}; nothing here decides how a sink is
+ * built.
  *
- * <table>
- *   <caption>Sink selection</caption>
- *   <tr><th>Set</th><th>Adds</th></tr>
- *   <tr><td>nothing</td><td>human-readable console</td></tr>
- *   <tr><td>{@code LOKI_URL}</td><td>async batched push to Loki</td></tr>
- *   <tr><td>{@code LOGGING_FILE_NAME}</td><td>JSON lines to that file</td></tr>
- *   <tr><td>{@code INSTA_LOG_CONSOLE=false}</td><td>drops the console sink</td></tr>
- * </table>
- *
- * <p>Two things differ from the Spring services in this repo, both because this is a program a
- * person runs rather than a server that boots once.
+ * <p>Two insta-specific translations remain, both because this is a program a person runs rather
+ * than a server that boots once:
  *
  * <p><b>The console sink writes to stderr, not stdout.</b> Results are stdout and nothing else is,
  * so {@code insta followers nasa --json | jq} stays parseable no matter how chatty logging gets.
+ * That is the {@code console} stream {@link #from} is handed.
  *
- * <p><b>An unset {@code LOKI_URL} is not warned about.</b> The Spring bean complains, because a
- * server with no log shipping is usually a misconfigured deployment. For a command someone runs
- * by hand, console-only is the ordinary case, and a warning on every invocation would be noise.
+ * <p><b>{@code INSTA_LOG_CONSOLE=false} drops the console.</b> {@link LoggerMode} has no value for
+ * this on purpose — a server's console is what {@code docker logs} reads and must never be
+ * configurable away — but a command someone runs in a terminal is the case the rule was not written
+ * for. It is honoured by pointing the console sink at a discarded stream rather than by teaching
+ * the shared factory a mode that only insta would ever set.
  *
- * <p>{@link #close()} matters more here than it does in a server: {@link LokiLogger} batches on a
- * <em>daemon</em> thread and flushes every couple of seconds, so a program that exits in under a
- * second would take its unsent records with it. Closing drains them. {@link InstaCli} closes this
- * in a try-with-resources, which is why the logger is built there and passed down.
+ * <p>{@link ManagedLogger#close()} matters more here than in a server:
+ * {@link dev.orwell.logging.LokiLogger} batches on a <em>daemon</em> thread and flushes every
+ * couple of seconds, so a program that exits in under a second would take its unsent records with
+ * it. {@link InstaCli} closes it in a try-with-resources, which is why the logger is built there
+ * and passed down.
  */
-public final class InstaLogger implements Logger, AutoCloseable {
+public final class InstaLogger {
     static final String APP_NAME = "insta";
 
-    private final Logger delegate;
-    private final List<AutoCloseable> closeables;
+    /** Swallows what a disabled console would have printed. */
+    private static final PrintStream DISCARD =
+            new PrintStream(OutputStream.nullOutputStream(), false, StandardCharsets.UTF_8);
 
-    private InstaLogger(Logger delegate, List<AutoCloseable> closeables) {
-        this.delegate = Objects.requireNonNull(delegate, "delegate");
-        this.closeables = List.copyOf(closeables);
+    private InstaLogger() {
     }
 
     /** Reads the sink choice out of {@link InstaEnvs}. */
-    public static InstaLogger from(Env env, PrintStream console) {
+    public static ManagedLogger from(Env env, PrintStream console) {
         return create(
                 console,
+                console,
                 env.get(InstaEnvs.INSTA_LOG_CONSOLE),
+                env.get(InstaEnvs.LOGGER),
                 env.get(InstaEnvs.LOKI_URL),
                 env.get(InstaEnvs.LOKI_TENANT_ID),
                 env.get(InstaEnvs.LOGGING_FILE_NAME));
     }
 
     /**
-     * The same choice expressed as plain values, so a test can ask for one sink combination
-     * without building an {@link Env}.
+     * The same choice expressed as plain values, so a test can ask for one sink combination without
+     * building an {@link Env}.
      *
-     * <p>Every sink is optional and a bad one is skipped rather than fatal: an unwritable log file
-     * must not be the reason a lookup does not happen. If that leaves nothing at all, records go
-     * nowhere — which is what {@code INSTA_LOG_CONSOLE=false} with no other sink asks for.
+     * <p>An unopenable sink is reported and skipped rather than being fatal — that is
+     * {@link LoggerSetup}'s rule, and it is the one insta needs: a log file nobody can write must
+     * not be the reason a paid lookup does not happen. A <em>contradiction</em> between configured
+     * values still fails, so {@code LOGGER=loki} with no {@code LOKI_URL} stops the program instead
+     * of pretending to ship records; {@link InstaCli} turns that into a configuration error and
+     * exit code 2.
+     *
+     * <p>{@code diagnostics} is where that report goes, and it is deliberately <em>not</em> the
+     * stream {@code consoleEnabled} switches off. Turning the console off silences records; it must
+     * not also silence "this log file could not be opened", or a cron job with a bad path discards
+     * everything and says nothing anywhere.
      */
-    public static InstaLogger create(
+    public static ManagedLogger create(
             PrintStream console,
+            PrintStream diagnostics,
             boolean consoleEnabled,
+            String configuredMode,
             String lokiUrl,
             String lokiTenantId,
             String logFileName) {
-        List<Logger> sinks = new ArrayList<>();
-        List<AutoCloseable> closeables = new ArrayList<>();
-        ConsoleLogger reporter = new ConsoleLogger(APP_NAME, console, console);
-
-        if (consoleEnabled) {
-            sinks.add(reporter);
-        }
-        if (isSet(logFileName)) {
-            try {
-                sinks.add(new JsonLogger(Path.of(logFileName)));
-            } catch (Exception exception) {
-                reporter.warn("Could not open the log file; continuing without it.", Map.of(
-                        "file", logFileName, "error", exception.toString()));
-            }
-        }
-        if (isSet(lokiUrl)) {
-            try {
-                LokiLogger loki = new LokiLogger(APP_NAME, URI.create(lokiUrl), lokiTenantId);
-                sinks.add(loki);
-                closeables.add(loki);
-            } catch (Exception exception) {
-                reporter.warn("Could not start the Loki sink; continuing without it.", Map.of(
-                        "url", lokiUrl, "error", exception.toString()));
-            }
-        }
-
-        // FailSafeLogger last, so a sink that fails mid-run cannot take a lookup down with it.
-        return new InstaLogger(new FailSafeLogger(new CompositeLogger(sinks)), closeables);
+        LoggerMode mode = LoggerMode.parseOrDefault(configuredMode, defaultMode(lokiUrl, logFileName));
+        PrintStream sink = consoleEnabled ? console : DISCARD;
+        return LoggerSetup.create(
+                APP_NAME, mode, lokiUrl, lokiTenantId, diskFile(logFileName), sink, sink, diagnostics);
     }
 
-    @Override
-    public void log(LogEntry entry) {
-        delegate.log(entry);
+    /**
+     * What insta does when {@code LOGGER} is unset. It is deliberately <em>not</em>
+     * {@link LoggerSetup#defaultMode(String)}: on a server the file sink appears only where
+     * {@code LOGGER} asks for one, but here {@code LOGGING_FILE_NAME} has always meant "also write
+     * this file", and every existing insta configuration predates {@code LOGGER}. Deriving the mode
+     * from which keys are set keeps all of them working unchanged; naming {@code LOGGER} overrides
+     * the lot.
+     */
+    static LoggerMode defaultMode(String lokiUrl, String logFileName) {
+        boolean loki = isSet(lokiUrl);
+        boolean disk = isSet(logFileName);
+        if (loki && disk) {
+            return LoggerMode.BOTH;
+        }
+        if (loki) {
+            return LoggerMode.LOKI;
+        }
+        return disk ? LoggerMode.DISK : LoggerMode.CONSOLE;
     }
 
-    /** Drains anything a sink is holding. Safe to call once; {@link InstaCli} does exactly that. */
-    @Override
-    public void close() {
-        for (AutoCloseable closeable : closeables) {
-            try {
-                closeable.close();
-            } catch (Exception exception) {
-                // Nothing useful is left to log to — the sinks are what is shutting down.
-                continue;
-            }
-        }
+    /**
+     * insta names the file outright where a server names the directory holding Spring's log, so
+     * {@code LOGGING_FILE_NAME} is used as given. Unset, the shared default applies — it is only
+     * reached by an explicit {@code LOGGER=disk}, since {@link #defaultMode} does not pick a disk
+     * mode without a filename.
+     */
+    private static Path diskFile(String logFileName) {
+        return isSet(logFileName)
+                ? Path.of(logFileName.trim())
+                : LoggerSetup.defaultDiskFile(APP_NAME);
     }
 
     private static boolean isSet(String value) {

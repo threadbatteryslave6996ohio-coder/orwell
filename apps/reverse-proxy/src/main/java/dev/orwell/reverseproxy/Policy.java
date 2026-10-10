@@ -19,4 +19,15 @@ public interface Policy {
     default String name() {
         return getClass().getSimpleName();
     }
+
+    /**
+     * What this policy is, in enough detail that two differently-configured instances of the same
+     * class do not look identical. {@link PolicyChain#fingerprint()} digests these, so a policy that
+     * reports only its name makes a change to its own configuration invisible in the audit — which
+     * is the whole question the fingerprint exists to answer ("was this allowed under today's
+     * rules, or yesterday's?"). Override it wherever configuration decides what the policy does.
+     */
+    default String signature() {
+        return name();
+    }
 }

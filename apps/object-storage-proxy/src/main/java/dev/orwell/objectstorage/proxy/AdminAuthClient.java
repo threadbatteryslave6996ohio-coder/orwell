@@ -3,6 +3,7 @@ package dev.orwell.objectstorage.proxy;
 import dev.orwell.auth.http.api.LoginHttpResponse;
 import dev.orwell.auth.http.client.HttpAuthenticationException;
 import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
+import dev.orwell.logging.Logger;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -36,8 +37,9 @@ public class AdminAuthClient {
     private final FileAuditLogger audit;
 
     @Autowired
-    public AdminAuthClient(ProxyProperties properties, FileAuditLogger audit) {
-        this(new HttpAuthenticationStrategy(properties.adminAuth().baseUrl()), audit);
+    public AdminAuthClient(ProxyProperties properties, FileAuditLogger audit, Logger logger) {
+        this(new HttpAuthenticationStrategy(
+                properties.adminAuth().baseUrl(), properties.adminAuth().workspace(), logger), audit);
     }
 
     AdminAuthClient(HttpAuthenticationStrategy strategy, FileAuditLogger audit) {
@@ -53,17 +55,8 @@ public class AdminAuthClient {
             audit.write("adminauth.login.response", Map.of("clientId", clientId, "statusCode", 200));
             boolean success = response.token() != null && !response.token().isBlank();
             return new AuthServerClient.AuthCallResult(success, 200, response.clientId(), response.token());
-        } catch (HttpAuthenticationException exception) {
-            Integer statusCode = exception.statusCode();
-            if (statusCode != null) {
-                audit.write("adminauth.login.response_error", Map.of("clientId", clientId, "statusCode", statusCode));
-                return new AuthServerClient.AuthCallResult(false, statusCode, null, null);
-            }
-            audit.write("adminauth.login.error", Map.of("clientId", clientId, "error", String.valueOf(exception.getMessage())));
-            return new AuthServerClient.AuthCallResult(false, 503, null, null);
         } catch (Exception exception) {
-            audit.write("adminauth.login.error", Map.of("clientId", clientId, "error", String.valueOf(exception.getMessage())));
-            return new AuthServerClient.AuthCallResult(false, 503, null, null);
+            return AuthCalls.failure(audit, "adminauth.login", clientId, null, exception);
         }
     }
 

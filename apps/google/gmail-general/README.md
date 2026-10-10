@@ -453,7 +453,7 @@ Inline images (`inline: true`) are the parts an HTML body references as `src="ci
 ## Build and run
 
 ```bash
-docker compose -f docker-compose.all-services.yml up -d db
+docker compose -f docker-compose.storages.yml up -d db
 mvn -pl apps/google/gmail-general -am package
 java -jar apps/google/gmail-general/target/gmail-general-0.1.0-SNAPSHOT-exec.jar
 ```

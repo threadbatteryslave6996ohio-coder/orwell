@@ -1,5 +1,6 @@
 package dev.orwell.liveness;
 
+import dev.orwell.bootstrap.schedule.ScheduledJob;
 import dev.orwell.bootstrap.web.SharedJson;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -7,10 +8,15 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import dev.orwell.http.LoggingHttpClient;
+import dev.orwell.logging.Logger;
+
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -18,8 +24,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Polls Loki for client heartbeats on a schedule and decides, per client, whether it has gone
@@ -29,9 +33,16 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Component
 public class LivenessService {
+    /**
+     * Below this many clients the fuse never applies: with one or two clients, "all of them" is an
+     * ordinary outage rather than a signal that the heartbeat source itself failed.
+     */
+    static final int MIN_CLIENTS_FOR_FUSE = 3;
+
     private final int checkIntervalSeconds;
     private final int lookbackSeconds;
     private final int thresholdSeconds;
+    private final int maxDownPercent;
     private final Set<String> expectedClients;
     private final HeartbeatSource heartbeatSource;
     private final Alerter alerter;
@@ -39,14 +50,8 @@ public class LivenessService {
 
     private final Set<String> downClients = ConcurrentHashMap.newKeySet();
     private final Map<String, Sighting> statuses = new ConcurrentHashMap<>();
-    private final AtomicBoolean checkInProgress = new AtomicBoolean(false);
-    private final AtomicLong checksTotal = new AtomicLong();
-    private final AtomicLong alertsSentTotal = new AtomicLong();
-    private final AtomicLong alertsRejectedTotal = new AtomicLong();
-    private final AtomicLong errorsTotal = new AtomicLong();
-    private volatile Instant lastRunAt;
-    private volatile Instant lastAlertAt;
-    private volatile String lastError = "";
+    /** Single-flight guard, run counters and the shared {@code /health} keys. */
+    private final ScheduledJob job = new ScheduledJob("check");
 
     @Autowired
     public LivenessService(
@@ -60,17 +65,25 @@ public class LivenessService {
             @Value("${liveness.grafana-loki-datasource-uid}") String grafanaLokiDatasourceUid,
             @Value("${liveness.loki-query}") String lokiQuery,
             @Value("${liveness.alert-url}") String alertUrl,
-            @Value("${liveness.alert-cooldown-seconds}") int cooldownSeconds
+            @Value("${liveness.alert-cooldown-seconds}") int cooldownSeconds,
+            @Value("${liveness.max-down-percent}") int maxDownPercent,
+            Logger logger
     ) {
-        this(checkIntervalSeconds, lookbackSeconds, thresholdSeconds, parseClients(expectedClients),
+        this(checkIntervalSeconds, lookbackSeconds, thresholdSeconds, maxDownPercent,
+                parseClients(expectedClients),
                 new LokiHeartbeatClient(grafanaUrl, grafanaApiToken, grafanaLokiDatasourceUid, lokiQuery,
-                        maxLogLines, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build()),
-                new AlertClient(alertUrl,
-                        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(),
-                        SharedJson.mapper()),
+                        maxLogLines, httpClient(logger)),
+                new AlertClient(alertUrl, httpClient(logger), SharedJson.mapper()),
                 new AlertCooldownTracker(cooldownSeconds));
     }
 
+    /** Grafana and the alert endpoint each get their own connection pool, both recorded. */
+    private static HttpClient httpClient(Logger logger) {
+        return LoggingHttpClient.wrap(
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(), logger);
+    }
+
+    /** Existing tests build a service with the fuse at its default. */
     LivenessService(
             int checkIntervalSeconds,
             int lookbackSeconds,
@@ -80,9 +93,24 @@ public class LivenessService {
             Alerter alerter,
             AlertCooldownTracker cooldownTracker
     ) {
+        this(checkIntervalSeconds, lookbackSeconds, thresholdSeconds, 100, expectedClients,
+                heartbeatSource, alerter, cooldownTracker);
+    }
+
+    LivenessService(
+            int checkIntervalSeconds,
+            int lookbackSeconds,
+            int thresholdSeconds,
+            int maxDownPercent,
+            Set<String> expectedClients,
+            HeartbeatSource heartbeatSource,
+            Alerter alerter,
+            AlertCooldownTracker cooldownTracker
+    ) {
         this.checkIntervalSeconds = checkIntervalSeconds;
         this.lookbackSeconds = lookbackSeconds;
         this.thresholdSeconds = thresholdSeconds;
+        this.maxDownPercent = maxDownPercent;
         this.expectedClients = expectedClients;
         this.heartbeatSource = heartbeatSource;
         this.alerter = alerter;
@@ -91,11 +119,7 @@ public class LivenessService {
 
     @Scheduled(fixedRateString = "${liveness.check-interval-seconds}", timeUnit = TimeUnit.SECONDS)
     void scheduledCheck() {
-        try {
-            checkOnce();
-        } catch (Exception exception) {
-            recordFailure(exception);
-        }
+        job.runSafely(this::runCheck);
     }
 
     /**
@@ -103,29 +127,16 @@ public class LivenessService {
      * handler both call this, and a slow Loki or alert round trip can outlive the interval.
      */
     public Map<String, Object> checkOnce() throws IOException, InterruptedException {
-        if (!checkInProgress.compareAndSet(false, true)) {
-            Map<String, Object> busy = new LinkedHashMap<>();
-            busy.put("success", false);
-            busy.put("skipped", true);
-            busy.put("summary", "A check is already in progress.");
-            return busy;
-        }
-        try {
-            return runCheck();
-        } finally {
-            checkInProgress.set(false);
-        }
+        return job.runOnce(this::runCheck);
     }
 
     public void recordRunOnceFailure(Exception exception) {
-        recordFailure(exception);
+        job.recordFailure(exception);
     }
 
-    private Map<String, Object> runCheck() throws IOException, InterruptedException {
-        checksTotal.incrementAndGet();
-        Instant now = Instant.now();
-        lastRunAt = now;
-
+    /** {@code now} is the instant the run was stamped with, so a client's age is measured against
+     * the same timestamp {@code /health} reports as {@code lastRunAt}. */
+    private Map<String, Object> runCheck(Instant now) throws IOException, InterruptedException {
         Map<String, Instant> latest = heartbeatSource.latestHeartbeats(lookbackSeconds);
 
         // Check every client we expect plus every client we actually saw, so a configured client
@@ -133,17 +144,32 @@ public class LivenessService {
         Set<String> candidates = new TreeSet<>(expectedClients);
         candidates.addAll(latest.keySet());
 
-        int downCount = 0;
+        // Decide first, alert second. The fuse below needs the whole picture, and alerting inside
+        // this loop would already have sent half of them by the time the total was known.
+        List<String> downNow = new ArrayList<>();
         for (String clientId : candidates) {
             Instant seen = latest.get(clientId);
             boolean down = seen == null || Duration.between(seen, now).getSeconds() > thresholdSeconds;
             statuses.put(clientId, new Sighting(down ? "down" : "up", seen));
             if (down) {
-                downCount++;
-                handleDown(clientId, seen, now);
+                downNow.add(clientId);
             } else {
                 handleUp(clientId);
             }
+        }
+        int downCount = downNow.size();
+
+        String refusal = refusedBecause(downCount, candidates.size());
+        if (refusal == null) {
+            for (String clientId : downNow) {
+                handleDown(clientId, latest.get(clientId), now);
+            }
+        } else {
+            // The status map and downClients still say what was observed — only the dispatch is
+            // held. An operator looking at /health sees every client down *and* the reason the
+            // alerts did not go out, which is strictly more information than N alerts would carry.
+            downClients.addAll(downNow);
+            job.recordAlertRejected(refusal);
         }
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -153,7 +179,38 @@ public class LivenessService {
         response.put("summary", downCount == 0
                 ? "All " + candidates.size() + " client(s) alive."
                 : downCount + " of " + candidates.size() + " client(s) down.");
+        if (refusal != null) {
+            response.put("alertsSuppressed", true);
+            response.put("alertsSuppressedReason", refusal);
+        }
         return response;
+    }
+
+    /**
+     * Why a check was not believed, or {@code null} when it was.
+     *
+     * <p>A heartbeat source that answers with nothing is indistinguishable from every client dying
+     * in the same second, and the ways to get an empty answer are mundane: Loki restarted, its
+     * retention is shorter than the lookback window, a label changed, or this service is pointed at
+     * a different Loki than the one the clients push to. Any of them turns a monitoring service into
+     * a pager storm. So a check at or above the fuse is reported loudly and not dispatched — the
+     * same reasoning as insta's {@code INSTA_MAX_RETIRE_PERCENT}, which refuses to believe a walk
+     * that would retire implausibly many followers at once.
+     *
+     * <p>The default is 100%, so this only ever withholds on a total wipeout; any partial outage
+     * alerts exactly as before.
+     */
+    private String refusedBecause(int downCount, int checked) {
+        if (maxDownPercent <= 0 || downCount == 0 || checked < MIN_CLIENTS_FOR_FUSE) {
+            return null;
+        }
+        if (downCount * 100 < maxDownPercent * checked) {
+            return null;
+        }
+        return ("%d of %d clients reported down in a single check, at or above the %d%% fuse. "
+                + "Treating this as a heartbeat-source failure rather than a simultaneous outage; "
+                + "no alerts were sent. Check that Loki is reachable and holds the lookback window.")
+                .formatted(downCount, checked, maxDownPercent);
     }
 
     private void handleDown(String clientId, Instant lastSeen, Instant now) {
@@ -167,23 +224,18 @@ public class LivenessService {
         }
         try {
             switch (alerter.sendClientDown(clientId, lastSeen, thresholdSeconds)) {
-                case DELIVERED -> {
-                    alertsSentTotal.incrementAndGet();
-                    lastAlertAt = Instant.now();
-                }
-                case REJECTED -> {
-                    // Terminal: hold the cooldown so a broken alert pipeline is not hammered, and
-                    // surface it on /health rather than failing silently.
-                    alertsRejectedTotal.incrementAndGet();
-                    lastError = "Alert service rejected the liveness alert for " + clientId + ".";
-                }
+                case DELIVERED -> job.recordAlertDelivered();
+                // Terminal: hold the cooldown so a broken alert pipeline is not hammered, and
+                // surface it on /health rather than failing silently.
+                case REJECTED -> job.recordAlertRejected(
+                        "Alert service rejected the liveness alert for " + clientId + ".");
                 case FAILED -> cooldownTracker.rollback(clientId, nowSeconds);
             }
         } catch (IOException | InterruptedException exception) {
             // Transient network failure delivering the alert: free the slot so the next check
             // retries, and keep checking the remaining clients.
             cooldownTracker.rollback(clientId, nowSeconds);
-            recordFailure(exception);
+            job.recordFailure(exception);
             if (exception instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
@@ -195,11 +247,6 @@ public class LivenessService {
         if (downClients.remove(clientId)) {
             cooldownTracker.clear(clientId);
         }
-    }
-
-    private void recordFailure(Exception exception) {
-        errorsTotal.incrementAndGet();
-        lastError = String.valueOf(exception.getMessage());
     }
 
     /** Current metrics and per-client status, surfaced on the shared {@code GET /health}. */
@@ -215,18 +262,15 @@ public class LivenessService {
             clients.put(clientId, detail);
         });
 
+        // This service's own configuration, then the run counters every scheduled job reports
+        // (checksTotal, alerts, errors, timestamps), then what it saw.
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("checkIntervalSeconds", checkIntervalSeconds);
         response.put("thresholdSeconds", thresholdSeconds);
+        response.put("maxDownPercent", maxDownPercent);
         response.put("lookbackSeconds", lookbackSeconds);
         response.put("expectedClients", new LinkedHashSet<>(expectedClients));
-        response.put("checksTotal", checksTotal.get());
-        response.put("alertsSentTotal", alertsSentTotal.get());
-        response.put("alertsRejectedTotal", alertsRejectedTotal.get());
-        response.put("errorsTotal", errorsTotal.get());
-        response.put("lastRunAt", lastRunAt == null ? null : lastRunAt.toString());
-        response.put("lastAlertAt", lastAlertAt == null ? null : lastAlertAt.toString());
-        response.put("lastError", lastError);
+        response.putAll(job.healthDetails());
         response.put("clients", clients);
         return response;
     }

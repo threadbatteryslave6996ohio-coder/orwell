@@ -1,191 +1,94 @@
 #!/bin/bash
+set -euo pipefail
 
-# Keeboarder macOS - Management Script
-# Tool for managing the record-only recorder
+# Jarvis macOS recorder — management commands.
+# Colours, print helpers and the retention sweep come from the shared library; what stays here is
+# the launchd half, which has no Ubuntu equivalent.
 
-set -e
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/console.sh
+source "$SCRIPT_DIR/../lib/console.sh"
+# shellcheck source=config.sh
 source "$SCRIPT_DIR/config.sh"
 
-# ============================================================
-# Functions
-# ============================================================
+LAUNCHAGENT_PLIST="$HOME/Library/LaunchAgents/$LAUNCHAGENT_LABEL.plist"
 
-print_header() {
-    echo ""
-    echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}$1${NC}"
-    echo -e "${BLUE}========================================${NC}"
-    echo ""
-}
-
-print_section() {
-    echo -e "${YELLOW}$1${NC}"
-}
-
-print_success() {
-    echo -e "${GREEN}✓ $1${NC}"
-}
-
-print_error() {
-    echo -e "${RED}✗ $1${NC}"
-}
-
-print_info() {
-    echo "  $1"
-}
-
-# Start all services
 start_all() {
-    print_header "Starting Keeboarder Services"
+    print_header "Starting Jarvis Recorder"
 
     print_section "Starting recorder..."
-    launchctl load ~/Library/LaunchAgents/com.keeboarder.recorder.plist 2>/dev/null || true
+    launchctl load "$LAUNCHAGENT_PLIST" 2>/dev/null || true
     sleep 2
 
-    if ps aux | grep -q "[s]tart_recorder"; then
+    if pgrep -f start_recorder.sh >/dev/null 2>&1; then
         print_success "Recorder is running"
     else
         print_error "Recorder failed to start"
     fi
 }
 
-# Stop all services
 stop_all() {
-    print_header "Stopping Keeboarder Services"
+    print_header "Stopping Jarvis Recorder"
 
     print_section "Stopping recorder..."
-    launchctl unload ~/Library/LaunchAgents/com.keeboarder.recorder.plist 2>/dev/null || true
+    launchctl unload "$LAUNCHAGENT_PLIST" 2>/dev/null || true
+    # The recorder's own SIGTERM handler stops its captures; these are the belt-and-braces sweep
+    # for a recorder that was killed rather than asked to stop and left ffmpeg behind.
     pkill -f start_recorder.sh || true
     pkill -f ffmpeg || true
     sleep 1
 
-    if ! ps aux | grep -q "[s]tart_recorder"; then
-        print_success "Recorder stopped"
-    else
+    if pgrep -f start_recorder.sh >/dev/null 2>&1; then
         print_error "Recorder still running"
+    else
+        print_success "Recorder stopped"
     fi
 }
 
-# Restart all services
 restart_all() {
-    print_header "Restarting Keeboarder Services"
+    print_header "Restarting Jarvis Recorder"
 
     stop_all
     sleep 2
     start_all
 }
 
-# Show status
 show_status() {
-    print_header "Keeboarder System Status"
+    print_header "Jarvis Recorder Status"
 
     print_section "Recorder Status"
-    if ps aux | grep -q "[f]fmpeg"; then
+    if pgrep -x ffmpeg >/dev/null 2>&1; then
         print_success "FFmpeg is running"
-        ps aux | grep "[f]fmpeg" | awk '{print "  PID " $2}'
+        pgrep -x ffmpeg | while read -r pid; do print_info "PID $pid"; done
     else
         print_error "FFmpeg is not running"
     fi
 
-    if launchctl list | grep -q "com.keeboarder.recorder"; then
+    if launchctl list | grep -q "$LAUNCHAGENT_LABEL"; then
         print_success "LaunchAgent is loaded"
     else
         print_error "LaunchAgent is not loaded"
     fi
 
-    print_section "Disk Usage"
-    if [ -d "$RECORDINGS_DIR" ]; then
-        local size=$(du -sh "$RECORDINGS_DIR" | cut -f1)
-        print_info "Recording directory: $size"
-        print_info "Path: $RECORDINGS_DIR"
-
-        if [ -d "$SCREEN_DIR" ]; then
-            local screen_size=$(du -sh "$SCREEN_DIR" | cut -f1)
-            print_info "  Screen recordings: $screen_size"
-        fi
-
-        if [ -d "$MIC_DIR" ]; then
-            local mic_size=$(du -sh "$MIC_DIR" | cut -f1)
-            print_info "  Microphone recordings: $mic_size"
-        fi
-
-        if [ -d "$SYSTEM_AUDIO_DIR" ]; then
-            local audio_size=$(du -sh "$SYSTEM_AUDIO_DIR" | cut -f1)
-            print_info "  System audio: $audio_size"
-        fi
-    fi
+    echo ""
+    print_disk_usage
 }
 
-# Show logs
 show_logs() {
     print_header "Recent Logs"
-
-    if [ -n "$1" ] && [ "$1" != "all" ]; then
-        local log_type="$1"
-    else
-        local log_type="all"
-    fi
-
-    case "$log_type" in
+    case "${1:-all}" in
         recorder)
-            print_section "Recorder Log:"
-            if [ -f "$LOGS_DIR/recorder.log" ]; then
-                tail -50 "$LOGS_DIR/recorder.log"
-            else
-                print_error "Log file not found"
-            fi
+            print_recorder_log 50
             ;;
         *)
-            print_section "Last 20 Recorder Entries:"
-            if [ -f "$LOGS_DIR/recorder.log" ]; then
-                tail -20 "$LOGS_DIR/recorder.log"
-            else
-                print_error "Log file not found"
-            fi
+            print_recorder_log 20
             ;;
     esac
 }
 
-# Clean up old files
-cleanup_old_files() {
-    print_header "Cleaning Up Old Local Files"
-
-    if [ -z "$1" ]; then
-        local days=7
-    else
-        local days="$1"
-    fi
-
-    print_section "Removing files older than $days days..."
-
-    local file_count=0
-
-    for dir in "$SCREEN_DIR" "$MIC_DIR" "$SYSTEM_AUDIO_DIR"; do
-        if [ -d "$dir" ]; then
-            while IFS= read -r file; do
-                print_info "Removing: $(basename "$file")"
-                rm -f "$file"
-                ((++file_count))
-            done < <(find "$dir" -maxdepth 1 -type f -mtime +$days)
-        fi
-    done
-
-    print_success "Removed $file_count old files"
-}
-
-# Show detailed status
+# The configured device names, which are the usual reason a fresh install records nothing.
 full_status() {
-    print_header "Keeboarder Full System Report"
+    print_header "Jarvis Recorder Full Report"
 
     print_section "Configuration"
     print_info "Device: $DEVICE_HOSTNAME"
@@ -197,13 +100,9 @@ full_status() {
     show_status
 }
 
-# ============================================================
-# Main Menu
-# ============================================================
-
 print_usage() {
     cat << EOF
-${BLUE}Keeboarder macOS Management Tool${NC}
+${BLUE}Jarvis macOS Recorder Management Tool${NC}
 
 ${YELLOW}Usage:${NC}
   ./manage.sh [command] [options]
@@ -231,7 +130,6 @@ ${YELLOW}Uploads:${NC}
 EOF
 }
 
-# Main dispatch
 if [ $# -eq 0 ]; then
     print_usage
     show_status
@@ -255,10 +153,10 @@ case "$1" in
         full_status
         ;;
     logs)
-        show_logs "$2"
+        show_logs "${2:-all}"
         ;;
     cleanup)
-        cleanup_old_files "$2"
+        cleanup_old_files "${2:-7}"
         ;;
     help|--help|-h)
         print_usage

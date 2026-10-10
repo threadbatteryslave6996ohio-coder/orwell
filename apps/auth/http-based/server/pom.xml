@@ -29,6 +29,11 @@
             <groupId>dev.orwell</groupId>
             <artifactId>klippy-utils</artifactId>
         </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>server-test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

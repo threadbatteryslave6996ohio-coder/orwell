@@ -9,8 +9,6 @@ import dev.orwell.env.Env;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
-import java.util.LinkedHashMap;
-
 @SpringBootApplication(proxyBeanMethods = false)
 class AlertSpringApplication {
     private static final AppServer SERVER =
@@ -28,12 +26,9 @@ class AlertSpringApplication {
         return new AlertEndpoint(service);
     }
 
+    /** {@code engine} is stamped by {@code SharedHealthController}, not here. */
     @Bean
     HealthDetailsProvider alertHealthDetailsProvider(AlertEndpoint endpoint) {
-        return () -> {
-            var details = new LinkedHashMap<>(endpoint.healthDetails());
-            details.put("engine", "spring");
-            return details;
-        };
+        return endpoint::healthDetails;
     }
 }

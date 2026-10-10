@@ -36,8 +36,8 @@ public final class BackupLauncher {
         runner.run(projects);
 
         logger.info("Cleaning up expired backups.", Map.of("retentionDays", retentionDays));
-        runner.cleanUp();
-        runner.cleanUpEmptyDirs();
+        runner.cleanUp(projects);
+        runner.cleanUpEmptyDirs(projects);
 
         logger.info("Backup complete.");
     }

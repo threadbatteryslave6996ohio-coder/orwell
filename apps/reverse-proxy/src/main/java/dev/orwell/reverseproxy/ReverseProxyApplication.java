@@ -44,12 +44,34 @@ public class ReverseProxyApplication {
         return new UpstreamClient(upstreamUrl, Duration.ofSeconds(timeoutSeconds));
     }
 
+    /**
+     * The audit store, or {@link AuditStore#DISABLED} when no datasource is configured. Spring
+     * calls {@code close()} on it at shutdown, which is what drains the last queued records.
+     */
     @Bean
-    ProxyEndpoint proxyEndpoint(PolicyChain policies, UpstreamClient upstream, Logger logger) {
+    AuditStore auditStore(
+            @Value("${proxy.audit.datasource-url:}") String url,
+            @Value("${proxy.audit.datasource-username:}") String username,
+            @Value("${proxy.audit.datasource-password:}") String password,
+            @Value("${proxy.audit.queue-depth:10000}") int queueDepth,
+            @Value("${proxy.audit.retention-days:30}") int retentionDays,
+            Logger logger
+    ) {
+        if (url.isBlank()) {
+            logger.warn("PROXY_AUDIT_DATASOURCE_URL is unset; requests are logged but not stored, "
+                    + "so there is no audit table to query.", Map.of());
+            return AuditStore.DISABLED;
+        }
+        return new JdbcAuditStore(url, username, password, queueDepth,
+                Duration.ofDays(Math.max(0, retentionDays)), logger);
+    }
+
+    @Bean
+    ProxyEndpoint proxyEndpoint(PolicyChain policies, UpstreamClient upstream, Logger logger, AuditStore audit) {
         logger.info("Reverse proxy policies loaded.", Map.of(
                 "upstream", upstream.upstreamUrl(),
                 "policies", policies.names()));
-        return new ProxyEndpoint(policies, upstream, logger);
+        return new ProxyEndpoint(policies, upstream, logger, audit);
     }
 
     @Bean

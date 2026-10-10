@@ -3,7 +3,6 @@ package dev.orwell.insta.instagram;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.orwell.insta.InstaJson;
-import dev.orwell.insta.apify.ActorRun;
 import dev.orwell.insta.apify.ApifyClient;
 import dev.orwell.insta.apify.ApifyException;
 import dev.orwell.insta.cache.ScrapeCache;
@@ -61,7 +60,7 @@ public class InstagramService {
     private final ApifyClient apify;
     private final ScrapeCache cache;
     private final String profileActor;
-    private final List<ConnectionsAdapter> adapters;
+    private final List<ConnectionsSource> sources;
     private final int defaultLimit;
     private final int maxLimit;
     private final Logger logger;
@@ -70,14 +69,14 @@ public class InstagramService {
             ApifyClient apify,
             ScrapeCache cache,
             String profileActor,
-            List<ConnectionsAdapter> adapters,
+            List<ConnectionsSource> sources,
             int defaultLimit,
             int maxLimit,
             Logger logger) {
         this.apify = Objects.requireNonNull(apify, "apify");
         this.cache = Objects.requireNonNull(cache, "cache");
         this.profileActor = Objects.requireNonNull(profileActor, "profileActor");
-        this.adapters = List.copyOf(Objects.requireNonNull(adapters, "adapters"));
+        this.sources = List.copyOf(Objects.requireNonNull(sources, "sources"));
         this.defaultLimit = defaultLimit;
         this.maxLimit = maxLimit;
         this.logger = Objects.requireNonNull(logger, "logger");
@@ -217,30 +216,30 @@ public class InstagramService {
      */
     private ConnectionsPage fetchFromFirstWillingAdapter(
             String username, ConnectionType type, int limit, ConnectionCursor resume) {
-        List<ConnectionsAdapter> candidates = resume == null
-                ? adapters.stream().filter(adapter -> adapter.supports(type)).toList()
-                : adapters.stream().filter(a -> a.name().equals(resume.adapter())).toList();
+        List<ConnectionsSource> candidates = resume == null
+                ? sources.stream().filter(source -> source.supports(type)).toList()
+                : sources.stream().filter(s -> s.name().equals(resume.adapter())).toList();
         if (candidates.isEmpty()) {
             throw new ApifyException(resume == null
-                    ? "No configured actor can scrape " + type.name().toLowerCase(Locale.ROOT) + "."
-                    : "The actor that issued that cursor (" + resume.adapter()
+                    ? "No configured source can scrape " + type.name().toLowerCase(Locale.ROOT) + "."
+                    : "The source that issued that cursor (" + resume.adapter()
                             + ") is no longer configured.",
                     ApifyException.Kind.UNAVAILABLE);
         }
 
         ApifyException lastFailure = null;
         for (int index = 0; index < candidates.size(); index++) {
-            ConnectionsAdapter adapter = candidates.get(index);
+            ConnectionsSource source = candidates.get(index);
             try {
-                return fetch(adapter, username, type, limit, resume);
+                return fetch(source, username, type, limit, resume);
             } catch (ApifyException failure) {
                 boolean more = index < candidates.size() - 1;
                 if (!more || !WORTH_FAILING_OVER.contains(failure.kind())) {
                     throw failure;
                 }
-                logger.warn("Falling back to the next connections actor.", Map.of(
+                logger.warn("Falling back to the next connections source.", Map.of(
                         "username", username,
-                        "exhausted", adapter.name(),
+                        "exhausted", source.name(),
                         "kind", failure.kind().name(),
                         "next", candidates.get(index + 1).name()));
                 lastFailure = failure;
@@ -250,23 +249,21 @@ public class InstagramService {
     }
 
     private ConnectionsPage fetch(
-            ConnectionsAdapter adapter, String username, ConnectionType type, int limit,
+            ConnectionsSource source, String username, ConnectionType type, int limit,
             ConnectionCursor resume) {
         String token = resume == null ? null : resume.token();
-        ActorRun run = runForOutput(
-                adapter.actorId(), adapter.input(username, type, limit, token), limit, username);
-        adapter.verify(run.output());
+        ConnectionsSource.Result result = source.fetch(username, type, limit, token);
 
-        List<InstagramAccount> accounts = accountsIn(run.items(), username, type);
-        String nextToken = adapter.supportsCursor() ? adapter.nextToken(run.output()) : null;
-        // An actor without pagination can never establish the end of a list. A short page looks
+        List<InstagramAccount> accounts = accountsIn(result.items(), username, type);
+        String nextToken = source.supportsCursor() ? result.nextToken() : null;
+        // A source without pagination can never establish the end of a list. A short page looks
         // like proof and is not: datadoping returned 48 for a limit of 50 on an account with 441
-        // followers, so "fewer than asked" means the actor stopped, not that there is no more.
+        // followers, so "fewer than asked" means the source stopped, not that there is no more.
         // Such a walk therefore never completes, and never retires an edge — it can only add.
-        boolean endOfList = adapter.supportsCursor() && nextToken == null;
+        boolean endOfList = source.supportsCursor() && nextToken == null;
         return new ConnectionsPage(accounts, nextToken == null
                 ? null
-                : new ConnectionCursor(username, type, adapter.name(), nextToken).encode(),
+                : new ConnectionCursor(username, type, source.name(), nextToken).encode(),
                 endOfList);
     }
 
@@ -302,15 +299,6 @@ public class InstagramService {
             String actor, Map<String, Object> input, int maxItems, String username) {
         try {
             return apify.runActor(actor, input, maxItems);
-        } catch (ApifyException exception) {
-            throw logged(exception, actor, username);
-        }
-    }
-
-    private ActorRun runForOutput(
-            String actor, Map<String, Object> input, int maxItems, String username) {
-        try {
-            return apify.runActorWithOutput(actor, input, maxItems);
         } catch (ApifyException exception) {
             throw logged(exception, actor, username);
         }

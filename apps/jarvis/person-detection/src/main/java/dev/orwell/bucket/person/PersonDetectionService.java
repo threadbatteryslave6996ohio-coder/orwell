@@ -2,12 +2,14 @@ package dev.orwell.bucket.person;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.orwell.bucket.frame.client.Frame;
+import dev.orwell.http.LoggingHttpClient;
 import dev.orwell.logging.Logger;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,12 +37,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  * re-fetches what was dropped on the next reconnect.
  */
 public class PersonDetectionService {
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+
     private final String alertUrl;
     private final PersonDetector detector;
     private final CooldownTracker cooldowns;
     private final Logger logger;
     private final ObjectMapper mapper = new ObjectMapper();
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final HttpClient httpClient;
     private final AtomicInteger framesExaminedTotal = new AtomicInteger();
     private final AtomicInteger detectionsTotal = new AtomicInteger();
     private final AtomicInteger alertsSentTotal = new AtomicInteger();
@@ -50,6 +55,8 @@ public class PersonDetectionService {
             String alertUrl, int cooldownSeconds, double minConfidence, Logger logger) {
         this.alertUrl = Objects.requireNonNull(alertUrl, "alertUrl");
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.httpClient = LoggingHttpClient.wrap(
+                HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build(), logger);
         this.cooldowns = new CooldownTracker(cooldownSeconds);
         this.detector = new HogPersonDetector(minConfidence);
     }
@@ -124,6 +131,9 @@ public class PersonDetectionService {
         alert.put("boxes", detections);
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(alertUrl))
+                    // This runs on the frame listener, so an alerting service that accepts the
+                    // request and then stalls would stop frames being consumed at all.
+                    .timeout(REQUEST_TIMEOUT)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(alert)))
                     .build();

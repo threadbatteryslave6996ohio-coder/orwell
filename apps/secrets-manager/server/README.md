@@ -75,8 +75,9 @@ registered in the client auth server is an accessor.
 
 There is no admin or accessor table, and no auth material — passwords, tokens,
 or client secrets — is stored in this service's database. Granting or revoking
-either role is done in the corresponding auth deployment via its `/identities`
-API, not here.
+either role is done in the corresponding auth deployment via its
+`/{workspace}/identities` API, not here — which itself needs a token from that
+deployment's `admin` workspace.
 
 The two beans are wired in `auth/SecretsAuthConfiguration.java` as distinct
 wrapper types (`AdminAuth`, `ClientAuth`) rather than two `AuthenticationStrategy`

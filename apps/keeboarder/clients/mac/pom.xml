@@ -15,6 +15,10 @@
 
     <dependencies>
         <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.glassfish.tyrus.bundles</groupId>
             <artifactId>tyrus-standalone-client</artifactId>
         </dependency>

@@ -2,7 +2,7 @@
 
 A pooled, namespaced handle on the one shared Redis.
 
-There is exactly one Redis in this repo (the `redis` service in `docker-compose.all-services.yml`),
+There is exactly one Redis in this repo (the `redis` service in `docker-compose.storages.yml`),
 so every app in it is a guest in the same keyspace. `RedisClient` makes that safe by construction:
 it takes a **prefix** and puts it in front of every key it touches, so keeboarder's `ws:` and
 insta's `insta:` can never collide no matter what key a caller passes.

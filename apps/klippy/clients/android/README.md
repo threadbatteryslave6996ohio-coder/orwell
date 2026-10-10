@@ -23,11 +23,19 @@ when you use the local defaults.
 Create a client identity and login with the auth server:
 
 ```bash
-curl -i http://localhost:8081/identities \
+# Creating an identity needs an admin token; see apps/auth/http-based/server/README.md for
+# where the first admin comes from.
+ADMIN_TOKEN=$(curl -s http://localhost:8081/admin/login \
   -H 'Content-Type: application/json' \
+  -d '{"clientId":"ops-admin","secret":"change-me-please"}' | jq -r .token)
+
+curl -i http://localhost:8081/def/identities \
+  -H 'Content-Type: application/json' \
+  -H "X-Client-Id: ops-admin" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{"clientId":"android-pixel-8","secret":"change-me-please"}'
 
-curl -s http://localhost:8081/login \
+curl -s http://localhost:8081/def/login \
   -H 'Content-Type: application/json' \
   -d '{"clientId":"android-pixel-8","secret":"change-me-please"}'
 ```

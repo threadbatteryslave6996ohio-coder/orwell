@@ -21,10 +21,14 @@ public record ProxyProperties(
 
     public record Azure(String accountName, String containerName, String endpoint, String connectionString) {}
 
-    public record AuthServer(String baseUrl, String identityProvisioningKey) {}
+    /**
+     * The upload clients' auth server: {@code workspace} is where their identities live, and the
+     * admin credentials are what this service provisions new ones with.
+     */
+    public record AuthServer(String baseUrl, String workspace, String adminClientId, String adminSecret) {}
 
     /** The auth deployment holding admin identities. See {@link AdminAuthClient} for why it is a second one. */
-    public record AdminAuth(String baseUrl) {}
+    public record AdminAuth(String baseUrl, String workspace) {}
 
     public record Cors(List<String> allowedOrigins) {}
 

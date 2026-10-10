@@ -3,6 +3,7 @@ package dev.orwell.objectstorage.proxy;
 import dev.orwell.objectstorage.proxy.storage.BucketStorage;
 import dev.orwell.auth.AuthenticationContext;
 import org.junit.jupiter.api.Test;
+import dev.orwell.testing.ObjectProviders;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -187,32 +188,7 @@ class ProxyControllerTest {
     }
 
     private static ObjectProvider<AuthenticationContext> provider(AuthenticationContext authenticationContext) {
-        return new ObjectProvider<>() {
-            @Override
-            public AuthenticationContext getObject(Object... args) {
-                return authenticationContext;
-            }
-
-            @Override
-            public AuthenticationContext getObject() {
-                return authenticationContext;
-            }
-
-            @Override
-            public AuthenticationContext getIfAvailable() {
-                return authenticationContext;
-            }
-
-            @Override
-            public AuthenticationContext getIfUnique() {
-                return authenticationContext;
-            }
-
-            @Override
-            public java.util.Iterator<AuthenticationContext> iterator() {
-                return java.util.List.of(authenticationContext).iterator();
-            }
-        };
+        return ObjectProviders.of(authenticationContext);
     }
 
     private static ProxyProperties properties(String serverUrl) {
@@ -222,8 +198,8 @@ class ProxyControllerTest {
                     new ProxyProperties.Storage("aws", 5L * 1024 * 1024 * 1024),
                     new ProxyProperties.S3("bucket", "us-east-1", null, false),
                     new ProxyProperties.Azure("account", "container", null, null),
-                    new ProxyProperties.AuthServer("http://localhost:8081", "provisioning-key"),
-                    new ProxyProperties.AdminAuth("http://localhost:8082"),
+                    new ProxyProperties.AuthServer("http://localhost:8081", "def", "ops-admin", "admin-secret"),
+                    new ProxyProperties.AdminAuth("http://localhost:8082", "def"),
                     new ProxyProperties.Cors(List.of()),
                     new ProxyProperties.Server(serverUrl),
                     new ProxyProperties.Logging(auditFile)
@@ -276,8 +252,8 @@ class ProxyControllerTest {
 
         private StubAuthServerClient(AuthServerClient.AuthCallResult result) {
             super(new dev.orwell.auth.http.client.HttpAuthenticationStrategy("http://localhost:8081"),
-                    org.springframework.web.client.RestClient.builder().baseUrl("http://localhost:8081").build(),
-                    "provisioning-key",
+                    new dev.orwell.auth.http.client.ClientAuthSession(
+                            "http://localhost:8081", "admin", "ops-admin", "admin-secret", null),
                     newFileAuditLogger(properties("http://localhost")));
             this.loginResult = result;
             this.identityResult = result;

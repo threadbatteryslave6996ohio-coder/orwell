@@ -3,6 +3,7 @@ package dev.orwell.clients.sync;
 import dev.orwell.clients.core.ClientAuthInitializer;
 import dev.orwell.clients.core.OfflineFileLockerFactory;
 import dev.orwell.clients.core.OfflineLogPath;
+import dev.orwell.auth.http.api.AuthWorkspaces;
 import dev.orwell.auth.http.client.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.clients.filelocker.OfflineFileLockerClient;
@@ -56,7 +57,7 @@ public final class OfflineSyncBootstrap {
         String clientId = resolveClientId(initialSnapshot);
         ClientAuthSession authSession = initializeAuth(clientId);
 
-        RemoteClipboardGateway gateway = new RemoteClipboardGateway(config.endpoint(), authSession, clientId);
+        RemoteClipboardGateway gateway = new RemoteClipboardGateway(config.endpoint(), authSession, clientId, logger);
         OfflineSyncService syncService = new OfflineSyncService(gateway, clientId, logger);
         SyncMonitor monitor = new SyncMonitor(syncService, clientId, logger);
         logger.info("Monitoring offline clipboard file for changes.", Map.of(
@@ -76,7 +77,8 @@ public final class OfflineSyncBootstrap {
 
     private ClientAuthSession initializeAuth(String clientId) {
         ClientAuthSession authSession =
-                new ClientAuthSession(config.authServerUrl(), clientId, config.clientSecret(), config.clientToken());
+                new ClientAuthSession(config.authServerUrl(), AuthWorkspaces.DEFAULT, clientId,
+                        config.clientSecret(), config.clientToken(), logger);
         try {
             ClientAuthInitializer.initialize(authSession, config.authServerUrl(), clientId, logger);
         } catch (IllegalStateException exception) {

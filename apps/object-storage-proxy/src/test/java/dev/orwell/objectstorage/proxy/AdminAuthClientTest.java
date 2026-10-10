@@ -1,41 +1,37 @@
 package dev.orwell.objectstorage.proxy;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 import dev.orwell.auth.http.client.HttpAuthenticationStrategy;
+import dev.orwell.testing.http.JsonStubServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static dev.orwell.testing.http.JsonStubServer.readBody;
+import static dev.orwell.testing.http.JsonStubServer.respond;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class AdminAuthClientTest {
-    private HttpServer server;
+    private JsonStubServer server;
 
     @AfterEach
     void stopServer() {
         if (server != null) {
-            server.stop(0);
+            server.close();
         }
     }
 
     @Test
     void loginExchangesCredentialsForAnAuthServerToken() throws IOException {
         AtomicReference<String> body = new AtomicReference<>();
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/login", exchange -> {
+        server = JsonStubServer.start();
+        server.on("/def/login", exchange -> {
             body.set(readBody(exchange));
             respond(exchange, 200, "{\"clientId\":\"admin-a\",\"token\":\"token-123\"}");
         });
-        server.start();
 
         var result = newClient().login("admin-a", "secret");
 
@@ -46,9 +42,8 @@ class AdminAuthClientTest {
 
     @Test
     void loginSurfacesTheAuthServerStatusRatherThanACatchAllFailure() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/login", exchange -> respond(exchange, 401, "{}"));
-        server.start();
+        server = JsonStubServer.start();
+        server.on("/def/login", exchange -> respond(exchange, 401, "{}"));
 
         var result = newClient().login("admin-a", "wrong");
 
@@ -70,12 +65,11 @@ class AdminAuthClientTest {
     @Test
     void sessionRoundTripsTheAdminIdAndIsCheckedAgainstTheAuthServer() throws IOException {
         AtomicReference<String> checkBody = new AtomicReference<>();
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/tokens/check", exchange -> {
+        server = JsonStubServer.start();
+        server.on("/def/tokens/check", exchange -> {
             checkBody.set(readBody(exchange));
             respond(exchange, 200, "{\"valid\":true,\"clientId\":\"admin-a\"}");
         });
-        server.start();
 
         String session = AdminAuthClient.session("admin-a", "token-123");
 
@@ -87,12 +81,11 @@ class AdminAuthClientTest {
     @Test
     void aTokenContainingTheSeparatorIsNotTruncated() throws IOException {
         AtomicReference<String> checkBody = new AtomicReference<>();
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/tokens/check", exchange -> {
+        server = JsonStubServer.start();
+        server.on("/def/tokens/check", exchange -> {
             checkBody.set(readBody(exchange));
             respond(exchange, 200, "{\"valid\":true,\"clientId\":\"admin-a\"}");
         });
-        server.start();
 
         newClient().signedInAdmin(AdminAuthClient.session("admin-a", "aaa.bbb.ccc"));
 
@@ -101,9 +94,8 @@ class AdminAuthClientTest {
 
     @Test
     void aRejectedOrMalformedSessionIsNotSignedIn() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/tokens/check", exchange -> respond(exchange, 200, "{\"valid\":false,\"clientId\":null}"));
-        server.start();
+        server = JsonStubServer.start();
+        server.on("/def/tokens/check", exchange -> respond(exchange, 200, "{\"valid\":false,\"clientId\":null}"));
         AdminAuthClient client = newClient();
 
         assertThat(client.signedInAdmin(AdminAuthClient.session("admin-a", "stale"))).isEmpty();
@@ -123,12 +115,9 @@ class AdminAuthClientTest {
     }
 
     private AdminAuthClient newClient() {
-        return new AdminAuthClient(new HttpAuthenticationStrategy(baseUrl()), auditLogger());
+        return new AdminAuthClient(new HttpAuthenticationStrategy(server.baseUrl()), auditLogger());
     }
 
-    private String baseUrl() {
-        return "http://localhost:%d".formatted(server.getAddress().getPort());
-    }
 
     private static FileAuditLogger auditLogger() {
         try {
@@ -136,8 +125,8 @@ class AdminAuthClientTest {
                     new ProxyProperties.Storage("aws", 1L),
                     new ProxyProperties.S3("bucket", "us-east-1", null, false),
                     new ProxyProperties.Azure(null, null, null, null),
-                    new ProxyProperties.AuthServer("http://localhost:8081", "provisioning-key"),
-                    new ProxyProperties.AdminAuth("http://localhost:8082"),
+                    new ProxyProperties.AuthServer("http://localhost:8081", "def", "ops-admin", "admin-secret"),
+                    new ProxyProperties.AdminAuth("http://localhost:8082", "def"),
                     new ProxyProperties.Cors(List.of()),
                     new ProxyProperties.Server("http://localhost"),
                     new ProxyProperties.Logging(Files.createTempFile("admin-audit-", ".log").toString())
@@ -147,18 +136,5 @@ class AdminAuthClientTest {
         }
     }
 
-    private static String readBody(HttpExchange exchange) throws IOException {
-        try (InputStream inputStream = exchange.getRequestBody()) {
-            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
 
-    private static void respond(HttpExchange exchange, int statusCode, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(statusCode, bytes.length);
-        try (OutputStream outputStream = exchange.getResponseBody()) {
-            outputStream.write(bytes);
-        }
-    }
 }

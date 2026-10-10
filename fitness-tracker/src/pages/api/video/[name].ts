@@ -33,8 +33,21 @@ export default async function handler(
   // Browsers seek by asking for a byte range; without this the scrubber is dead.
   const match = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
   if (match) {
-    const start = match[1] ? Number(match[1]) : 0;
-    const end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+    // `bytes=-500` is a *suffix* range: the LAST 500 bytes, not the first 500 (RFC 9110 §14.1.2).
+    // Reading the empty first group as a 0 start served the head of the file under a 206 and a
+    // Content-Range that claimed it was what was asked for — so nothing errored, and a player
+    // hunting the `moov` atom at the end of a non-faststart MP4 got header bytes and gave up.
+    const suffix = match[1] === "" && match[2] !== "";
+    const start = suffix
+      ? Math.max(0, size - Number(match[2]))
+      : match[1]
+        ? Number(match[1])
+        : 0;
+    const end = suffix
+      ? size - 1
+      : match[2]
+        ? Math.min(Number(match[2]), size - 1)
+        : size - 1;
     if (start >= size || end < start) {
       res.setHeader("Content-Range", `bytes */${size}`);
       return res.status(416).end();

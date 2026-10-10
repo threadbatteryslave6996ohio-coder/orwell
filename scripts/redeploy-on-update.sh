@@ -6,7 +6,7 @@
 #   ./scripts/redeploy-on-update.sh --force  # redeploy even if already up to date
 #
 # The all-services image builds the jars inside its multi-stage Dockerfile, so
-# a redeploy is just `docker compose up -d --build` — no local mvn step needed.
+# a redeploy is just `scripts/stack.sh up -d --build` — no local mvn step needed.
 #
 # Intended to be run on a timer (cron/systemd) on the deploy host. Idempotent:
 # when there is nothing new and --force is not given, it exits 0 without
@@ -15,6 +15,9 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BRANCH="${DEPLOY_BRANCH:-main}"
+# The compose files, checked here so a missing one fails this script's preconditions rather than
+# surfacing from inside stack.sh, which is what actually runs them.
+STORAGES_FILE="$ROOT/docker-compose.storages.yml"
 COMPOSE_FILE="$ROOT/docker-compose.all-services.yml"
 FORCE=0
 [ "${1:-}" = "--force" ] && FORCE=1
@@ -28,6 +31,7 @@ die() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; exit 1; }
 command -v git >/dev/null 2>&1 || die "git not found on PATH"
 docker compose version >/dev/null 2>&1 || die "'docker compose' not available"
 [ -f "$COMPOSE_FILE" ] || die "compose file not found: $COMPOSE_FILE"
+[ -f "$STORAGES_FILE" ] || die "compose file not found: $STORAGES_FILE"
 
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
 [ "$current_branch" = "$BRANCH" ] || die "checkout is on '$current_branch', expected '$BRANCH'"
@@ -56,7 +60,7 @@ fi
 
 # --- 2. Redeploy --------------------------------------------------------------
 log "Rebuilding and restarting the stack ..."
-docker compose -f "$COMPOSE_FILE" up -d --build || die "docker compose up failed"
+"$ROOT/scripts/stack.sh" up -d --build || die "docker compose up failed"
 
 log "Pruning dangling images ..."
 docker image prune -f >/dev/null 2>&1 || true

@@ -1,13 +1,9 @@
 package dev.orwell.bucket.retention.worker;
 
+import dev.orwell.testing.PostgresJdbcTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.postgresql.ds.PGSimpleDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -37,26 +33,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * worker has no JPA and no entity classes, so the table is created here as the hub's Hibernate
  * mapping would create it.
  */
-@Testcontainers
-class FrameRetentionSweepTest {
+class FrameRetentionSweepTest extends PostgresJdbcTest {
     private static final int FRAME_BYTES = 4096;
 
-    @Container
-    private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
-
-    private DataSource dataSource;
     private FrameRetentionSchedule schedule;
 
     /** The columns of frame_events the sweep touches, as jarvis-hub's entity maps them. */
     @BeforeEach
     void createTable() throws SQLException {
-        PGSimpleDataSource source = new PGSimpleDataSource();
-        source.setUrl(POSTGRES.getJdbcUrl());
-        source.setUser(POSTGRES.getUsername());
-        source.setPassword(POSTGRES.getPassword());
-        dataSource = source;
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 Statement statement = connection.createStatement()) {
             statement.execute("DROP TABLE IF EXISTS frame_events");
             statement.execute("""
@@ -72,11 +57,11 @@ class FrameRetentionSweepTest {
         // A 10-frame byte budget and a 60s age bound, with the schedule never firing on its own:
         // every test here drives the sweep itself.
         schedule = new FrameRetentionSchedule(
-                dataSource, (entry) -> { }, 10L * FRAME_BYTES, 60, 3600);
+                dataSource(), (entry) -> { }, 10L * FRAME_BYTES, 60, 3600);
     }
 
     private void store(long id, Instant capturedAt) throws SQLException {
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 PreparedStatement statement = connection.prepareStatement(
                         "INSERT INTO frame_events (id, source, frame_index, sha256, captured_at,"
                                 + " frame_bytes) VALUES (?, ?, ?, ?, ?, ?)")) {
@@ -91,7 +76,7 @@ class FrameRetentionSweepTest {
     }
 
     private long count() throws SQLException {
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 Statement statement = connection.createStatement();
                 ResultSet rows = statement.executeQuery("SELECT COUNT(*) FROM frame_events")) {
             return rows.next() ? rows.getLong(1) : -1;
@@ -99,7 +84,7 @@ class FrameRetentionSweepTest {
     }
 
     private long highestId() throws SQLException {
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 Statement statement = connection.createStatement();
                 ResultSet rows = statement.executeQuery("SELECT MAX(id) FROM frame_events")) {
             return rows.next() ? rows.getLong(1) : -1;
@@ -165,7 +150,7 @@ class FrameRetentionSweepTest {
      */
     @Test
     void aFailedSweepIsRecordedRatherThanThrown() throws Exception {
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 Statement statement = connection.createStatement()) {
             statement.execute("DROP TABLE frame_events");
         }

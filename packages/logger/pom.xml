@@ -27,5 +27,11 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- JsonStubServer, for the tests that stand a real HTTP server up on a loopback port. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

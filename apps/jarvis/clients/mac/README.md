@@ -96,7 +96,7 @@ Installation:
     └── Creates LaunchAgent plist
 
 Auto-start (on login):
-  LaunchAgent (com.keeboarder.recorder.plist)
+  LaunchAgent ($LAUNCHAGENT_LABEL.plist, see config.sh)
     └── Runs: ~/scripts/start_recorder.sh
         ├── Captures screen
         ├── Captures microphone
@@ -114,6 +114,32 @@ Uploading (separate client):
   apps/jarvis/clients/syncer/syncer.sh
     └── Drains completed segments to the object storage proxy
 ```
+
+## Shared with the Ubuntu client
+
+Only the capture itself is written per platform. Logging, the shutdown trap, the restart loop each
+capture runs under, and the ffmpeg segment/streaming argument tails live in
+[`../lib/recorder.sh`](../lib/recorder.sh); the colours, print helpers and retention sweep the
+management script uses live in [`../lib/console.sh`](../lib/console.sh). What stays in
+`start_recorder.sh` is what is genuinely avfoundation's: the device names, and the fact that system
+audio arrives through BlackHole as an ordinary input.
+
+One difference between the two recorders is deliberate and marked in the code: `-framerate` is
+passed **after** `-i` here, making it an output frame rate, and **before** `-i` on Ubuntu, where
+x11grab needs it as an input option. They are different ffmpeg options — do not unify them without
+deciding which behaviour is wanted.
+
+`install.sh` copies the library next to the recorder as `~/scripts/recorder-lib.sh`, because the
+install layout is flat. `start_recorder.sh` looks for it under both names, so it runs the same from
+a repo checkout and from an install.
+
+`config.sh` is deliberately **not** shared: it is an inventory a person edits per machine, and it is
+where `LAUNCHAGENT_LABEL` lives — still `com.keeboarder.recorder`, because that is a plist filename
+on real disks rather than a name in code. See the comment there before renaming it.
+
+[`../lib/recorder-smoke-test.sh`](../lib/recorder-smoke-test.sh) runs both recorders against stub
+binaries and asserts the argv each capture is launched with. Nothing here is in the Maven reactor,
+so `mvn test` proves nothing about it — run that script after changing either recorder.
 
 ## Logging Details
 

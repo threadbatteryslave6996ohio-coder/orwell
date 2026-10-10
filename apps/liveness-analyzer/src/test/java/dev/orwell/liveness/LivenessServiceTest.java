@@ -88,6 +88,64 @@ class LivenessServiceTest {
         assertEquals(2, alerter.downCalls.size(), "a FAILED delivery must not hold the cooldown");
     }
 
+    // ─────────────────────────────────────────────────────── the fuse
+
+    /**
+     * The failure this guards. An empty answer from Loki is a flawless impression of every client
+     * dying in the same second, and the ways to get one are mundane — Loki restarted, retention
+     * shorter than the lookback, a changed label, the wrong Loki entirely. Alerting on it turns a
+     * monitoring service into a pager storm.
+     */
+    @Test
+    void everyClientDownAtOnceIsRefusedRatherThanAlertedOn() throws Exception {
+        heartbeats.set(Map.of());
+        Map<String, Object> result =
+                service(Set.of("client-mac", "client-linux", "client-phone")).checkOnce();
+
+        assertEquals(3, result.get("clientsDown"));
+        assertEquals(Boolean.TRUE, result.get("alertsSuppressed"));
+        assertTrue(alerter.downCalls.isEmpty(), "a total wipeout must not fan out one alert each");
+    }
+
+    /** A partial outage is an ordinary outage and must alert exactly as before. */
+    @Test
+    void aPartialOutageStillAlerts() throws Exception {
+        heartbeats.set(Map.of(
+                "client-mac", Instant.now().minusSeconds(3600),
+                "client-linux", Instant.now(),
+                "client-phone", Instant.now()));
+        Map<String, Object> result =
+                service(Set.of("client-mac", "client-linux", "client-phone")).checkOnce();
+
+        assertEquals(1, result.get("clientsDown"));
+        assertEquals(null, result.get("alertsSuppressed"));
+        assertEquals(List.of("client-mac"), alerter.downCalls);
+    }
+
+    /** With one or two clients, "all of them" is an outage, not a signal about the source. */
+    @Test
+    void belowTheClientMinimumTheFuseDoesNotApply() throws Exception {
+        heartbeats.set(Map.of());
+        Map<String, Object> result = service(Set.of("client-mac", "client-linux")).checkOnce();
+
+        assertEquals(2, result.get("clientsDown"));
+        assertEquals(2, alerter.downCalls.size());
+    }
+
+    @Test
+    void theFuseCanBeTurnedOff() throws Exception {
+        heartbeats.set(Map.of());
+        HeartbeatSource source = lookback -> heartbeats.get();
+        LivenessService service = new LivenessService(5, 60, THRESHOLD_SECONDS, 0,
+                Set.of("client-mac", "client-linux", "client-phone"), source, alerter,
+                new AlertCooldownTracker(300));
+
+        Map<String, Object> result = service.checkOnce();
+
+        assertEquals(3, result.get("clientsDown"));
+        assertEquals(3, alerter.downCalls.size());
+    }
+
     private static final class RecordingAlerter implements Alerter {
         private final List<String> downCalls = new ArrayList<>();
         private Outcome outcome = Outcome.DELIVERED;

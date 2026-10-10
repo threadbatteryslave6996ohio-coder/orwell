@@ -65,6 +65,16 @@ public final class PatternPolicy implements Policy {
         return blocked.stream().map(Rule::describe).toList();
     }
 
+    /**
+     * The patterns themselves, because they are what this policy <em>is</em>: two instances of
+     * this class with different blocklists must not fingerprint alike in the audit, or editing
+     * {@code PROXY_BLOCKED_PATTERNS} would leave no trace in the trail.
+     */
+    @Override
+    public String signature() {
+        return name() + "(" + String.join(",", patterns()) + ")";
+    }
+
     private record Rule(String method, Pattern target) {
         static Rule parse(String raw) {
             String method = ANY_METHOD;

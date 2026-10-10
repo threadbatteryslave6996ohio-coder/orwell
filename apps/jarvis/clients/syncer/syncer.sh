@@ -1,7 +1,7 @@
 #!/bin/bash
 set -uo pipefail
 
-# Keeboarder syncer client.
+# Jarvis syncer client.
 #
 # For every recording type the syncer:
 #   1. Lists completed segments in chronological order.

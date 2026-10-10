@@ -1,5 +1,6 @@
 package dev.orwell.insta.graph;
 
+import dev.orwell.http.LoggingHttpClient;
 import dev.orwell.logging.Logger;
 
 import java.net.URI;
@@ -21,8 +22,7 @@ import java.util.Objects;
 public final class HttpPictureStore implements PictureStore {
     private static final Duration TIMEOUT = Duration.ofSeconds(30);
 
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10)).build();
+    private final HttpClient http;
     private final String baseUrl;
     private final String token;
     private final Logger logger;
@@ -31,6 +31,8 @@ public final class HttpPictureStore implements PictureStore {
         this.baseUrl = stripTrailingSlash(Objects.requireNonNull(baseUrl, "baseUrl"));
         this.token = token;
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.http = LoggingHttpClient.wrap(
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(), logger);
     }
 
     @Override

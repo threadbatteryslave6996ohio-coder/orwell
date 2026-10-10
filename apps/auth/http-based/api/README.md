@@ -17,5 +17,7 @@ mvn -pl apps/auth/http-based/api,apps/auth/http-based/client,apps/auth/http-base
 
 - `LoginHttpRequest` / `LoginHttpResponse` — login credentials and token result
 - `CheckTokenHttpRequest` / `CheckTokenHttpResponse` — token validation request and result
+- `CreateIdentityHttpRequest` / `CreateIdentityHttpResponse` — identity provisioning request and result
+- `AuthWorkspaces` — the `def` and `admin` names, and the rule for what may be a workspace
 
 See `src/main/java/dev/orwell/auth/http/api/` for the full definition of each record.

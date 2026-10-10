@@ -1,0 +1,91 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.orwell</groupId>
+        <artifactId>jarvis</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>jarvis-fixture-detection</artifactId>
+
+    <properties>
+        <mainClass>dev.orwell.bucket.fixture.FixtureDetectionApplication</mainClass>
+    </properties>
+
+    <!--
+      A frame watcher that measures regions of the picture: is the lamp on, is the burner lit.
+
+      Note what is NOT here: no ML runtime, no native library, no GPU. For a camera that does not
+      move, a fixture's state is a threshold over a rectangle — arithmetic on a decoded JPEG, which
+      the JDK already does. That is the whole reason this can be a 192 MB container instead of a
+      model server.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>env-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>logger</artifactId>
+        </dependency>
+        <!-- The stream consumer. This app never takes a frame over HTTP; only the hub does. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>jarvis-frame-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- LoggingHttpClient, for the optional alert POST. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
+        <!-- /health, /fixtures and the preview image. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>undertow-bootstrap</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- The fixture definitions are JSON, and the alert body is built here. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JsonStubServer, to check the alert actually goes out on a transition. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- A plain program, so the runnable artifact is the shaded
+                 jarvis-fixture-detection-<version>-exec.jar — the same shape as its siblings. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <configuration>
+                    <shadedArtifactAttached>true</shadedArtifactAttached>
+                    <shadedClassifierName>exec</shadedClassifierName>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

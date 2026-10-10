@@ -46,7 +46,7 @@ public final class LinuxKeyboardClient {
         this.config = config;
         this.log = new KeeboarderClientLog(logger);
         this.currentClientId = new AtomicReference<>(config.clientId());
-        this.authClient = new HttpAuthenticationStrategy(config.authBaseUrl());
+        this.authClient = new HttpAuthenticationStrategy(config.authBaseUrl(), logger);
         this.keyboardMonitor = KeyboardMonitors.create(this::sendKeyEvent, this::handleKeyboardFailure);
     }
 

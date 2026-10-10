@@ -1,12 +1,11 @@
 package dev.orwell.bucket.frame.client;
 
-import com.sun.net.httpserver.HttpServer;
+import dev.orwell.testing.http.JsonStubServer;
 import dev.orwell.primitives.Sha256;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.OutputStream;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
@@ -27,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * whether the resume header asks for the right thing.
  */
 class FrameStreamClientTest {
-    private HttpServer server;
+    private JsonStubServer server;
     private FrameStreamClient client;
 
     @AfterEach
@@ -36,14 +35,14 @@ class FrameStreamClientTest {
             client.close();
         }
         if (server != null) {
-            server.stop(0);
+            server.close();
         }
     }
 
     /** Starts a server that writes whatever the handler produces to the SSE body. */
     private String serve(SseScript script) throws Exception {
-        server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/frames/stream", exchange -> {
+        server = JsonStubServer.start();
+        server.on("/frames/stream", exchange -> {
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, 0);
             try (OutputStream out = exchange.getResponseBody()) {
@@ -52,8 +51,7 @@ class FrameStreamClientTest {
                 // A dropped connection is the point of some of these tests.
             }
         });
-        server.start();
-        return "http://127.0.0.1:" + server.getAddress().getPort();
+        return server.baseUrl();
     }
 
     private static void send(OutputStream out, long id, String source, byte[] frame) throws Exception {

@@ -1,13 +1,9 @@
 package dev.orwell.bucket.retention;
 
+import dev.orwell.testing.PostgresJdbcTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.postgresql.ds.PGSimpleDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -27,15 +23,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * whether {@code DELETE ... RETURNING} reports what it removed, and — the one that motivated the
  * design — that deleting rows does not shrink {@code pg_total_relation_size}.
  */
-@Testcontainers
-class RetentionSweeperTest {
+class RetentionSweeperTest extends PostgresJdbcTest {
     private static final int FRAME_BYTES = 40 * 1024;
 
-    @Container
-    private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
-
-    private DataSource dataSource;
     private RetentionSweeper sweeper;
 
     private static RetentionPolicy policy(Long maxBytes, Duration maxAge) {
@@ -44,14 +34,9 @@ class RetentionSweeperTest {
 
     @BeforeEach
     void createTable() throws SQLException {
-        PGSimpleDataSource source = new PGSimpleDataSource();
-        source.setUrl(POSTGRES.getJdbcUrl());
-        source.setUser(POSTGRES.getUsername());
-        source.setPassword(POSTGRES.getPassword());
-        dataSource = source;
-        sweeper = new RetentionSweeper(dataSource, entry -> { });
+        sweeper = new RetentionSweeper(dataSource(), entry -> { });
 
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 Statement statement = connection.createStatement()) {
             statement.execute("DROP TABLE IF EXISTS frames");
             statement.execute("""
@@ -68,7 +53,7 @@ class RetentionSweeperTest {
 
     /** Inserts {@code count} frames of {@link #FRAME_BYTES} each, ids 1..count, oldest first. */
     private void insertFrames(int count, Instant newest) throws SQLException {
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 PreparedStatement statement = connection.prepareStatement(
                         "INSERT INTO frames (id, captured_at, payload) VALUES (?, ?, ?)")) {
             for (int index = 0; index < count; index++) {
@@ -84,7 +69,7 @@ class RetentionSweeperTest {
     }
 
     private long rowCount() throws SQLException {
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 Statement statement = connection.createStatement();
                 ResultSet rows = statement.executeQuery("SELECT count(*) FROM frames")) {
             rows.next();
@@ -93,7 +78,7 @@ class RetentionSweeperTest {
     }
 
     private long lowestId() throws SQLException {
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 Statement statement = connection.createStatement();
                 ResultSet rows = statement.executeQuery("SELECT COALESCE(MIN(id), 0) FROM frames")) {
             rows.next();
@@ -172,7 +157,7 @@ class RetentionSweeperTest {
     }
 
     private long relationSize() throws SQLException {
-        try (Connection connection = dataSource.getConnection();
+        try (Connection connection = connection();
                 Statement statement = connection.createStatement();
                 ResultSet rows = statement.executeQuery(
                         "SELECT pg_total_relation_size('frames')")) {

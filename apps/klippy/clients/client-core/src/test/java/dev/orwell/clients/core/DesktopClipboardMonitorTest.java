@@ -1,5 +1,6 @@
 package dev.orwell.clients.core;
 
+import dev.orwell.testing.http.JsonStubServer;
 import dev.orwell.auth.http.client.ClientAuthSession;
 import dev.orwell.clients.filelocker.OfflineFileLockerClient;
 import dev.orwell.clients.filelocker.OfflineFileLockerService;
@@ -73,7 +74,7 @@ class DesktopClipboardMonitorTest {
         // before any request reaches the network.
         ClientAuthSession auth = new ClientAuthSession(null, "client-a", null, null);
         ClipboardApiClient apiClient = new ClipboardApiClient(
-                URI.create("http://127.0.0.1:1/clipboard"), auth, Duration.ofMillis(100));
+                URI.create("http://127.0.0.1:1/clipboard"), auth, Duration.ofMillis(100), NO_OP_LOGGER);
         DesktopClipboardMonitor monitor = new DesktopClipboardMonitor(
                 () -> "unsendable text", apiClient, null, "client-a", fileLocker,
                 offlineLog, new LinuxClipboardPolicy(), NO_OP_LOGGER);
@@ -93,22 +94,20 @@ class DesktopClipboardMonitorTest {
         OfflineFileLockerClient fileLocker = new OfflineFileLockerClient(socket);
         // A 200 login response that omits "token" parses cleanly and only fails where the value is
         // used. It used to surface as a NullPointerException, escape poll(), and cost the entry.
-        com.sun.net.httpserver.HttpServer authServer =
-                com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(0), 0);
-        authServer.createContext("/login", exchange -> {
+        JsonStubServer authServer = JsonStubServer.start();
+        authServer.on("/def/login", exchange -> {
             byte[] body = "{\"clientId\":\"client-a\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
             exchange.close();
         });
-        authServer.start();
 
         try (RunningFileLocker ignored = startFileLocker(socket)) {
             ClientAuthSession auth = new ClientAuthSession(
-                    "http://127.0.0.1:" + authServer.getAddress().getPort(), "client-a", "secret-value", null);
+                    authServer.baseUrl(), "client-a", "secret-value", null);
             ClipboardApiClient apiClient = new ClipboardApiClient(
-                    URI.create("http://127.0.0.1:1/clipboard"), auth, Duration.ofMillis(100));
+                    URI.create("http://127.0.0.1:1/clipboard"), auth, Duration.ofMillis(100), NO_OP_LOGGER);
             DesktopClipboardMonitor monitor = new DesktopClipboardMonitor(
                     () -> "text worth keeping", apiClient, null, "client-a", fileLocker,
                     offlineLog, new LinuxClipboardPolicy(), NO_OP_LOGGER);
@@ -118,7 +117,7 @@ class DesktopClipboardMonitorTest {
             assertEquals("text worth keeping", ClipboardJson.mapper()
                     .readTree(fileLocker.read(offlineLog)).get(0).get("content").textValue());
         } finally {
-            authServer.stop(0);
+            authServer.close();
         }
     }
 
@@ -126,7 +125,7 @@ class DesktopClipboardMonitorTest {
             ClipboardReader reader, OfflineFileLockerClient fileLocker, Path offlineLog) {
         ClientAuthSession auth = new ClientAuthSession(null, "client-a", null, "token-a");
         ClipboardApiClient apiClient = new ClipboardApiClient(
-                URI.create("http://127.0.0.1:1/clipboard"), auth, Duration.ofMillis(100));
+                URI.create("http://127.0.0.1:1/clipboard"), auth, Duration.ofMillis(100), NO_OP_LOGGER);
         return new DesktopClipboardMonitor(
                 reader, apiClient, null, "client-a", fileLocker,
                 offlineLog, new LinuxClipboardPolicy(), NO_OP_LOGGER);

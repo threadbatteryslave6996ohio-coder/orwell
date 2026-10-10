@@ -36,6 +36,12 @@ Each server pushes its own logs directly. The shared `Logger` bean
 background thread. There is no collector, and no log file unless a service's `LOGGER` asks for
 one — see [`packages/logger/README.md`](../../packages/logger/README.md).
 
+The Undertow engine has no Spring context to build that bean, so its main assembles the same sinks
+by hand from the same `LOGGER`/`LOKI_URL`/`LOKI_TENANT_ID` values and closes them on shutdown —
+both engines answer to the same configuration, and both now record this service's own outbound
+calls (Grafana, the AI model, the alert endpoint) through
+[`packages/http-client`](../../packages/http-client/README.md).
+
 That last point matters for what this analyzer can see: a service running `LOGGER=disk` ships
 nothing to Loki, so its errors never reach this triage. Anything meant to be analyzed here needs
 `loki`, `loki-with-fallback` or `both`.
@@ -101,7 +107,7 @@ This service and the sibling `alerting` service run as part of the whole-stack
 compose file at the repository root. From the repository root:
 
 ```bash
-docker compose -f docker-compose.all-services.yml up --build
+docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml up --build
 ```
 
 Set `GRAFANA_URL`, `GRAFANA_API_TOKEN`, `GRAFANA_LOKI_DATASOURCE_UID`, and `AI_API_KEY` before

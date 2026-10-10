@@ -1,15 +1,14 @@
 package dev.orwell.clients.sync;
 
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 import dev.orwell.auth.http.client.ClientAuthSession;
 import dev.orwell.logging.Logger;
 import dev.orwell.utils.ClipboardLimits;
+import dev.orwell.testing.http.JsonStubServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -18,6 +17,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
+import static dev.orwell.testing.http.JsonStubServer.respond;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -80,12 +80,11 @@ class OfflineClipboardSyncAppTest {
     @Test
     void queriesTimeframeAndPostsOnlyMissingEntriesWithOriginalTimestamp() throws Exception {
         List<String> requests = new ArrayList<>();
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/clipboard", exchange -> handleClipboard(exchange, requests));
-        server.start();
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/clipboard", exchange -> handleClipboard(exchange, requests));
 
         try {
-            URI endpoint = URI.create("http://localhost:" + server.getAddress().getPort() + "/clipboard");
+            URI endpoint = URI.create("http://localhost:" + server.port() + "/clipboard");
             OfflineSyncService service = syncService(endpoint);
             List<ClipboardRecord> records = List.of(
                     new ClipboardRecord(
@@ -106,7 +105,7 @@ class OfflineClipboardSyncAppTest {
             assertTrue(requests.get(1).contains("\"content\":\"send me\""));
             assertTrue(requests.get(1).contains("\"timestamp\":\"2026-06-23T13:00:00Z\""));
         } finally {
-            server.stop(0);
+            server.close();
         }
     }
 
@@ -115,12 +114,11 @@ class OfflineClipboardSyncAppTest {
         List<String> requests = new ArrayList<>();
         List<Duration> sleepDurations = new ArrayList<>();
         List<String> clearedSnapshots = new ArrayList<>();
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/clipboard", exchange -> handleClipboard(exchange, requests));
-        server.start();
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/clipboard", exchange -> handleClipboard(exchange, requests));
 
         try {
-            URI endpoint = URI.create("http://localhost:" + server.getAddress().getPort() + "/clipboard");
+            URI endpoint = URI.create("http://localhost:" + server.port() + "/clipboard");
             SyncMonitor monitor = monitor(endpoint);
             List<ClipboardRecord> changedRecords = List.of(
                     new ClipboardRecord(
@@ -142,7 +140,7 @@ class OfflineClipboardSyncAppTest {
         } catch (InterruptedException expected) {
             assertEquals("stop test loop", expected.getMessage());
         } finally {
-            server.stop(0);
+            server.close();
         }
 
         assertEquals(List.of(Duration.ofMinutes(30), Duration.ofMinutes(30)), sleepDurations);
@@ -214,13 +212,12 @@ class OfflineClipboardSyncAppTest {
 
     @Test
     void doesNotClearSnapshotWhenSyncFails() throws Exception {
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/clipboard", exchange -> respond(exchange, 503, "temporarily unavailable"));
-        server.start();
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/clipboard", exchange -> respond(exchange, 503, "temporarily unavailable"));
         int[] clearAttempts = {0};
 
         try {
-            URI endpoint = URI.create("http://localhost:" + server.getAddress().getPort() + "/clipboard");
+            URI endpoint = URI.create("http://localhost:" + server.port() + "/clipboard");
             SyncMonitor monitor = monitor(endpoint);
             ClipboardSnapshot snapshot = new ClipboardSnapshot(
                     "[failed]",
@@ -237,7 +234,7 @@ class OfflineClipboardSyncAppTest {
         } catch (InterruptedException expected) {
             assertEquals("stop test loop", expected.getMessage());
         } finally {
-            server.stop(0);
+            server.close();
         }
 
         assertEquals(0, clearAttempts[0]);
@@ -281,8 +278,8 @@ class OfflineClipboardSyncAppTest {
     @Test
     void deadLettersPermanentPostRejectionAndContinuesWithLaterRecord() throws Exception {
         List<String> requests = new ArrayList<>();
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/clipboard", exchange -> {
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/clipboard", exchange -> {
             if ("GET".equals(exchange.getRequestMethod())) {
                 respond(exchange, 200, "[]");
                 return;
@@ -291,12 +288,11 @@ class OfflineClipboardSyncAppTest {
             requests.add(body);
             respond(exchange, body.contains("reject me") ? 400 : 201, "");
         });
-        server.start();
         List<RejectedRecord> rejections = new ArrayList<>();
 
         try {
             OfflineSyncService service = syncService(
-                    URI.create("http://localhost:" + server.getAddress().getPort() + "/clipboard"));
+                    URI.create("http://localhost:" + server.port() + "/clipboard"));
             List<ClipboardRecord> records = List.of(
                     new ClipboardRecord(
                             "client-a", "reject me", Instant.parse("2026-06-23T12:00:00Z")),
@@ -310,7 +306,7 @@ class OfflineClipboardSyncAppTest {
             assertEquals(1, rejections.size());
             assertEquals("HTTP 400", rejections.getFirst().reason());
         } finally {
-            server.stop(0);
+            server.close();
         }
     }
 
@@ -353,19 +349,18 @@ class OfflineClipboardSyncAppTest {
 
     @Test
     void stopsSynchronizationAfterFifthRetryWithoutClearingSource() throws Exception {
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        JsonStubServer server = JsonStubServer.start();
         int[] requests = {0};
-        server.createContext("/clipboard", exchange -> {
+        server.on("/clipboard", exchange -> {
             requests[0]++;
             respond(exchange, 503, "temporarily unavailable");
         });
-        server.start();
         List<Duration> delays = new ArrayList<>();
         int[] clearAttempts = {0};
 
         try {
             SyncMonitor monitor = monitor(
-                    URI.create("http://localhost:" + server.getAddress().getPort() + "/clipboard"));
+                    URI.create("http://localhost:" + server.port() + "/clipboard"));
             ClipboardSnapshot snapshot = new ClipboardSnapshot(
                     "[retry]", List.of(new ClipboardRecord(
                             "client-a", "keep me", Instant.parse("2026-06-23T12:00:00Z"))));
@@ -381,7 +376,7 @@ class OfflineClipboardSyncAppTest {
                     Duration.ofSeconds(5), Duration.ofSeconds(10), Duration.ofSeconds(20),
                     Duration.ofSeconds(40), Duration.ofSeconds(80)), delays);
         } finally {
-            server.stop(0);
+            server.close();
         }
     }
 
@@ -397,8 +392,8 @@ class OfflineClipboardSyncAppTest {
     @Test
     void resetsToNormalIntervalAfterRetrySucceeds() throws Exception {
         int[] requests = {0};
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/clipboard", exchange -> {
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/clipboard", exchange -> {
             if (requests[0]++ == 0) {
                 respond(exchange, 503, "temporarily unavailable");
             } else if ("GET".equals(exchange.getRequestMethod())) {
@@ -407,12 +402,11 @@ class OfflineClipboardSyncAppTest {
                 respond(exchange, 201, "{}");
             }
         });
-        server.start();
         List<Duration> delays = new ArrayList<>();
 
         try {
             SyncMonitor monitor = monitor(
-                    URI.create("http://localhost:" + server.getAddress().getPort() + "/clipboard"));
+                    URI.create("http://localhost:" + server.port() + "/clipboard"));
             ClipboardSnapshot snapshot = new ClipboardSnapshot(
                     "[retry]", List.of(new ClipboardRecord(
                             "client-a", "send me", Instant.parse("2026-06-23T12:00:00Z"))));
@@ -426,7 +420,7 @@ class OfflineClipboardSyncAppTest {
                         }
                     }));
         } finally {
-            server.stop(0);
+            server.close();
         }
 
         assertEquals(List.of(Duration.ofSeconds(5), Duration.ofMinutes(30)), delays);
@@ -434,7 +428,7 @@ class OfflineClipboardSyncAppTest {
 
     private static OfflineSyncService syncService(URI endpoint) {
         ClientAuthSession auth = new ClientAuthSession(null, "client-a", null, "token-a");
-        return new OfflineSyncService(new RemoteClipboardGateway(endpoint, auth, "client-a"), "client-a", NO_OP_LOGGER);
+        return new OfflineSyncService(new RemoteClipboardGateway(endpoint, auth, "client-a", NO_OP_LOGGER), "client-a", NO_OP_LOGGER);
     }
 
     private static SyncMonitor monitor(URI endpoint) {
@@ -457,10 +451,4 @@ class OfflineClipboardSyncAppTest {
         respond(exchange, 201, "{}");
     }
 
-    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.sendResponseHeaders(status, bytes.length);
-        exchange.getResponseBody().write(bytes);
-        exchange.close();
-    }
 }

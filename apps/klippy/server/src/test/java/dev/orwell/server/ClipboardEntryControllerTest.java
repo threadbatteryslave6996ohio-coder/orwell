@@ -10,6 +10,7 @@ import dev.orwell.server.repository.ClipboardEntryRepository;
 import dev.orwell.logging.LogEntry;
 import dev.orwell.logging.Logger;
 import org.junit.jupiter.api.Test;
+import dev.orwell.testing.ObjectProviders;
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.Instant;
@@ -241,31 +242,6 @@ class ClipboardEntryControllerTest {
     }
 
     private static ObjectProvider<AuthenticationContext> provider(AuthenticationContext authenticationContext) {
-        return new ObjectProvider<>() {
-            @Override
-            public AuthenticationContext getObject(Object... args) {
-                return authenticationContext;
-            }
-
-            @Override
-            public AuthenticationContext getObject() {
-                return authenticationContext;
-            }
-
-            @Override
-            public AuthenticationContext getIfAvailable() {
-                return authenticationContext;
-            }
-
-            @Override
-            public AuthenticationContext getIfUnique() {
-                return authenticationContext;
-            }
-
-            @Override
-            public java.util.Iterator<AuthenticationContext> iterator() {
-                return java.util.List.of(authenticationContext).iterator();
-            }
-        };
+        return ObjectProviders.of(authenticationContext);
     }
 }

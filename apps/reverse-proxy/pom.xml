@@ -29,9 +29,28 @@
             <groupId>dev.orwell</groupId>
             <artifactId>server-bootstrap</artifactId>
         </dependency>
+        <!-- For the Service header constant: both ends of that contract read one definition. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+          A pool and a driver, not spring-boot-starter-jdbc: the audit store owns its own
+          DataSource and writes plain SQL, so pulling in Spring's data layer would only add an
+          auto-configuration that fails at startup whenever the (optional) datasource is unset.
+        -->
+        <dependency>
+            <groupId>com.zaxxer</groupId>
+            <artifactId>HikariCP</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -41,6 +60,21 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!--
+          The audit store's contract is with Postgres, so its test runs against a real one.
+          PostgresJdbcTest brings the container and the Testcontainers dependencies with it.
+        -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>server-test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JsonStubServer, for the stub upstream ProxyEndpointTest forwards to. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>test-support</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -65,6 +65,11 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>server-test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Tyrus server + client used only to exercise the JSR-356 @ServerEndpoint in unit tests;
              production hosts the endpoint on Spring Boot's embedded container. -->
         <dependency>

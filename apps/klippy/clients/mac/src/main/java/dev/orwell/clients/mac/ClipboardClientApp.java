@@ -41,7 +41,7 @@ public final class ClipboardClientApp {
             OfflineFileLockerClient fileLocker,
             Logger logger
     ) {
-        ClipboardApiClient apiClient = new ClipboardApiClient(endpoint, authSession, Duration.ofSeconds(10));
+        ClipboardApiClient apiClient = new ClipboardApiClient(endpoint, authSession, Duration.ofSeconds(10), logger);
         this.monitor = new DesktopClipboardMonitor(
                 clipboardReader(clipboard), apiClient, authServerUrl, clientId, fileLocker,
                 OFFLINE_LOG_PATH, new MacClipboardPolicy(), logger);
@@ -70,7 +70,7 @@ public final class ClipboardClientApp {
 
         Logger logger = new ConsoleLogger("klippy-mac-client");
         Env env = ClientEnvs.load();
-        ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("client-"));
+        ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("client-"), logger);
         long pollIntervalMs = PollInterval.resolve(env);
 
         Clipboard clipboard;

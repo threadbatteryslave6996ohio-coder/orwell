@@ -5,6 +5,7 @@ import dev.orwell.clients.core.ClipboardApiClient;
 import dev.orwell.clients.core.ClipboardEntry;
 import dev.orwell.clients.core.ClipboardJson;
 import dev.orwell.auth.http.client.ClientAuthSession;
+import dev.orwell.logging.Logger;
 
 import java.io.IOException;
 import java.net.URI;
@@ -27,8 +28,9 @@ final class RemoteClipboardGateway {
     private final URI clipboardEndpoint;
     private final String clientId;
 
-    RemoteClipboardGateway(URI clipboardEndpoint, ClientAuthSession authSession, String clientId) {
-        this.apiClient = new ClipboardApiClient(clipboardEndpoint, authSession, REQUEST_TIMEOUT);
+    RemoteClipboardGateway(
+            URI clipboardEndpoint, ClientAuthSession authSession, String clientId, Logger logger) {
+        this.apiClient = new ClipboardApiClient(clipboardEndpoint, authSession, REQUEST_TIMEOUT, logger);
         this.clipboardEndpoint = clipboardEndpoint;
         this.clientId = clientId;
     }

@@ -20,6 +20,12 @@ import java.util.concurrent.atomic.AtomicLong;
  * is worth pushing is what viewers get, which also means the payload need not be an image the
  * server can decode.
  *
+ * <p>Capture time is the receiver's clock unless the producer insists otherwise. A frame pushed by a
+ * live camera is stamped {@code Instant.now()}; a frame carrying an explicit {@code capturedAt} keeps
+ * the time it claims, which is what makes backfilling a recording possible without every frame of it
+ * landing at the moment of upload. The id is unaffected either way and still comes from the ingest
+ * sequence, so id order stays arrival order however far back a backfill is dated.
+ *
  * <p>The id is allocated from a sequence before either step, so the frame can go out to connected
  * clients <em>before</em> it is written — the live stream never waits on Postgres. Storing happens
  * behind it via {@link FrameStoreWriter} and is what makes a reconnecting client able to catch up.
@@ -52,6 +58,11 @@ public class FrameIngestService {
         byte[] frameBytes = FramePayload.decode(payload);
         String source = FramePayload.source(payload);
         Object frameIndex = payload.get("frameIndex");
+        // Absent for a live camera, which is the normal case: a frame pushed now was captured now,
+        // and the receiver's clock beats the producer's for that. Present only for a backfill, where
+        // "now" would put an hour of recorded footage in the table as a single instant. See
+        // FramePayload.capturedAt for why it is trusted and what that costs.
+        Instant capturedAt = FramePayload.capturedAt(payload);
         framesReceivedTotal.incrementAndGet();
 
         FrameEventEntity frame = new FrameEventEntity(
@@ -59,7 +70,7 @@ public class FrameIngestService {
                 source,
                 asLong(frameIndex),
                 Sha256.hex(frameBytes),
-                Instant.now(),
+                capturedAt == null ? Instant.now() : capturedAt,
                 frameBytes);
 
         // Broadcast first, store second. The id was allocated up front precisely so the live
@@ -74,6 +85,9 @@ public class FrameIngestService {
         response.put("source", source);
         response.put("frameIndex", frameIndex);
         response.put("timestamp", payload.get("timestamp"));
+        // What was actually stored, which is not always what was asked for — a backfill needs to be
+        // able to confirm its capture times landed rather than trusting that they did.
+        response.put("capturedAt", frame.getCapturedAt().toString());
         response.put("stored", true);
         response.put("frameId", frame.getId());
         // Lets a producer notice nobody is watching without polling anything. A frame with zero

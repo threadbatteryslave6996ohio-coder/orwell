@@ -1,49 +1,36 @@
 #!/bin/bash
 set -uo pipefail
 
-# Keeboarder Ubuntu GNOME Recorder
-# Records X11 or GNOME Wayland screen, microphone, and system audio separately.
+# Jarvis Ubuntu recorder.
+# Captures the X11 or GNOME Wayland screen, microphone and system audio into separate files.
+#
+# Everything not specific to this platform — logging, the shutdown trap, process supervision, the
+# segment and streaming argument tails — lives in the shared library below. What stays here is the
+# part that has no macOS equivalent: choosing between x11grab and GNOME Shell's PipeWire
+# screencast service, and finding a PulseAudio monitor source for system audio.
 
-CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$CONFIG_DIR/config.sh"
+CLIENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# install.sh flattens the client into ~/scripts, so the library sits beside this script once
+# installed and one directory up in a repo checkout.
+if [ -r "$CLIENT_DIR/recorder-lib.sh" ]; then
+    # shellcheck source=/dev/null
+    source "$CLIENT_DIR/recorder-lib.sh"
+else
+    # shellcheck source=../lib/recorder.sh
+    source "$CLIENT_DIR/../lib/recorder.sh"
+fi
+
 : "${CAPTURE_BACKEND:=auto}"
 : "${REQUIRE_XORG:=false}"
 : "${WAYLAND_SCREEN_EXTENSION:=webm}"
 : "${WAYLAND_DRAW_CURSOR:=true}"
 
-RECORDER_LOG="$LOGS_DIR/recorder.log"
-mkdir -p "$SCREEN_DIR" "$MIC_DIR" "$SYSTEM_AUDIO_DIR" "$LOGS_DIR"
-PROCESS_PIDS=()
+require_command ffmpeg "Install it with: sudo apt install ffmpeg"
+require_command pactl "Install it with: sudo apt install pulseaudio-utils"
 
-log_message() {
-    local level="$1"
-    local message="$2"
-    local timestamp
-    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[$timestamp] [$level] $message" | tee -a "$RECORDER_LOG"
-}
-
-cleanup() {
-    log_message "INFO" "Shutting down recorder gracefully..."
-    for pid in "${PROCESS_PIDS[@]:-}"; do
-        kill "$pid" 2>/dev/null || true
-    done
-    wait 2>/dev/null || true
-    log_message "INFO" "Recorder stopped"
-    exit 0
-}
-
-trap cleanup SIGTERM SIGINT SIGHUP
-
-if ! command -v ffmpeg >/dev/null 2>&1; then
-    log_message "ERROR" "FFmpeg not found. Install with: sudo apt install ffmpeg"
-    exit 1
-fi
-
-if ! command -v pactl >/dev/null 2>&1; then
-    log_message "ERROR" "pactl not found. Install with: sudo apt install pulseaudio-utils"
-    exit 1
-fi
+# ============================================================
+# Session detection
+# ============================================================
 
 detect_capture_backend() {
     local requested="${CAPTURE_BACKEND:-auto}"
@@ -130,8 +117,8 @@ elif ! command -v gjs >/dev/null 2>&1; then
 elif [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
     log_message "ERROR" "DBUS_SESSION_BUS_ADDRESS is unavailable. Start the recorder from the logged-in GNOME user session."
     exit 1
-elif [ ! -r "$CONFIG_DIR/gnome_wayland_recorder.js" ]; then
-    log_message "ERROR" "GNOME Wayland helper is missing: $CONFIG_DIR/gnome_wayland_recorder.js"
+elif [ ! -r "$CLIENT_DIR/gnome_wayland_recorder.js" ]; then
+    log_message "ERROR" "GNOME Wayland helper is missing: $CLIENT_DIR/gnome_wayland_recorder.js"
     exit 1
 fi
 
@@ -146,7 +133,7 @@ if [ -z "$MONITOR_SOURCE" ]; then
     log_message "WARN" "No monitor source found for system audio. Set SYSTEM_AUDIO_SOURCE in config.sh."
 fi
 
-log_message "INFO" "=== Keeboarder Recorder Starting ==="
+log_message "INFO" "=== Jarvis recorder starting ==="
 log_message "INFO" "Capture backend: $ACTIVE_CAPTURE_BACKEND"
 if [ "$ACTIVE_CAPTURE_BACKEND" = "x11" ]; then
     log_message "INFO" "Display: $DISPLAY"
@@ -155,125 +142,68 @@ fi
 log_message "INFO" "Microphone source: $MIC_SOURCE"
 log_message "INFO" "System audio source: ${MONITOR_SOURCE:-unavailable}"
 log_message "INFO" "Recording directory: $RECORDINGS_DIR"
-if [ "$REMOTE_STREAM_ENABLED" = "true" ] && [ -n "$REMOTE_STREAM_URL" ]; then
-    log_message "INFO" "Remote stream enabled: $REMOTE_STREAM_FORMAT -> $REMOTE_STREAM_URL"
-elif [ "$REMOTE_STREAM_ENABLED" = "true" ]; then
-    log_message "WARN" "Remote stream is enabled but REMOTE_STREAM_URL is empty; local recording will continue independently"
-else
-    log_message "INFO" "Remote stream disabled"
-fi
+log_remote_stream_status
 
-start_ffmpeg_process() {
-    local name="$1"
-    shift
+# ============================================================
+# Captures
+# ============================================================
 
-    (
-        current_pid=""
-        cleanup_child() {
-            if [ -n "$current_pid" ]; then
-                kill "$current_pid" 2>/dev/null || true
-            fi
-        }
-        trap cleanup_child EXIT
-        trap 'cleanup_child; exit 0' SIGTERM SIGINT SIGHUP
-
-        while true; do
-            log_message "INFO" "Starting $name process..."
-            ffmpeg -nostdin "$@" >> "$RECORDER_LOG" 2>&1 &
-            local pid=$!
-            current_pid="$pid"
-            log_message "DEBUG" "$name process started with PID $pid"
-            wait "$pid"
-            local exit_code=$?
-            current_pid=""
-
-            if [ "$exit_code" -ne 0 ]; then
-                log_message "WARN" "$name process exited with code $exit_code. Restarting in 5 seconds..."
-                sleep 5
-            fi
-        done
-    ) &
-    PROCESS_PIDS+=("$!")
-}
-
-start_wayland_screen_process() {
-    (
-        current_pid=""
-        cleanup_child() {
-            if [ -n "$current_pid" ]; then
-                kill "$current_pid" 2>/dev/null || true
-                wait "$current_pid" 2>/dev/null || true
-            fi
-        }
-        trap cleanup_child EXIT
-        trap 'cleanup_child; exit 0' SIGTERM SIGINT SIGHUP
-
-        while true; do
-            local output_file="$SCREEN_DIR/screen-$(date '+%Y-%m-%d-%H-%M-%S').$WAYLAND_SCREEN_EXTENSION"
-            log_message "INFO" "Starting GNOME Wayland screen segment: $output_file"
-            gjs "$CONFIG_DIR/gnome_wayland_recorder.js" \
-                "$output_file" "$SEGMENT_DURATION" "$SCREEN_FPS" "$WAYLAND_DRAW_CURSOR" \
-                >> "$RECORDER_LOG" 2>&1 &
-            current_pid=$!
-            wait "$current_pid"
-            local exit_code=$?
-            current_pid=""
-
-            if [ "$exit_code" -ne 0 ]; then
-                log_message "WARN" "GNOME Wayland recorder exited with code $exit_code. Restarting in 5 seconds..."
-                sleep 5
-            fi
-        done
-    ) &
-    PROCESS_PIDS+=("$!")
+# GNOME Shell's screencast service records one file per call rather than a continuous stream, so
+# each attempt needs its own output name — which is why this goes through supervise_building
+# rather than supervise. The restart loop is what turns single-segment calls into a continuous
+# recording.
+build_wayland_screen_command() {
+    local stamp
+    stamp=$(date '+%Y-%m-%d-%H-%M-%S')
+    local output_file="$SCREEN_DIR/screen-$stamp.$WAYLAND_SCREEN_EXTENSION"
+    log_message "INFO" "Next GNOME Wayland screen segment: $output_file"
+    # shellcheck disable=SC2034  # read by supervise_building in the shared library
+    RECORDER_COMMAND=(
+        gjs "$CLIENT_DIR/gnome_wayland_recorder.js"
+        "$output_file" "$SEGMENT_DURATION" "$SCREEN_FPS" "$WAYLAND_DRAW_CURSOR"
+    )
 }
 
 if [ "$ACTIVE_CAPTURE_BACKEND" = "gnome-wayland" ]; then
     log_message "INFO" "Starting GNOME Wayland screen recording (WebM, $SCREEN_FPS fps)..."
-    start_wayland_screen_process
-    if [ "$REMOTE_STREAM_ENABLED" = "true" ] && [ -n "$REMOTE_STREAM_URL" ]; then
+    supervise_building "wayland-screen" build_wayland_screen_command
+    if remote_stream_wanted; then
         log_message "WARN" "Live screen streaming is unavailable with the GNOME Wayland backend; local recording remains enabled."
     fi
 else
     log_message "INFO" "Starting X11 screen recording ($SCREEN_SEGMENT_FORMAT, H.264, $SCREEN_FPS fps, CRF $SCREEN_CRF)..."
-    start_ffmpeg_process "screen" \
-        -f x11grab -framerate "$SCREEN_FPS" -video_size "$SCREEN_GEOMETRY" \
+    screen_segment_args
+    supervise "screen" \
+        ffmpeg -nostdin -f x11grab -framerate "$SCREEN_FPS" -video_size "$SCREEN_GEOMETRY" \
         -i "$DISPLAY+$SCREEN_OFFSET_X,$SCREEN_OFFSET_Y" \
-        -c:v libx264 -preset "$SCREEN_PRESET" -crf "$SCREEN_CRF" \
-        -g "$SCREEN_KEYFRAME_INTERVAL" -keyint_min "$SCREEN_KEYFRAME_INTERVAL" -sc_threshold 0 \
-        -f segment -segment_time "$SEGMENT_DURATION" -reset_timestamps 1 \
-        -segment_format "$SCREEN_SEGMENT_FORMAT" \
-        -segment_format_options "$SCREEN_SEGMENT_FORMAT_OPTIONS" \
-        -flush_packets 1 -strftime 1 \
-        "$SCREEN_DIR/screen-%Y-%m-%d-%H.$SCREEN_SEGMENT_EXTENSION"
+        "${SCREEN_SEGMENT_ARGS[@]}"
 
-    if [ "$REMOTE_STREAM_ENABLED" = "true" ] && [ -n "$REMOTE_STREAM_URL" ]; then
+    if remote_stream_wanted; then
         log_message "INFO" "Starting remote screen stream ($REMOTE_STREAM_FORMAT)..."
-        start_ffmpeg_process "screen-stream" \
-            -f x11grab -framerate "$SCREEN_FPS" -video_size "$SCREEN_GEOMETRY" \
+        remote_stream_args
+        supervise "screen-stream" \
+            ffmpeg -nostdin -f x11grab -framerate "$SCREEN_FPS" -video_size "$SCREEN_GEOMETRY" \
             -i "$DISPLAY+$SCREEN_OFFSET_X,$SCREEN_OFFSET_Y" \
-            -c:v "$REMOTE_STREAM_CODEC" -preset "$REMOTE_STREAM_PRESET" -crf "$REMOTE_STREAM_CRF" \
-            -pix_fmt "$REMOTE_STREAM_PIXEL_FORMAT" -tune "$REMOTE_STREAM_TUNE" \
-            -g "$REMOTE_STREAM_KEYFRAME_INTERVAL" -keyint_min "$REMOTE_STREAM_KEYFRAME_INTERVAL" -sc_threshold 0 \
-            -f "$REMOTE_STREAM_FORMAT" "$REMOTE_STREAM_URL"
+            "${REMOTE_STREAM_ARGS[@]}"
     fi
 fi
 
 log_message "INFO" "Starting microphone recording (WAV)..."
-start_ffmpeg_process "microphone" \
-    -f pulse -i "$MIC_SOURCE" \
-    -acodec pcm_s16le \
-    -f segment -segment_time "$SEGMENT_DURATION" -strftime 1 \
-    "$MIC_DIR/mic-%Y-%m-%d-%H.wav"
+wav_segment_args "$MIC_DIR/mic-%Y-%m-%d-%H.wav"
+supervise "microphone" \
+    ffmpeg -nostdin -f pulse -i "$MIC_SOURCE" \
+    "${WAV_SEGMENT_ARGS[@]}"
 
 if [ -n "$MONITOR_SOURCE" ]; then
     log_message "INFO" "Starting system audio recording (WAV)..."
-    start_ffmpeg_process "system-audio" \
-        -f pulse -i "$MONITOR_SOURCE" \
-        -acodec pcm_s16le \
-        -f segment -segment_time "$SEGMENT_DURATION" -strftime 1 \
-        "$SYSTEM_AUDIO_DIR/system-%Y-%m-%d-%H.wav"
+    wav_segment_args "$SYSTEM_AUDIO_DIR/system-%Y-%m-%d-%H.wav"
+    supervise "system-audio" \
+        ffmpeg -nostdin -f pulse -i "$MONITOR_SOURCE" \
+        "${WAV_SEGMENT_ARGS[@]}"
 fi
 
 log_message "INFO" "Recording processes started. Monitoring..."
+
+# Stay alive so the signal traps can run: this process is what systemd supervises, and it is what
+# turns a stop request into a clean shutdown of every capture.
 wait

@@ -3,7 +3,7 @@
 Run the full upload path — client → proxy → bucket — entirely on your machine,
 with no AWS account and no remote auth server. A local [MinIO](https://min.io)
 container stands in for S3, and the auth server runs against the monorepo's single
-shared PostgreSQL — the `db` service in `docker-compose.all-services.yml`, not a
+shared PostgreSQL — the `db` service in `docker-compose.storages.yml`, not a
 container private to this app.
 
 Requires: Docker, JDK 25+, Maven, `curl`.
@@ -15,7 +15,7 @@ cd apps/object-storage-proxy
 
 # 1. Start MinIO (S3), bring up the shared `db` service, and create the bucket.
 #    Note: `up` touches the monorepo-wide stack — it runs `docker compose -f
-#    docker-compose.all-services.yml up -d db`, the same Postgres every other app uses.
+#    docker-compose.storages.yml up -d db`, the same Postgres every other app uses.
 scripts/local-stack.sh up
 
 # 2. In one terminal, run the client auth server (builds the jar on first run).
@@ -28,7 +28,10 @@ scripts/local-stack.sh admin-auth
 # 4. In another terminal, run the proxy pointed at MinIO.
 scripts/local-stack.sh proxy
 
-# 5. Create an upload identity, and an admin (secrets must be >= 8 chars).
+# 5. Create an upload identity, and an admin (secrets must be >= 8 chars). Both commands log in
+#    as the bootstrap admin each server was started with (`local-admin` / `local-admin-secret`,
+#    override with AUTH_ADMIN_CLIENT_ID / AUTH_ADMIN_SECRET) — the auth server only provisions
+#    for a token from its `admin` workspace.
 scripts/local-stack.sh identity tester testsecret
 scripts/local-stack.sh admin-identity operator operatorsecret
 
@@ -70,7 +73,7 @@ scripts/local-stack.sh down
 
 `down` removes only the containers this script started (MinIO; named volumes are kept). It
 deliberately leaves the shared Postgres running, since other apps depend on it — stop that with
-`docker compose -f docker-compose.all-services.yml stop db` from the repo root if you really
+`docker compose -f docker-compose.storages.yml stop db` from the repo root if you really
 want it down.
 
 ## How the proxy is pointed at the local bucket
@@ -90,7 +93,10 @@ remote endpoint. See `application.yml`.
 Browse to `http://localhost:5000/admin` and sign in with the admin identity from step 5
 (`operator` / `operatorsecret`). The panel checks that credential against the admin auth server
 on :8082, not the client one on :8081, so `tester` cannot sign in — that separation is the point.
-From there, "Create identity" mints upload identities in the *client* auth server.
+From there, "Create identity" mints upload identities in the *client* auth server — the proxy
+presents `AUTH_ADMIN_CLIENT_ID` / `AUTH_ADMIN_SECRET` to do it, which `local-stack.sh proxy`
+passes through as the same bootstrap admin. Without them that form answers 503 and everything
+else keeps working.
 
 ## Pointing the syncer / recorder clients at it
 

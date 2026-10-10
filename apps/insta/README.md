@@ -19,6 +19,9 @@ insta profile   <username>
 insta followers <username> [--limit N] [--all] [--cursor C] [--json]
 insta following <username> [--limit N] [--all] [--cursor C] [--json]
 insta sync      <username> [--limit N]
+insta block     <username> [--followers|--following|--both] [--reason R]
+insta unblock   <username> [--followers|--following|--both]
+insta blocks
 insta ui
 ```
 
@@ -28,6 +31,8 @@ insta ui
 | `--all` | keep fetching pages until the list is exhausted |
 | `--cursor C` | resume from a previous run's cursor |
 | `--json` | print raw JSON instead of a readable list |
+| `--followers` / `--following` / `--both` | which list a block covers (default `--both`) |
+| `--reason R` | why an account is blocked, kept on the row |
 
 The username may be given with or without a leading `@` and is case-insensitive.
 
@@ -103,7 +108,7 @@ $ insta sync nasa
 nasa: 500 followers seen, 3 new, 1 unfollowed, 12 posts
 ```
 
-Five tables, created automatically on first run (`CREATE … IF NOT EXISTS`, so there is no
+The tables, created automatically on first run (`CREATE … IF NOT EXISTS`, so there is no
 migration tool to keep in step):
 
 | Table | Holds |
@@ -115,6 +120,9 @@ migration tool to keep in step):
 | `follow_edge` | who follows whom right now: `active`, plus the `last_seen_at` watermark |
 | `follows` | one row every time a follow began — the first sighting and each return |
 | `unfollows` | one row every time one ended, each carrying its own `notified_at` |
+| `scrape_block` | accounts a walk must leave alone, one row per account per direction |
+| `scrape_run` | one row per sync: when it ran, whether it walked, and what it counted |
+| `scrape_run_member` | the membership that run saw — one row per account per run |
 | `post` | identity and publication facts, one row per post |
 | `post_caption` | every distinct caption, digest-keyed like bios (captions are editable) |
 | `post_metric` | likes / comments / views over time — a row only when a number moves |
@@ -122,6 +130,42 @@ migration tool to keep in step):
 
 Identity is Instagram's id rather than a handle because handles change — and it is `TEXT`, not
 `INT`, since real ids already exceed `INT` (`4014759590`).
+
+### What each run saw — `scrape_run`
+
+Every `sync` writes a snapshot of the list it walked, alongside the graph and independently of it.
+The graph is *derived*: it is what we were willing to believe after the checks below refused to act
+on a walk that stopped early or lost implausibly much. `scrape_run_member` is what actually came
+back, stamped with when.
+
+That gap is the reason the table exists. Three questions it can answer and `follow_edge` cannot:
+
+```sql
+-- What did the run on the 3rd return, on a day whose diff was refused?
+SELECT m.account_id FROM scrape_run_member m JOIN scrape_run r ON r.id = m.run_id
+WHERE r.subject_id = ? AND r.finished_at::date = DATE '2026-08-03';
+
+-- Did two consecutive runs disagree about anybody?
+SELECT account_id FROM scrape_run_member WHERE run_id = ?
+EXCEPT SELECT account_id FROM scrape_run_member WHERE run_id = ?;
+
+-- Every run over this account, including the ones that chose not to walk.
+SELECT finished_at, walked, complete, seen, added, retired, skipped_reason
+FROM scrape_run WHERE subject_id = ? ORDER BY finished_at DESC;
+```
+
+A run that skipped the walk — blocked, over the follower ceiling, or private — still gets a
+`scrape_run` row with `walked = false` and the reason. An absent row would mean "no sync happened",
+which is a different fact from "a sync happened and declined to spend money here".
+
+Read `complete` before treating a snapshot as a census: a walk that stopped early is a sample of
+the list, and it is stored as one rather than being thrown away.
+
+**This table grows per run, not per change.** A walk is bounded by `INSTA_SKIP_ABOVE_FOLLOWERS`
+(1500 by default), so one run costs at most that many rows — but nothing prunes them, and syncing
+100 accounts daily is on the order of 50M rows a year. There is no retention sweep yet. If it
+starts to bite, delete `scrape_run_member` rows past a horizon and keep the `scrape_run` rows,
+which are one per run and already carry the counts.
 
 ### Posts come free with the profile lookup
 
@@ -192,6 +236,77 @@ them, which is why this exists.
 The whole write is one transaction: a sync that dies halfway leaves the graph as it was, because a
 half-refreshed graph looks like unfollows to the next run.
 
+### Not tracking an account — `insta block`
+
+Some accounts are not worth what their list costs: a shop, a news account you follow for the
+headlines, anything whose 40,000 followers say nothing about you. `block` records that decision
+next to the graph, so it survives the next run instead of being re-made — and re-paid for — every
+night.
+
+```console
+$ insta block someshop --followers --reason "shop, list is noise"
+blocked someshop (followers)
+
+$ insta blocks
+someshop                 followers  2026-08-17  shop, list is noise
+
+$ insta unblock someshop --both
+unblocked someshop (followers)
+was not blocked: someshop (following)
+```
+
+Direction is on the row rather than the account, so "don't read who follows this shop, but do read
+who it follows" is a sentence the table can hold. `--both` is the default and is simply two rows.
+
+**A block stops the walk, not the profile lookup.** The profile is one dataset item against a
+list's hundreds, it keeps counts, bios and the free twelve posts current, and it is the only thing
+that could ever notice a blocked account has changed — including [going public](#todo-warn-when-an-account-goes-from-private-to-public).
+A block that skipped the profile too would freeze the account at whatever it looked like the day
+you blocked it, which is the opposite of what a watch list is for.
+
+`sync` asks the block list first, before the follower-ceiling and private checks, so a deliberate
+decision is reported as one:
+
+```console
+$ insta sync someshop
+someshop: follower walk is blocked (shop, list is noise) — profile and 12 posts recorded.
+```
+
+Blocking costs nothing: the handle is resolved to an account id out of `account_username`, from
+data a previous walk already paid for. The flip side is that an account insta has **never seen**
+cannot be blocked — there is no id to key the row on, and there is no way to learn one without
+paying for a lookup. In practice that never bites, because the accounts worth blocking are the ones
+a walk already put in `account`.
+
+Lifting a block deletes the row. Unlike every other table here it keeps no history: a block is a
+decision rather than an observation, and what matters is what the next run is willing to pay for.
+
+### TODO: warn when an account goes from private to public
+
+Roughly two thirds of a personal follower list is private, and a private account is skipped for
+free. So the moment one of them goes **public** is the moment a follower list that was never
+readable becomes readable — the single most interesting transition this program could report, and
+nothing watches for it today.
+
+What it needs, in order:
+
+1. **Somewhere to put `private`.** The schema does not record it at all right now: `sync` reads
+   `profile.isPrivate()`, branches on it, and throws it away. It wants the same shape as the other
+   facts that change — a row per distinct value with `first_seen_at` / `last_seen_at`, so both
+   "public since Tuesday" and "has flipped four times this month" stay answerable. A single boolean
+   column on `account` would answer neither.
+2. **The transition.** On each sync, compare what the profile just said against the last recorded
+   value; `true → false` is the event. Note that the profile lookup runs even for blocked and
+   over-ceiling accounts, so this fires for every account insta has ever synced rather than only
+   the ones it walks — which is the point, since the private ones are exactly the ones never walked.
+3. **Somewhere to send it.** The alert dispatcher does not exist either — `unfollows.notified_at`
+   is written and indexed for one and nothing reads it. A gone-public event wants the same
+   dispatcher and the same per-event `notified_at` discipline, so it is worth building once for
+   both rather than twice.
+
+Best done together with the dispatcher rather than before it: a trigger with nowhere to send its
+output is a row nobody reads.
+
 ### Profile pictures
 
 Off by default (`INSTA_PICTURE_STORE=none`) — and with it off, no image is even downloaded.
@@ -215,9 +330,15 @@ about $150 per full pass at depth 2 and $75,000 at depth 3 — so there is delib
 crawl here.
 
 Not built yet: the alert dispatcher (`unfollow_notified_at` is written and indexed for it, but
-nothing sends mail), any scheduler (run `sync` from cron), and posts beyond the free twelve —
-`post_media` fills only for those, and `deleted_at` stays unused until a complete post listing
-exists.
+nothing sends mail), the [gone-public warning](#todo-warn-when-an-account-goes-from-private-to-public)
+that wants the same dispatcher, any scheduler (run `sync` from cron), and posts beyond the free
+twelve — `post_media` fills only for those, and `deleted_at` stays unused until a complete post
+listing exists.
+
+`insta block` is the lever for the depth-2 arithmetic above: cost is linear in how many accounts
+you walk, and a handful of large accounts usually dominate the total. Blocking those is the
+cheapest reduction available, and `INSTA_SKIP_ABOVE_FOLLOWERS` is the automatic version of the same
+idea.
 
 ## The viewer — `insta ui`
 
@@ -295,7 +416,7 @@ overwrites it. To read something fresh, delete its key —
 
 ### Sharing the one Redis
 
-There is exactly one Redis in this repo (the `redis` service in `docker-compose.all-services.yml`)
+There is exactly one Redis in this repo (the `redis` service in `docker-compose.storages.yml`)
 and keeboarder-server is already in it under the `ws:` prefix. This cache namespaces every key
 with **`insta:`**. The namespacing is not this program's to get right: both go through
 `dev.orwell.redis.RedisClient` (`packages/redis-client`), which puts the prefix its constructor is
@@ -321,17 +442,12 @@ Configuration error: Missing required environment variable: APIFY_TOKEN
 What still works with no key, no Redis and no network: `insta --help`, every usage error, and the
 whole test suite (`mvn -pl apps/insta -am test`).
 
-To exercise the program itself, run the bundled fake Apify:
-
-```bash
-python3 apps/insta/scripts/fake-apify.py --pages 3 &
-export APIFY_TOKEN=anything APIFY_BASE_URL=http://127.0.0.1:9401
-java -jar apps/insta/target/insta-0.1.0-SNAPSHOT-exec.jar followers nasa --all
-```
-
-It serves canned data on both run paths and ignores the token. `--pages N` hands out continuation
-tokens so `--all` has something to walk. It is a development fixture, not the test double — the
-tests have their own stub and do not use it.
+To exercise the program itself against something other than a real account, point
+`APIFY_BASE_URL` at a server of your own that answers Apify's run endpoints. There used to be a
+`scripts/fake-apify.py` fixture doing exactly that; it was **deleted deliberately** — it duplicated
+`src/test/java/dev/orwell/insta/support/ApifyStubServer.java` with a second set of canned data that
+nothing kept in step, and the tests never used it. Don't recreate it; ignore references to it in
+old commits.
 
 Redis is optional too: with none running, every lookup logs a cache warning and answers anyway.
 
@@ -357,8 +473,21 @@ required one, and a missing one fails before anything can be spent.
 | `APIFY_TOKEN` | — | Apify API token, sent as a bearer header (never in the URL) |
 | `APIFY_BASE_URL` | `https://api.apify.com` | Apify API root |
 | `APIFY_PROFILE_ACTOR` | `apify/instagram-profile-scraper` | actor behind `profile` |
-| `APIFY_CONNECTIONS_ACTORS` | `scraping-solutions` | ordered chain of adapters for list lookups |
+| `APIFY_CONNECTIONS_ACTORS` | `scraping-solutions` | ordered chain of sources for list lookups |
 | `INSTA_INSTAGRAM_COOKIES` | *(empty)* | session cookies, used only by `logical-scrapers` |
+| `INSTA_SELFHOSTED_URL` | *(empty)* | base URL of your own scraper |
+| `INSTA_SELFHOSTED_TOKEN` | *(empty)* | bearer token for it; omitted when blank |
+| `INSTA_SELFHOSTED_PAGINATES` | `true` | whether it returns an honest `nextCursor` |
+| `INSTA_RAPIDAPI_HOST` | *(empty)* | e.g. `instagram-scraper-api2.p.rapidapi.com` |
+| `INSTA_RAPIDAPI_KEY` | *(empty)* | `X-RapidAPI-Key` |
+| `INSTA_RAPIDAPI_FOLLOWERS_PATH` | `/v1/followers` | path for a follower list |
+| `INSTA_RAPIDAPI_FOLLOWING_PATH` | `/v1/following` | path for a following list |
+| `INSTA_RAPIDAPI_USER_PARAM` | `username_or_id_or_url` | query parameter naming the account |
+| `INSTA_RAPIDAPI_LIMIT_PARAM` | `count` | query parameter carrying the limit |
+| `INSTA_RAPIDAPI_CURSOR_PARAM` | `pagination_token` | query parameter carrying the cursor |
+| `INSTA_RAPIDAPI_PAGINATES` | `false` | claim only if your vendor really resumes |
+| `INSTA_RAPIDAPI_READS_FOLLOWING` | `false` | claim only if it sells a following endpoint |
+| `INSTA_HTTP_TIMEOUT_SECONDS` | `60` | per-request budget for both HTTP sources |
 | `INSTA_SKIP_ABOVE_FOLLOWERS` | `1500` | skip the walk above this many followers; 0 disables |
 | `APIFY_RUN_TIMEOUT_SECONDS` | `120` | per-run budget; a run that outlives it is aborted |
 | `INSTA_DEFAULT_LIMIT` | `500` | accounts returned when `--limit` is omitted — at the ceiling, see [Caching](#caching) |
@@ -373,27 +502,42 @@ required one, and a missing one fails before anything can be spent.
 | `INSTA_UI_ADDRESS` | `0.0.0.0` | interface the viewer binds; `127.0.0.1` to keep it local |
 | `INSTA_UI_PORT` | `5554` | viewer port |
 | `INSTA_LOG_CONSOLE` | `true` | whether log records go to the console (on stderr) |
+| `LOGGER` | *(derived)* | `console`, `disk`, `loki`, `loki-with-fallback` or `both` |
 | `LOKI_URL` / `LOKI_TENANT_ID` | *(empty)* | ship records to Loki as well |
 | `LOGGING_FILE_NAME` | *(empty)* | append records as JSON lines to this file |
 
 Run it against the stack's Redis with `REDIS_HOST=localhost`, which is where
-`docker-compose.all-services.yml` publishes 6379.
+`docker-compose.storages.yml` publishes 6379.
 
 ## Logging
 
 Everything inside the program logs through `dev.orwell.logging.Logger` and is handed one at
 construction — `ApifyClient`, `InstagramService` and the cache all take it as a parameter and know
-nothing about where records end up. `InstaLogger` is the single place a concrete sink is named, so
-changing production is configuration, not code.
+nothing about where records end up. The sinks themselves are assembled by `LoggerSetup`
+(`packages/logger`), the same factory every server in the repo uses; `InstaLogger` is only the
+translation from insta's environment into it.
 
-| Set | Adds |
+`LOGGER` names the sink tree, exactly as it does elsewhere:
+
+| `LOGGER` | Records go to |
 |---|---|
-| *(nothing)* | human-readable console |
-| `LOKI_URL` (+ `LOKI_TENANT_ID`) | async batched push to Loki |
-| `LOGGING_FILE_NAME` | JSON lines appended to that file |
-| `INSTA_LOG_CONSOLE=false` | drops the console sink |
+| `console` | the console only |
+| `disk` | console + `LOGGING_FILE_NAME` as JSON lines |
+| `loki` | console + async batched push to Loki |
+| `loki-with-fallback` | console + Loki, with the file catching only what Loki refused |
+| `both` | console + Loki + the file, unconditionally |
 
-They compose, so a cron job can ship structured records and leave the terminal clean:
+**Leaving `LOGGER` unset keeps whatever your existing configuration already did**, because insta's
+keys predate it: `LOKI_URL` and `LOGGING_FILE_NAME` together imply `both`, either alone implies
+`loki` or `disk`, and neither means `console`. Naming `LOGGER` overrides the lot — so
+`LOGGER=console` with a `LOGGING_FILE_NAME` set writes no file.
+
+`loki-with-fallback` is the one worth knowing about: it costs no disk I/O in the steady state and
+turns a Loki outage into a file rather than into lost records. Insta could not reach it at all
+before it moved onto the shared factory.
+
+`INSTA_LOG_CONSOLE=false` is separate from `LOGGER` and drops the console, so a cron job can ship
+structured records and leave the terminal clean:
 
 ```bash
 INSTA_LOG_CONSOLE=false LOGGING_FILE_NAME=/var/log/insta.log insta profile nasa
@@ -405,16 +549,21 @@ rather than a server that boots once:
 
 - **The console sink writes to stderr, not stdout.** Results are stdout and nothing else is, so
   `insta followers nasa --json | jq` stays parseable however chatty logging gets.
-- **An unset `LOKI_URL` is not warned about.** The Spring bean complains, because a server with no
-  log shipping is usually a misconfigured deployment; for a hand-run command it is the normal case,
-  and the warning would fire on every invocation.
+- **The console can be switched off.** A server's console is what `docker logs` reads and is in
+  every mode by construction; `INSTA_LOG_CONSOLE` is the exception a terminal earns.
 
-A sink that cannot be opened is skipped with a warning rather than being fatal — an unwritable log
+A sink that cannot be **opened** is reported and skipped rather than being fatal — an unwritable log
 file should not be the reason a lookup does not happen — and the whole chain is wrapped in
-`FailSafeLogger` so a sink failing mid-run cannot take a lookup down.
+`FailSafeLogger` so a sink failing mid-run cannot take a lookup down. A **contradiction** between
+configured values does stop the program: `LOGGER=loki` with no `LOKI_URL` exits 2 with a
+configuration error rather than pretending to ship records.
+
+That report goes to stderr **even with `INSTA_LOG_CONSOLE=false`**. Switching the console off
+silences records, not the news that a sink is broken — otherwise the cron job above, pointed at a
+path it cannot write, would discard every record and say nothing anywhere.
 
 The Loki sink batches on a **daemon** thread and flushes every couple of seconds. A program that
-exits in under a second would take its unsent records with it, so `InstaLogger` is `AutoCloseable`
+exits in under a second would take its unsent records with it, so the logger is a `ManagedLogger`
 and `InstaCli` closes it in a try-with-resources; that drains the queue. This is the one part of
 logging a CLI has to get right that a long-lived server does not.
 
@@ -453,7 +602,7 @@ dev.orwell.insta            InstaCli, InstaEnvs, InstaJson, InstaLogger — the 
 dev.orwell.insta.apify      ApifyClient, ApifyException, ActorRun — everything that speaks to Apify
 dev.orwell.insta.cache      ScrapeCache + Redis and disabled implementations
 dev.orwell.insta.instagram  InstagramService and the value types it produces
-dev.orwell.insta.graph      Postgres schema, writers, and the sync command
+dev.orwell.insta.graph      Postgres schema, writers, the block list, and the sync command
 dev.orwell.insta.ui         the read-only graph viewer
 ```
 
@@ -480,22 +629,90 @@ They are also fetched differently:
   `OUTPUT`, which is where the actor puts its continuation token. The sync endpoint returns dataset
   items and nothing else, so paging is simply not visible from it.
 
-### Actors come in a chain, not one at a time
+### Sources come in a chain, not one at a time
 
 Every Instagram actor has its own quota, and the free tiers are small — so list lookups work down
-an ordered chain and fall through when one refuses:
+an ordered chain and fall through when one refuses. Not every link in it is an Apify actor:
 
-| Adapter | Price/1k | Directions | Paginates | Notes |
+| Source | Price/1k | Directions | Paginates | Notes |
 |---|---|---|---|---|
-| `scraping-solutions` | from $0.60 | both | **yes** | default; free API capped at 1,000 results/day |
-| `datadoping` | ~$1.55 observed | followers | no | needs no cookies |
-| `logical-scrapers` | $2.50 | followers | no | wants your Instagram session cookies |
+| `self-hosted` | yours | both | **yes** | your own service; the only one that costs nothing per result |
+| `scraping-solutions` | from $0.60 | both | **yes** | Apify; default; free API capped at 1,000 results/day |
+| `datadoping` | ~$1.55 observed | followers | no | Apify; needs no cookies |
+| `logical-scrapers` | $2.50 | followers | no | Apify; wants your Instagram session cookies |
+| `rapidapi` | vendor's | followers¹ | no¹ | any RapidAPI Instagram endpoint, fully configurable |
 
-`APIFY_CONNECTIONS_ACTORS=scraping-solutions,datadoping` sets the order. They are adapter *names*
-rather than actor ids because swapping actors is not a matter of changing an id: they disagree on
+¹ Both off by default — see [RapidAPI](#rapidapi) for why turning them on is a decision, not a
+convenience.
+
+`APIFY_CONNECTIONS_ACTORS=self-hosted,scraping-solutions` sets the order. They are source *names*
+rather than actor ids because swapping one is not a matter of changing an id: they disagree on
 input field names (`Account` vs `usernames` vs `username`), on the limit field (`resultsLimit` vs
 `max_count` vs `max_results`), on whether they can read a *following* list, on whether they
-paginate, and on how they signal a refusal. Each of those lives in a `ConnectionsAdapter`.
+paginate, and on how they signal a refusal.
+
+Two of them are not Apify actors at all. `ConnectionsSource` is the level that lets them sit in the
+same chain: an Apify adapter *describes* an actor for `ApifyClient` to run, which is exactly right
+for the marketplace three and useless for anything with its own hostname and authentication, so a
+source owns its request instead. `ApifyConnectionsSource` wraps the existing adapters unchanged,
+and the names that select them are unchanged too — an existing `.env` keeps working as it did.
+
+Whatever the source, `InstagramService` keeps everything that must not vary between them: mapping
+rows through `DatasetFields`, counting unusable ones, encoding the cursor, caching, and the
+all-or-nothing failover rule.
+
+#### Self-hosted
+
+Your own scraper, and the only source here whose contract is *ours*. There is now an implementation
+of it in this repo — [`apps/insta-scraper`](../insta-scraper/README.md), which drives a logged-in
+Instagram session behind a rate limiter — but the contract is the HTTP shape below, not that
+module, so any implementation in any language will do:
+
+```
+GET {INSTA_SELFHOSTED_URL}/connections?username=nasa&type=followers&limit=500[&cursor=…]
+Authorization: Bearer {INSTA_SELFHOSTED_TOKEN}      (sent only when the token is set)
+
+200 {"accounts": [{"id": "1", "username": "alice", "fullName": "Alice"}, …],
+     "nextCursor": "…"}          // null or absent = the list is exhausted
+```
+
+Only `username` is required per row, and fields are read leniently — `full_name` and `fullName`
+are both fine.
+
+**`nextCursor` is load-bearing and must be honest.** Absent means "there is no more", and `sync`
+takes that as licence to retire every follower it did not see. A service that truncates a page
+without handing back a cursor looks exactly like a mass unfollow. If yours cannot paginate, say so
+with `INSTA_SELFHOSTED_PAGINATES=false`: it will then be allowed to add followers but never to
+retire one.
+
+#### RapidAPI
+
+RapidAPI is a marketplace, not an API — dozens of Instagram endpoints, differently priced and
+shaped, appearing and vanishing. So every part of the request is configurable and the response is
+read leniently; switching vendor is meant to be a change to `.env`, not to the code.
+
+```
+GET https://{INSTA_RAPIDAPI_HOST}{path}?{userParam}=nasa&{limitParam}=500[&{cursorParam}=…]
+X-RapidAPI-Key:  {INSTA_RAPIDAPI_KEY}
+X-RapidAPI-Host: {INSTA_RAPIDAPI_HOST}
+```
+
+The defaults follow the common `instagram-scraper-api2` shape and are a starting point, not a
+promise. A host carrying a scheme is taken as given, so a local mock or an outbound proxy needs no
+special switch; a bare hostname gets `https`.
+
+`INSTA_RAPIDAPI_PAGINATES` and `INSTA_RAPIDAPI_READS_FOLLOWING` **both default to false**, and
+turning either on is a claim about your vendor you should check first. Pagination is the expensive
+one to get wrong: a source that cannot prove it reached the end of a list must never end one, or
+the first short page retires everybody it did not include.
+
+#### What an HTTP source may never do
+
+Return an empty list it is not sure about. A response with no recognisable accounts array is an
+`UNAVAILABLE` failure, never an empty page — because an empty page is exactly what `FollowWriter`
+reads as every follower leaving at once. Status codes map to the same kinds the Apify path uses, so
+the chain fails over on 401/402/403/429/5xx and stops on a 4xx that every source would reject
+identically.
 
 Three rules keep failover from corrupting the graph:
 

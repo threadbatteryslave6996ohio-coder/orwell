@@ -6,6 +6,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
@@ -19,6 +20,9 @@ import dev.orwell.logging.Logger;
 import dev.orwell.primitives.Sha256;
 
 public final class AnalysisWorker {
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+
     private static final byte[] SOI = {(byte) 0xFF, (byte) 0xD8};
     private static final byte[] EOI = {(byte) 0xFF, (byte) 0xD9};
     /** Bound in-progress frame assembly so a stream that never emits an EOI can't exhaust memory. */
@@ -58,7 +62,13 @@ public final class AnalysisWorker {
     }
 
     private static void run(String endpoint, InputStream input, Logger logger) throws Exception {
-        HttpClient client = HttpClient.newBuilder().build();
+        // Deliberately NOT wrapped in LoggingHttpClient, and one of the few places in the repo
+        // that is not. This is a per-frame push loop at video rates, not a request/response
+        // service: the wrapper writes one record per request, so a healthy stream would emit a
+        // line per frame and a dead endpoint a WARN per frame — which is precisely what
+        // SEND_FAILURE_LOG_INTERVAL below exists to prevent, and wrapping silently undid it.
+        // The throttled error line here is this worker's outbound record.
+        HttpClient client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         int frameIndex = 0;
         long consecutiveFailures = 0;
         for (byte[] frame : extractFrames(input, logger)) {
@@ -70,6 +80,9 @@ public final class AnalysisWorker {
             double timestamp = now.getEpochSecond() + (now.getNano() / 1_000_000_000.0);
             String payload = toJson(timestamp, frameIndex, Sha256.hex(frame), Base64.getEncoder().encodeToString(frame));
             HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
+                    // Frames arrive continuously; a stalled endpoint must cost one timeout,
+                    // not the whole drain loop.
+                    .timeout(REQUEST_TIMEOUT)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(payload))
                     .build();

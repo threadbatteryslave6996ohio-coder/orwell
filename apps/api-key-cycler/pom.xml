@@ -1,0 +1,72 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.orwell</groupId>
+        <artifactId>orwell</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>api-key-cycler</artifactId>
+
+    <properties>
+        <start-class>dev.orwell.keycycler.ApiKeyCyclerApplication</start-class>
+    </properties>
+
+    <!--
+      Standalone: this app shares no module with apps/reverse-proxy. It carries its own forwarding
+      (ProxyController, ProxyRequest, ProxyResponse, UpstreamClient, ProxyEndpoint) because the two
+      proxies answer different questions and neither should constrain the other's shape.
+
+      No database and no HikariCP, unlike reverse-proxy: this proxy keeps no trail of its own. What
+      it holds is a handful of credentials and a cursor, and both live in memory for the life of the
+      process. Put it in front of the audit proxy if the requests need recording.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>logger</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>env-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>server-bootstrap</artifactId>
+        </dependency>
+        <!-- RequestId, for the correlation header the relay carries across the hop. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JsonStubServer, for the stub upstream the rotation tests answer 429 from. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

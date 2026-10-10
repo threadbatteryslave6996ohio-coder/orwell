@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Keeboarder Ubuntu GNOME Client - Installation Script
+# Jarvis Ubuntu recorder - installation script.
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Keeboarder Ubuntu GNOME Client Installer${NC}"
+echo -e "${BLUE}Jarvis Ubuntu Recorder Installer${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -110,6 +110,9 @@ install -m 755 "$SCRIPT_DIR/start_recorder.sh" "$SCRIPTS_DIR/start_recorder.sh"
 install -m 755 "$SCRIPT_DIR/gnome_wayland_recorder.js" "$SCRIPTS_DIR/gnome_wayland_recorder.js"
 install -m 755 "$SCRIPT_DIR/setup-systemd.sh" "$SCRIPTS_DIR/setup-systemd.sh"
 install -m 644 "$SCRIPT_DIR/config.sh" "$SCRIPTS_DIR/config.sh"
+# start_recorder.sh sources this. The install layout is flat, so it lands beside the script rather
+# than in a lib/ directory; the recorder looks for both names.
+install -m 644 "$SCRIPT_DIR/../lib/recorder.sh" "$SCRIPTS_DIR/recorder-lib.sh"
 echo -e "${GREEN}✓ Scripts installed${NC}"
 
 echo ""

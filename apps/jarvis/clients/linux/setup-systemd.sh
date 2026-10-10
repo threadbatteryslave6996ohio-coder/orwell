@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Keeboarder Ubuntu GNOME - systemd user recorder service setup.
+# Jarvis Ubuntu recorder - systemd user service setup.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
@@ -14,7 +14,7 @@ create_units() {
 
     cat > "$SERVICE_FILE" << EOF
 [Unit]
-Description=Keeboarder recorder
+Description=Jarvis recorder
 After=graphical-session.target
 PartOf=graphical-session.target
 

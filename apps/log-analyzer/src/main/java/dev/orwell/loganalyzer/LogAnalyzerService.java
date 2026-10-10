@@ -2,6 +2,7 @@ package dev.orwell.loganalyzer;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.orwell.bootstrap.schedule.ScheduledJob;
 import dev.orwell.bootstrap.web.SharedJson;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -10,6 +11,9 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
+import dev.orwell.http.LoggingHttpClient;
+import dev.orwell.logging.Logger;
+
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -24,8 +28,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 /**
@@ -38,6 +40,8 @@ import java.util.regex.Pattern;
 public class LogAnalyzerService {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
     private static final Pattern NON_ALNUM = Pattern.compile("[^a-z0-9]+");
+    /** Matches liveness-analyzer's, which queries the same Grafana the same way. */
+    private static final Duration GRAFANA_TIMEOUT = Duration.ofSeconds(10);
 
     private final int lookbackSeconds;
     private final int maxLogLines;
@@ -51,15 +55,9 @@ public class LogAnalyzerService {
     private final double minImportanceConfidence;
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper = SharedJson.mapper();
-    private volatile Instant lastRunAt;
-    private volatile Instant lastAlertAt;
     private volatile String lastDecisionSummary = "";
-    private volatile String lastError = "";
-    private final AtomicLong pollsTotal = new AtomicLong();
-    private final AtomicLong alertsSentTotal = new AtomicLong();
-    private final AtomicLong alertsRejectedTotal = new AtomicLong();
-    private final AtomicLong errorsTotal = new AtomicLong();
-    private final AtomicBoolean pollInProgress = new AtomicBoolean(false);
+    /** Single-flight guard, run counters and the shared {@code /health} keys. */
+    private final ScheduledJob job = new ScheduledJob("poll");
 
     public LogAnalyzerService(
             @Value("${loganalyzer.lookback-seconds}") int lookbackSeconds,
@@ -74,7 +72,8 @@ public class LogAnalyzerService {
             @Value("${loganalyzer.ai-model}") String aiModel,
             @Value("${loganalyzer.ai-timeout-seconds}") int aiTimeoutSeconds,
             @Value("${loganalyzer.min-importance-confidence}") double minImportanceConfidence,
-            @Value("${loganalyzer.alert-cooldown-seconds}") int cooldownSeconds
+            @Value("${loganalyzer.alert-cooldown-seconds}") int cooldownSeconds,
+            Logger logger
     ) {
         this.lookbackSeconds = lookbackSeconds;
         this.maxLogLines = maxLogLines;
@@ -83,9 +82,10 @@ public class LogAnalyzerService {
         this.grafanaLokiDatasourceUid = grafanaLokiDatasourceUid;
         this.lokiQuery = lokiQuery;
         this.minImportanceConfidence = minImportanceConfidence;
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
+        // One client for Grafana, the AI model and the alert endpoint alike, so all three show up
+        // in this service's own log stream.
+        this.httpClient = LoggingHttpClient.wrap(
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(), logger);
         Duration aiTimeout = Duration.ofSeconds(aiTimeoutSeconds);
         Model model = new OpenAiModel(aiApiUrl, aiApiKey, aiModel, aiTimeout, httpClient, SharedJson.mapper());
         this.aiAnalyzer = new AiAnalyzer(model, SharedJson.mapper());
@@ -93,7 +93,7 @@ public class LogAnalyzerService {
         this.cooldownTracker = new AlertCooldownTracker(cooldownSeconds);
     }
 
-    static LogAnalyzerService fromEnv(dev.orwell.env.Env env) {
+    static LogAnalyzerService fromEnv(dev.orwell.env.Env env, Logger logger) {
         return new LogAnalyzerService(
                 env.get(LogAnalyzerEnvs.LOOKBACK_SECONDS),
                 env.get(LogAnalyzerEnvs.MAX_LOG_LINES),
@@ -107,66 +107,38 @@ public class LogAnalyzerService {
                 env.get(LogAnalyzerEnvs.AI_MODEL),
                 env.get(LogAnalyzerEnvs.AI_TIMEOUT_SECONDS),
                 env.get(LogAnalyzerEnvs.MIN_IMPORTANCE_CONFIDENCE),
-                env.get(LogAnalyzerEnvs.ALERT_COOLDOWN_SECONDS)
+                env.get(LogAnalyzerEnvs.ALERT_COOLDOWN_SECONDS),
+                logger
         );
     }
 
     @Scheduled(fixedRateString = "${loganalyzer.poll-interval-seconds}", timeUnit = TimeUnit.SECONDS)
     void scheduledPoll() {
-        pollSafely();
+        job.runSafely(this::runPoll);
     }
 
     /** Current metrics snapshot, surfaced on the shared {@code GET /health} endpoint. */
     public Map<String, Object> healthDetails() {
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("pollsTotal", pollsTotal.get());
-        response.put("alertsSentTotal", alertsSentTotal.get());
-        response.put("alertsRejectedTotal", alertsRejectedTotal.get());
-        response.put("errorsTotal", errorsTotal.get());
-        response.put("lastRunAt", lastRunAt == null ? null : lastRunAt.toString());
-        response.put("lastAlertAt", lastAlertAt == null ? null : lastAlertAt.toString());
+        // The run counters every scheduled job reports (pollsTotal, alerts, errors, timestamps),
+        // then what this one made of them.
+        Map<String, Object> response = new LinkedHashMap<>(job.healthDetails());
         response.put("lastDecisionSummary", lastDecisionSummary);
-        response.put("lastError", lastError);
         return response;
     }
 
-    private void pollSafely() {
-        try {
-            pollOnce();
-        } catch (Exception exception) {
-            recordFailure(exception);
-        }
-    }
-
-    private void recordFailure(Exception exception) {
-        errorsTotal.incrementAndGet();
-        lastError = exception.getMessage();
-    }
-
+    /**
+     * Single-flighted: the scheduler thread and the {@code /run-once} handler thread both call
+     * this, and a poll can outlive the interval (a slow AI call), so overlap is guarded against.
+     */
     public Map<String, Object> pollOnce() throws IOException, InterruptedException {
-        // Single-flight the poll: the scheduler thread and the /run-once handler thread both call
-        // this, and a poll can outlive the interval (a slow AI call), so guard against overlap.
-        if (!pollInProgress.compareAndSet(false, true)) {
-            Map<String, Object> busy = new LinkedHashMap<>();
-            busy.put("success", false);
-            busy.put("skipped", true);
-            busy.put("summary", "A poll is already in progress.");
-            return busy;
-        }
-        try {
-            return runPoll();
-        } finally {
-            pollInProgress.set(false);
-        }
+        return job.runOnce(this::runPoll);
     }
 
     public void recordRunOnceFailure(Exception exception) {
-        recordFailure(exception);
+        job.recordFailure(exception);
     }
 
-    private Map<String, Object> runPoll() throws IOException, InterruptedException {
-        pollsTotal.incrementAndGet();
-        lastRunAt = Instant.now();
+    private Map<String, Object> runPoll(Instant startedAt) throws IOException, InterruptedException {
         List<LogLine> logLines = fetchRecentErrorLogs();
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("success", true);
@@ -227,15 +199,13 @@ public class LogAnalyzerService {
             case DELIVERED -> {
                 response.put("alertSent", true);
                 response.put("summary", "Alert sent.");
-                alertsSentTotal.incrementAndGet();
-                lastAlertAt = Instant.now();
+                job.recordAlertDelivered();
             }
             case REJECTED -> {
                 // Terminal client error: the service will keep rejecting this payload, so hold
                 // the cooldown instead of hammering it. Surface it so a broken alerting pipeline
                 // (e.g. bad auth) is visible on /health rather than failing silently.
-                alertsRejectedTotal.incrementAndGet();
-                lastError = "Alert service rejected the request.";
+                job.recordAlertRejected("Alert service rejected the request.");
                 response.put("summary", "Alert service rejected the request.");
             }
             case FAILED -> {
@@ -252,6 +222,11 @@ public class LogAnalyzerService {
         long startMillis = now - (lookbackSeconds * 1000L);
         String url = buildGrafanaProxyUrl(startMillis * 1_000_000L, now * 1_000_000L, maxLogLines);
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
+                // The client's connect timeout does not bound a Grafana that accepts the request
+                // and then stops answering. Unbounded, that stalls this poll forever — and because
+                // pollOnce() is single-flighted, every later poll returns the busy envelope, so the
+                // service stops triaging logs for good with pollsTotal frozen on /health.
+                .timeout(GRAFANA_TIMEOUT)
                 .GET();
         if (!grafanaApiToken.isBlank()) {
             builder.header("Authorization", "Bearer " + grafanaApiToken);
@@ -272,14 +247,11 @@ public class LogAnalyzerService {
                 if (value.size() < 2) {
                     continue;
                 }
-                long tsNanos = Long.parseLong(String.valueOf(value.get(0)));
-                String line = String.valueOf(value.get(1));
-                LogLine logLine = new LogLine(
-                        Instant.ofEpochMilli(tsNanos / 1_000_000L),
-                        labels,
-                        line
-                );
-                logLines.add(logLine);
+                Instant timestamp = parseNanos(value.get(0));
+                if (timestamp == null) {
+                    continue;
+                }
+                logLines.add(new LogLine(timestamp, labels, String.valueOf(value.get(1))));
             }
         }
         logLines.sort((left, right) -> left.timestamp().compareTo(right.timestamp()));
@@ -354,6 +326,21 @@ public class LogAnalyzerService {
             return (List<List<Object>>) list;
         }
         return List.of();
+    }
+
+    /**
+     * Loki stamps each line with epoch nanoseconds as a string. A value that is not one — a null
+     * element, or a response shape that is not what we expect — is one bad line, not a reason to
+     * fail the whole poll: unguarded, a single such entry aborts the round, and it aborts every
+     * later round too for as long as it stays inside the lookback window. liveness-analyzer's
+     * {@code LokiHeartbeatClient} makes the same judgement about the same field.
+     */
+    static Instant parseNanos(Object rawTimestamp) {
+        try {
+            return Instant.ofEpochMilli(Long.parseLong(String.valueOf(rawTimestamp)) / 1_000_000L);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     private static String encode(String value) {

@@ -7,8 +7,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-import java.util.LinkedHashMap;
-
 @SpringBootApplication(proxyBeanMethods = false)
 @EnableScheduling
 class LogAnalyzerSpringApplication {
@@ -27,12 +25,9 @@ class LogAnalyzerSpringApplication {
         return new LogAnalyzerEndpoint(service);
     }
 
+    /** {@code engine} is stamped by {@code SharedHealthController}, not here. */
     @Bean
     HealthDetailsProvider logAnalyzerHealthDetailsProvider(LogAnalyzerEndpoint endpoint) {
-        return () -> {
-            var details = new LinkedHashMap<>(endpoint.healthDetails());
-            details.put("engine", "spring");
-            return details;
-        };
+        return endpoint::healthDetails;
     }
 }

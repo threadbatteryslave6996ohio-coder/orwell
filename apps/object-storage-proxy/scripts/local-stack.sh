@@ -4,7 +4,7 @@ set -uo pipefail
 # Local test stack for the object storage proxy.
 #
 # Brings up an S3-compatible bucket (MinIO) in Docker and the monorepo's single
-# shared PostgreSQL (the `db` service in docker-compose.all-services.yml), then
+# shared PostgreSQL (the `db` service in docker-compose.storages.yml), then
 # runs the auth server and the proxy configured to use them. This lets you
 # exercise the full upload path (client -> proxy -> bucket) without AWS or a
 # remote auth server.
@@ -41,6 +41,12 @@ BUCKET="${BUCKET:-keeboarder-recordings}"
 S3_ENDPOINT="${S3_ENDPOINT:-http://localhost:9000}"
 AUTH_PORT="${AUTH_PORT:-8081}"
 ADMIN_AUTH_PORT="${ADMIN_AUTH_PORT:-8082}"
+# Creating an identity needs a token from the `admin` workspace, so each auth server is started
+# with a bootstrap admin and the identity commands below log in as it first. Local only: a real
+# deployment sets these once, creates its own admins, then unsets them.
+AUTH_ADMIN_CLIENT_ID="${AUTH_ADMIN_CLIENT_ID:-local-admin}"
+AUTH_ADMIN_SECRET="${AUTH_ADMIN_SECRET:-local-admin-secret}"
+AUTH_WORKSPACE="${AUTH_WORKSPACE:-def}"
 PROXY_PORT="${PROXY_PORT:-5000}"
 PG_PORT="${PG_PORT:-5432}"
 
@@ -66,8 +72,8 @@ cmd_up() {
     fi
 
     # Postgres comes from the one shared stack, not a private container.
-    log "Starting shared PostgreSQL (docker-compose.all-services.yml)"
-    docker compose -f "$MONO_ROOT/docker-compose.all-services.yml" up -d db \
+    log "Starting shared PostgreSQL (docker-compose.storages.yml)"
+    docker compose -f "$MONO_ROOT/docker-compose.storages.yml" up -d db \
         || die "failed to start the shared PostgreSQL"
 
     log "Creating bucket '$BUCKET' (idempotent)"
@@ -97,6 +103,8 @@ run_auth_server() {
     LOGGING_FILE_NAME="$REPO_ROOT/auth/http-based/server/target/${log_name}" \
     AUTH_JPA_HIBERNATE_DDL_AUTO=update \
     AUTH_JPA_JDBC_TIME_ZONE=UTC \
+    AUTH_ADMIN_BOOTSTRAP_CLIENT_ID="$AUTH_ADMIN_CLIENT_ID" \
+    AUTH_ADMIN_BOOTSTRAP_SECRET="$AUTH_ADMIN_SECRET" \
     exec java -Dcustom.logger.dir="$REPO_ROOT/auth/http-based/server/target" -jar "$jar"
 }
 
@@ -125,6 +133,9 @@ cmd_proxy() {
     SERVER_ADDRESS=0.0.0.0 \
     SERVER_PORT="$PROXY_PORT" \
     AUTH_BASE_URL="http://localhost:${AUTH_PORT}" \
+    AUTH_WORKSPACE="$AUTH_WORKSPACE" \
+    AUTH_ADMIN_CLIENT_ID="$AUTH_ADMIN_CLIENT_ID" \
+    AUTH_ADMIN_SECRET="$AUTH_ADMIN_SECRET" \
     OBJECT_STORAGE_ADMIN_AUTH_BASE_URL="http://localhost:${ADMIN_AUTH_PORT}" \
     exec java \
         -Dobject-storage.s3.bucket-name="$BUCKET" \
@@ -134,22 +145,42 @@ cmd_proxy() {
         -jar "$jar"
 }
 
+# Logs in as the bootstrap admin of the server on $1 and echoes its token.
+admin_token() {
+    local port="$1" response
+    response="$(curl -s -H 'Content-Type: application/json' \
+        -d "{\"clientId\":\"$AUTH_ADMIN_CLIENT_ID\",\"secret\":\"$AUTH_ADMIN_SECRET\"}" \
+        "http://localhost:${port}/admin/login")" || return 1
+    # No jq dependency for one field: the response is {"clientId":...,"token":"..."}.
+    printf '%s' "$response" | sed -n 's/.*"token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+}
+
+create_identity() {
+    local port="$1" workspace="$2" client_id="$3" secret="$4" token
+    token="$(admin_token "$port")"
+    [ -n "$token" ] || die "could not log in as '$AUTH_ADMIN_CLIENT_ID' on :$port — is the server up with AUTH_ADMIN_BOOTSTRAP_* set?"
+    curl -s -w '\n-> HTTP %{http_code}\n' \
+        -H 'Content-Type: application/json' \
+        -H "X-Client-Id: $AUTH_ADMIN_CLIENT_ID" \
+        -H "Authorization: Bearer $token" \
+        -d "{\"clientId\":\"$client_id\",\"secret\":\"$secret\"}" \
+        "http://localhost:${port}/${workspace}/identities"
+}
+
 cmd_identity() {
     local client_id="${1:-}" secret="${2:-}"
     [ -n "$client_id" ] && [ -n "$secret" ] || die "usage: $0 identity <clientId> <secret>  (secret >= 8 chars)"
-    log "Creating identity '$client_id' via auth server :$AUTH_PORT"
-    curl -s -w '\n-> HTTP %{http_code}\n' -H 'Content-Type: application/json' \
-        -d "{\"clientId\":\"$client_id\",\"secret\":\"$secret\"}" \
-        "http://localhost:${AUTH_PORT}/identities"
+    log "Creating identity '$client_id' in workspace '$AUTH_WORKSPACE' via auth server :$AUTH_PORT"
+    create_identity "$AUTH_PORT" "$AUTH_WORKSPACE" "$client_id" "$secret"
 }
 
 cmd_admin_identity() {
     local client_id="${1:-}" secret="${2:-}"
     [ -n "$client_id" ] && [ -n "$secret" ] || die "usage: $0 admin-identity <clientId> <secret>  (secret >= 8 chars)"
     log "Creating admin identity '$client_id' via admin auth server :$ADMIN_AUTH_PORT"
-    curl -s -w '\n-> HTTP %{http_code}\n' -H 'Content-Type: application/json' \
-        -d "{\"clientId\":\"$client_id\",\"secret\":\"$secret\"}" \
-        "http://localhost:${ADMIN_AUTH_PORT}/identities"
+    # In the admin deployment's `def` workspace: these identities sign in to /admin, they do not
+    # provision. Its own `admin` workspace holds only the bootstrap admin used to create them.
+    create_identity "$ADMIN_AUTH_PORT" def "$client_id" "$secret"
 }
 
 cmd_status() {
@@ -157,14 +188,14 @@ cmd_status() {
     echo "Containers:"
     docker ps --filter "name=$MINIO_CONTAINER" \
         --format '  {{.Names}}  {{.Status}}  {{.Ports}}'
-    echo "Shared PostgreSQL (docker-compose.all-services.yml):"
-    docker compose -f "$MONO_ROOT/docker-compose.all-services.yml" ps db \
+    echo "Shared PostgreSQL (docker-compose.storages.yml):"
+    docker compose -f "$MONO_ROOT/docker-compose.storages.yml" ps db \
         --format '  {{.Name}}  {{.Status}}  {{.Ports}}' 2>/dev/null \
         || echo "  db  not running"
     echo "Endpoints:"
     printf '  MinIO S3   %s -> %s\n' "$S3_ENDPOINT" "$(curl -s -o /dev/null -w '%{http_code}' "$S3_ENDPOINT/minio/health/live" 2>/dev/null || echo down)"
-    printf '  Auth       http://localhost:%s -> %s\n' "$AUTH_PORT" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"clientId":"x","secret":"x"}' "http://localhost:${AUTH_PORT}/login" 2>/dev/null || echo down)"
-    printf '  Admin auth http://localhost:%s -> %s\n' "$ADMIN_AUTH_PORT" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"clientId":"x","secret":"x"}' "http://localhost:${ADMIN_AUTH_PORT}/login" 2>/dev/null || echo down)"
+    printf '  Auth       http://localhost:%s -> %s\n' "$AUTH_PORT" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"clientId":"x","secret":"x"}' "http://localhost:${AUTH_PORT}/${AUTH_WORKSPACE}/login" 2>/dev/null || echo down)"
+    printf '  Admin auth http://localhost:%s -> %s\n' "$ADMIN_AUTH_PORT" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{"clientId":"x","secret":"x"}' "http://localhost:${ADMIN_AUTH_PORT}/def/login" 2>/dev/null || echo down)"
     printf '  Proxy      http://localhost:%s/health -> %s\n' "$PROXY_PORT" "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${PROXY_PORT}/health" 2>/dev/null || echo down)"
 }
 
@@ -172,9 +203,9 @@ cmd_down() {
     require_docker
     log "Removing MinIO (named volumes are kept)"
     docker rm -f "$MINIO_CONTAINER" 2>/dev/null || true
-    # The shared PostgreSQL from docker-compose.all-services.yml is deliberately left running:
+    # The shared PostgreSQL from docker-compose.storages.yml is deliberately left running:
     # every other app in the monorepo uses that same instance. Stop it explicitly with
-    # `docker compose -f docker-compose.all-services.yml stop db` from the repo root.
+    # `docker compose -f docker-compose.storages.yml stop db` from the repo root.
     log "Left the shared PostgreSQL ('db') running - other apps depend on it."
     log "Note: stop the auth/proxy JVMs manually if running."
 }

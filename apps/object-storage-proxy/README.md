@@ -34,7 +34,9 @@ The main runtime settings are:
   `AZURE_STORAGE_ENDPOINT`, and `AZURE_STORAGE_CONNECTION_STRING` for Azure
 - `AUTH_BASE_URL` for token validation (the shared key from `AppServerEnv`; the proxy maps it
   to `object-storage.auth-server.base-url`)
-- `AUTH_IDENTITY_PROVISIONING_KEY` for provisioning identities through the proxy
+- `AUTH_WORKSPACE` for the auth-server workspace the upload identities live in (defaults to `def`)
+- `AUTH_ADMIN_CLIENT_ID` / `AUTH_ADMIN_SECRET` — credentials in that auth server's `admin`
+  workspace, used only to provision identities through the panel
 - `OBJECT_STORAGE_ADMIN_AUTH_BASE_URL` (**required**) for the management panel — see
   [Management panel](#management-panel) below
 - `OBJECT_STORAGE_CORS_ALLOWED_ORIGINS`, `OBJECT_STORAGE_LOGGING_AUDIT_FILE`, and
@@ -73,10 +75,14 @@ frames from stdin, extracts individual JPEGs, and POSTs each frame to
 `STREAM_ANALYSIS_ENDPOINT` (blank drains the stream without forwarding). Its
 shell wrappers live in `scripts/`:
 
-It posts to **one** endpoint, so point it at exactly one of the jarvis services —
-`/person-detection/detect`, `/motion/motion`, or `/hub/frames` — not several. Those
-were all one service (`/detection/*`) before jarvis split into four; see
-`apps/jarvis/README.md` if you are updating an existing value.
+Point it at **`/hub/frames`**. That is not one option among several: `jarvis-hub` is the only
+service in the repo that takes frames over HTTP, and everything else that wants them — person
+detection included — watches the hub's stream through `jarvis-frame-client`, so a producer pushes
+each frame exactly once. `POST /detect` was deleted when person detection became a stream watcher
+(it now serves `/health` and nothing else), and `/motion` went with the motion service. Do not
+point this at a frame endpoint on another service; there isn't one, and adding one is the shape
+that split deliberately replaced. See `apps/jarvis/README.md` if you are updating an existing
+value.
 
 - `scripts/record_stream.sh` records segmented MP4 files
 - `scripts/analyze_stream.sh` pipes sampled frames from ffmpeg into the worker
@@ -142,9 +148,10 @@ the `/login` + `/upload` flow above.
 ## Management panel
 
 `/admin` authenticates against `apps/auth` like everything else here — it has no credential of
-its own. Signing in posts the identity to the auth server's `/login`, the session cookie carries
-the token that comes back, and every page load re-checks it against `/tokens/check`. Revoking an
-admin is therefore a change at the auth server, not a redeploy of this service.
+its own. Signing in posts the identity to the auth server's `/{workspace}/login`, the session
+cookie carries the token that comes back, and every page load re-checks it against
+`/{workspace}/tokens/check`. Revoking an admin is therefore a change at the auth server, not a
+redeploy of this service.
 
 **It is a second auth deployment, not the one upload clients use.** `AUTH_BASE_URL` holds the
 upload identities; `OBJECT_STORAGE_ADMIN_AUTH_BASE_URL` holds the identities allowed into
@@ -157,9 +164,18 @@ the two are the `auth-server` and `admin-auth-server` compose services.
 named rather than leaving a panel nobody can sign in to. Create an admin with
 `scripts/local-stack.sh admin-identity <clientId> <secret>`.
 
+The panel's **Create identity** form needs one more thing: the auth server now requires an admin
+token to provision, so `AUTH_ADMIN_CLIENT_ID` / `AUTH_ADMIN_SECRET` must name an identity in the
+*client* auth server's `admin` workspace. The proxy logs in with them on demand and re-logs in
+once if the cached token stops being accepted. Without them, the form answers 503 with a message
+pointing at configuration — uploads and logins are unaffected. Note these are separate from the
+panel sign-in credentials: signing in proves who the operator is, and these are what the proxy
+itself presents when writing to the other deployment.
+
 ## Notes
 
 - `/health` and `/login` do not require a bearer token.
 - Upload, list, metadata, and delete endpoints require
   `Authorization: Bearer TOKEN` and `X-Client-Id`.
-- The proxy validates tokens by calling the auth server `/tokens/check` endpoint.
+- The proxy validates tokens by calling the auth server `/{workspace}/tokens/check` endpoint,
+  where the workspace is `AUTH_WORKSPACE` (`def` unless set).

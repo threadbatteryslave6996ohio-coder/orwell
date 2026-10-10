@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Builds the logger a process should use from configuration, so every server assembles its sinks
@@ -105,12 +106,37 @@ public final class LoggerSetup {
             PrintStream out,
             PrintStream err
     ) {
+        return create(appName, mode, lokiUrl, lokiTenantId, diskFile, out, err, err);
+    }
+
+    /**
+     * As {@link #create}, separating <em>where records go</em> from <em>where a sink that could not
+     * be opened is reported</em>.
+     *
+     * <p>They are the same stream for every server, which is why the overload above passes
+     * {@code err} for both. They are not the same for a program whose console can be switched off:
+     * silencing records must not also silence "this log file could not be opened", or the operator
+     * who asked for a quiet terminal gets a run that discards everything and says nothing. insta is
+     * that caller.
+     */
+    public static ManagedLogger create(
+            String appName,
+            LoggerMode mode,
+            String lokiUrl,
+            String lokiTenantId,
+            Path diskFile,
+            PrintStream out,
+            PrintStream err,
+            PrintStream diagnostics
+    ) {
         Objects.requireNonNull(appName, "appName");
         Objects.requireNonNull(mode, "mode");
         ConsoleLogger console = new ConsoleLogger(appName, out, err);
+        // Only ever written to at ERROR, so both its streams are the diagnostics one.
+        ConsoleLogger reporter = new ConsoleLogger(appName, diagnostics, diagnostics);
         requireLokiUrlFor(mode, lokiUrl);
 
-        Logger disk = mode.usesDisk() ? openDiskSink(mode, diskFile, console) : null;
+        Logger disk = mode.usesDisk() ? openDiskSink(mode, diskFile, reporter) : null;
 
         List<Logger> sinks = new ArrayList<>();
         List<AutoCloseable> closeables = new ArrayList<>();
@@ -129,6 +155,46 @@ public final class LoggerSetup {
 
         // FailSafeLogger last, so a sink that breaks mid-run cannot turn a request into an HTTP 500.
         return new ManagedLogger(mode, new FailSafeLogger(new CompositeLogger(sinks)), closeables);
+    }
+
+    /**
+     * A second Loki channel for heartbeat records, or empty when no Loki is configured.
+     *
+     * <p>Here rather than built in a {@code main} for the same reason
+     * {@link #fromConfiguration} is: this module stays the one place that decides what a Loki sink
+     * looks like, so a new caller cannot quietly get different batching or a different label scheme.
+     *
+     * <p><strong>Why a separate channel and not the app logger.</strong> A heartbeat is one line per
+     * interval forever — thousands a day per process, every one of them saying nothing happened. On
+     * the app stream that noise is charged to whatever reads it: {@code apps/log-analyzer} triages
+     * {@code {stream_type="app"}} for errors, and a heartbeat is neither an error nor something a
+     * human should scroll past to find one. On its own {@code stream_type} it costs that reader
+     * nothing and {@code apps/liveness-analyzer} can select it directly.
+     *
+     * <p><strong>It is Loki-only, with no console sink.</strong> A heartbeat exists to be absent —
+     * its whole purpose is for something else to notice it stopped — and a copy on stdout would put
+     * the same thousands of lines in {@code docker logs} where nobody is watching for a gap.
+     *
+     * <p>No fallback file either, and that is the honest behaviour rather than an omission: if Loki
+     * cannot be reached the heartbeat does not arrive, the dead-man's switch fires, and that is
+     * correct — nobody can currently verify the process is doing its job. A file that recorded the
+     * heartbeat locally would only make the switch fire while claiming the opposite on disk.
+     *
+     * @param streamType the {@code stream_type} label, e.g. {@code heartbeat}.
+     */
+    public static Optional<ManagedLogger> heartbeatChannel(
+            String streamType, String appName, String lokiUrl, String lokiTenantId) {
+        Objects.requireNonNull(streamType, "streamType");
+        Objects.requireNonNull(appName, "appName");
+        if (!isSet(lokiUrl)) {
+            return Optional.empty();
+        }
+        LokiLogger loki = LokiLogger.onStream(
+                streamType, appName, URI.create(lokiUrl.trim()), lokiTenantId);
+        // FailSafe even here: a heartbeat that threw would take down the scheduled round that emits
+        // it, which would stop the very work the heartbeat is evidence of.
+        return Optional.of(new ManagedLogger(
+                LoggerMode.LOKI, new FailSafeLogger(loki), List.of(loki)));
     }
 
     /**

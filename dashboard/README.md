@@ -12,6 +12,14 @@ python3 dashboard/server.py
 
 Then open <http://localhost:9187>. No dependencies beyond the Python 3 standard library.
 
+The Auth tab's three cards each take a workspace (`def` unless you change it), since auth routes
+are `/{workspace}/login`, `/{workspace}/identities` and `/{workspace}/tokens/check`. **Register
+identity** additionally needs an admin session: log in as an identity in the `admin` workspace
+first, save the session, then pick it in the card's dropdown — the auth server refuses
+provisioning from anything else. See
+[`apps/auth/http-based/server/README.md`](../apps/auth/http-based/server/README.md) for where the
+first admin comes from.
+
 ## What `server.py` does
 
 It serves `dashboard/static/` at `/` and reverse-proxies `/api/<service>/*` to the real backends.

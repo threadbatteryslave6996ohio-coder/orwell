@@ -115,7 +115,7 @@ class AdapterChainTest {
         assertThatThrownBy(() -> service(List.of(followersOnly("followers-only")))
                 .connections("nasa", ConnectionType.FOLLOWING, 50, null))
                 .isInstanceOf(ApifyException.class)
-                .hasMessageContaining("No configured actor can scrape following");
+                .hasMessageContaining("No configured source can scrape following");
     }
 
     // ────────────────────────────────────────────────────────── completeness
@@ -184,8 +184,17 @@ class AdapterChainTest {
 
     private InstagramService service(List<ConnectionsAdapter> adapters) {
         ApifyClient client = new ApifyClient(apify.baseUrl(), "test-token", 120, NO_OP_LOGGER);
+        // The chain is sources now; these tests are about the Apify ones, so they wrap here.
         return new InstagramService(
-                client, cache, "apify/profile", adapters, 100, 500, NO_OP_LOGGER);
+                client, cache, "apify/profile", sources(adapters, client), 100, 500, NO_OP_LOGGER);
+    }
+
+    private static List<ConnectionsSource> sources(
+            List<ConnectionsAdapter> adapters, ApifyClient client) {
+        return adapters.stream()
+                .map(adapter -> (ConnectionsSource)
+                        new ApifyConnectionsSource(adapter, client, NO_OP_LOGGER))
+                .toList();
     }
 
     /** An adapter whose actor id is its name, so the stub's recorded path identifies it. */

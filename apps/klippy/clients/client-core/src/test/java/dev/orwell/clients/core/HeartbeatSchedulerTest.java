@@ -20,7 +20,8 @@ class HeartbeatSchedulerTest {
 
     private ClipboardApiClient apiClient() {
         ClientAuthSession session = new ClientAuthSession("http://localhost:8081", "client-1", null, "token");
-        return new ClipboardApiClient(URI.create("http://localhost:8080/clipboard"), session, Duration.ofSeconds(1));
+        return new ClipboardApiClient(
+                URI.create("http://localhost:8080/clipboard"), session, Duration.ofSeconds(1), logger);
     }
 
     @Test

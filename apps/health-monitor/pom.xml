@@ -1,0 +1,84 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.orwell</groupId>
+        <artifactId>orwell</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>health-monitor</artifactId>
+
+    <properties>
+        <mainClass>dev.orwell.health.HealthMonitorApplication</mainClass>
+    </properties>
+
+    <!--
+      Polls other services' /health endpoints and alerts on transitions.
+
+      No database and no Spring: it holds a schedule, an HTTP client and a state machine per target.
+      Its own two routes run on the Undertow runtime.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>env-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>logger</artifactId>
+        </dependency>
+        <!-- LoggingHttpClient. The probe wraps it at DEBUG — see HealthProbe for why a poller
+             should not use the default INFO. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
+        <!-- /health and /targets. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>undertow-bootstrap</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Health bodies are read to see whether a 200 actually means healthy. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JsonStubServer: the probe's behaviour is only meaningful against a real HTTP server. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- A plain program, so the runnable artifact is the shaded
+                 health-monitor-<version>-exec.jar. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <configuration>
+                    <shadedArtifactAttached>true</shadedArtifactAttached>
+                    <shadedClassifierName>exec</shadedClassifierName>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

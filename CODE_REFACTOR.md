@@ -1,5 +1,231 @@
 # Refactor backlog
 
+**Done (three duplications collapsed: insta's logger, the analyzer skeleton, the jarvis recorders).**
+
+- **The two reverse proxies duplicate their forwarding code, and that was chosen rather than
+  settled for.** A second proxy was wanted — one holding several API keys for an upstream, rotating
+  between them — and the extraction was actually done first: a `packages/proxy-core` holding
+  `ProxyController`, `ProxyRequest`, `ProxyResponse`, `UpstreamClient`, `PolicyChain`,
+  `ProxyEndpoint` and `ProxyAuditRecord`, with both apps on top of it. It built and passed. It was
+  then **deliberately unwound** in favour of two standalone apps, so **do not re-extract it** —
+  `apps/api-key-cycler` carries its own copy of the forwarding and shares nothing with
+  `apps/reverse-proxy`.
+  What the duplication costs is known and accepted, not overlooked: the hop-by-hop header list
+  (RFC 9110 §7.6.1), `X-Request-Id` propagation across the hop, the two-clock timing separating the
+  origin's cost from the proxy's, and the body-buffer ceiling all exist twice, and nothing will tell
+  you when a fix to one needs applying to the other. **Check the sibling by hand.**
+  What it buys is that the two never have to agree. They already do not: the cycler has a retry
+  loop, an `Attempt` scratch pad and an `attempts` count on its log record, and the audit proxy has
+  a policy chain, a fingerprinted `policies` column and a Postgres writer — a shared core would have
+  had to carry both sets, and the seam between "admit or refuse" and "rewrite the request" would
+  have had to be designed rather than simply not existing.
+  If a third proxy ever makes this a three-way copy, that is the point to revisit it.
+
+- **insta no longer re-implements `LoggerSetup`.** `InstaLogger` built its own sink tree —
+  `FailSafeLogger(CompositeLogger(Console, Json, Loki))`, its own skip-a-sink-that-won't-open rule,
+  its own closeables list — and `InstaLogger` was `ManagedLogger` rewritten. It is now ~40 lines
+  that translate insta's environment into `LoggerSetup.create` and nothing else. The entry below
+  filed this as "small change, small payoff: they share their delegating `log(LogEntry)`", which
+  badly understated it: it was a parallel factory, and it had **already drifted**. insta had no
+  `LOGGER` key, so none of the repo's modes worked there, and it called the three-argument
+  `LokiLogger` constructor, so `loki-with-fallback` — the mode that catches what Loki refused in a
+  file — was unreachable from insta entirely. Both are fixed. Leaving `LOGGER` unset still selects
+  exactly what each existing insta configuration selected before (`InstaLogger.defaultMode` derives
+  it from which keys are set), so nothing deployed changes. `INSTA_LOG_CONSOLE=false` survives as
+  insta's own concern, honoured by pointing the console sink at a discarded stream rather than by
+  teaching the shared factory a mode only a CLI would want. A bad `LOGGER`, or `LOGGER=loki` with
+  no `LOKI_URL`, now exits 2 as a configuration error instead of "Unexpected failure".
+  A review of the first cut caught one regression, now fixed: pointing the console sink at a
+  discarded stream also discarded `LoggerSetup`'s "cannot open the log file" report, so
+  `INSTA_LOG_CONSOLE=false` with an unwritable `LOGGING_FILE_NAME` dropped every record silently.
+  `LoggerSetup.create` now takes an optional third stream separating *where records go* from *where
+  a sink that could not be opened is reported*; the servers pass `err` for both, as before.
+  `InstaLoggerTest.reportsAnUnopenableLogFileEvenWithTheConsoleOff` fails without it.
+
+- **The two analyzers share their scheduled-job skeleton.** `LivenessService` and
+  `LogAnalyzerService` each carried the same `AtomicBoolean` single-flight guard, the same four
+  counters, the same `lastRunAt`/`lastAlertAt`/`lastError` triple and the same eight `/health` keys
+  built by hand. That is now `dev.orwell.bootstrap.schedule.ScheduledJob` — a collaborator, not a
+  base class, so neither run body had to be bent into a template method. Its **noun** keeps each
+  app's wire contract (`"poll"` → `pollsTotal`, `"check"` → `checksTotal`), so no payload either
+  service already served changed. Two small improvements came with it: a failure whose
+  `getMessage()` is null now reports the exception's `toString()` rather than a bare `null`, and
+  `runSafely` is documented as the thing that stops an exception escaping a `@Scheduled` method and
+  silently cancelling every future execution. `ScheduledJobTest` covers the guard, the counters and
+  the busy envelope. Separately, `engine: spring` is stamped once by `SharedHealthController`,
+  mirroring `UndertowHttp.health`, instead of by three identical `HealthDetailsProvider` beans that
+  copied a map to add one key — so every Spring servlet app now reports it, not only the three that
+  remembered to. Still open below: the two `AlertClient`s, the three cooldown trackers, and the
+  Grafana/Loki query these two apps also share.
+
+- **The jarvis mac and linux recorders share a library.** This file previously listed only the
+  copied `log_message()` and colour constants; the real duplication was the whole recorder
+  skeleton, and `start_recorder.sh` was 279/161 lines with ~75 shared. `clients/lib/recorder.sh`
+  now owns config loading, logging, the shutdown trap, the restart loop every capture runs under,
+  and the ffmpeg segment/streaming argument tails; `clients/lib/console.sh` owns what the two
+  `manage.sh` scripts shared. Each platform keeps only its capture: avfoundation on one side,
+  x11grab-or-GNOME-screencast plus PulseAudio monitor detection on the other. The Wayland helper's
+  per-attempt filename is why the loop has a `supervise_building` form as well as `supervise`.
+  Three things worth knowing:
+  - **`config.sh` is deliberately still per-platform.** It is an inventory a person edits per
+    machine; splitting it to save repeated defaults would cost more than it saves.
+  - **One difference between the recorders is real and is now marked in both.** `-framerate` is
+    passed after `-i` on mac (an output rate) and before it on linux (an x11grab input option).
+    They are different ffmpeg options; unifying them changes what is captured.
+  - **`clients/lib/recorder-smoke-test.sh` is the first test any of this has ever had.** Nothing
+    under `apps/jarvis/clients` is in the Maven reactor, so `mvn test` proves nothing about it. It
+    runs both recorders against stub binaries and asserts the argv each capture is launched with
+    (byte-identical to before the extraction), that a dead capture restarts, and that a stop signal
+    takes every capture down. Run it after touching either recorder.
+
+  The **naming straggler** went with it: these are jarvis clients that called themselves
+  Keeboarder throughout. Comments, banners, log lines and docs are renamed. The two service labels
+  are **not**, and each now carries a comment saying why — `com.keeboarder.recorder` is a plist
+  filename in `~/Library/LaunchAgents` and `keeboarder-recorder` a systemd unit name, both on real
+  machines; renaming either orphans the installed job rather than renaming it, and wants an
+  unload-old/load-new migration. Both are now read from `config.sh` everywhere instead of being
+  repeated as literals (the mac LaunchAgent label appeared in seven places), so that migration is a
+  one-line change when someone chooses to make it.
+
+  Two `log_message()` copies remain outside this tree, in
+  `apps/object-storage-proxy/scripts/{analyze_stream,record_stream}.sh` and
+  `clients/syncer/syncer.sh` — a different tree with a different job, left alone for now.
+
+**Done (two duplications collapsed).** object-storage-proxy's `AuthServerClient` and
+`AdminAuthClient` had the same failure classification written out three times; it is now
+`AuthCalls.failure`, which both call — a failure the server answered keeps its status, one it never
+answered is a 503. The success paths stay separate on purpose. That went in together with
+`ISSUES.md` §7, a bug in exactly that code. And `db`/`redis` are no longer defined in two compose
+files: `docker-compose.all-services.yml` holds the applications, `docker-compose.storages.yml` holds
+Postgres, Redis and MinIO, and the full stack is `-f` both. `AuthCallResult` still lives nested in
+`AuthServerClient` while `AdminAuthClient` returns it — moving it out is the remaining tidy.
+
+**Open: duplication worth extracting.** Found three ways, because each finds what the others miss:
+repeated line-windows across Java files (exact clones); the same with identifiers normalised away
+(clones that survived a rename — this is what found `SecretBundle`/`SecretGroup`); and the same over
+YAML, shell, SQL and poms. Ordered by what a change to one copy would cost if the other were missed.
+Defects rather than debt live in [`ISSUES.md`](ISSUES.md).
+
+Three things this pass re-found were **already in this file, described better** — see the §
+"Grafana/Loki query duplicated verbatim across the two analyzers" entry for the two analyzers'
+shared `encode`/`encodePathSegment`/`trimTrailingSlash` and the wanted `LokiQueryClient`, and the
+two `AlertClient` entries for the duplicated alert delivery. Only what is new to the backlog is
+listed below.
+
+- **The bounded queue drained by one thread, three times** — `FrameStoreWriter` (jarvis-hub),
+  `JdbcAuditStore` (reverse-proxy) and `LokiLogger` (packages/logger). Identical in all three:
+  `poll(timeout)` for the first item, `drainTo(batch, BATCH - 1)`, flush, interrupt-and-return on
+  `InterruptedException`, count-and-survive on anything else, `batch.clear()` in `finally` — plus a
+  bounded queue, a named virtual thread, a `volatile running`, an offer-and-count-the-drop submit
+  and a drain-on-close. `JdbcAuditStore`'s javadoc already says it is "the same shape as
+  jarvis-hub's `FrameStoreWriter`". A `BatchingWorker<T>` taking `(name, queueDepth, batchSize,
+  pollInterval, Consumer<List<T>> flush, Logger)` absorbs all of it. **Two cautions:** this is
+  concurrency code on three live paths (frame durability, the audit trail, all log shipping), so it
+  wants care rather than a sweep; and placement needs a decision — `packages/logger` already
+  depends on `packages/primitives`, so primitives reaches all three, but it is documented as
+  "shared value types" and a worker thread is not one.
+
+- **The named single-thread scheduler, three times** — `LogAnalyzerUndertowApplication:51`,
+  `FrameRetentionSchedule:39`, `HeartbeatScheduler:65` each hand-roll the same
+  `newSingleThreadScheduledExecutor` with a named `Thread` and a daemon flag. `ExecutorShutdown`
+  already solves the teardown half but lives inside `klippy-client-core`.
+
+- **`@DynamicPropertySource` blocks copied per test class** — five identical `gmailProperties`
+  methods across gmail-general's integration tests, three identical `hubProperties` across
+  jarvis-hub's. A per-module abstract base extending `PostgresIntegrationTest` removes each set.
+
+- **A `TestConfig` + `send(request)` pair in four files** across klippy-server and gmail-general —
+  the same `httpClient.send(request, BodyHandlers.ofString())` helper beside the same
+  `@TestConfiguration static class TestConfig`.
+
+- **The `EnvLoader` argument switch, twice** — `SpringEnvLoaders:21` (server-bootstrap) and
+  `ServerRuntime:50` (undertow-bootstrap) share the same `case "url"` / `case "remote"` / default
+  dispatch. The two bootstrap packages are deliberately independent, so this may be an accepted
+  cost; worth stating either way.
+
+- **`SecretBundle` and `SecretGroup` are the same 68-line class twice.** They differ in exactly
+  three lines: `@Table(name = ...)`, the class name and the constructor name. Same four fields
+  (`name`, `description`, `createdAt`, `createdBy`), same accessors, same `protected` no-arg
+  constructor. A `@MappedSuperclass` holding the four leaves each as about ten lines. Found by
+  identifier-normalised clone detection, which scores them at 1.00 — nothing else in the repo comes
+  close.
+
+- **Shell scripts repeat their preamble.** Mostly **done for the jarvis recorder tree** — see the
+  entry at the top of this file: `log_message()` and the shutdown/supervision skeleton are in
+  `clients/lib/recorder.sh`, and the ANSI colour constants and print helpers that
+  `jarvis/clients/{mac,linux}/manage.sh` shared are in `clients/lib/console.sh`. What is left:
+  `log_message()` still has copies in `object-storage-proxy/scripts/analyze_stream.sh`,
+  `record_stream.sh` and `jarvis/clients/syncer/syncer.sh`; the colour constants are still inline in
+  the two `install.sh` scripts and `setup-launchagent.sh` (they run before the shared library is in
+  scope on an installed machine, so sourcing it there needs the same two-layout lookup the recorder
+  does); and the `set -euo pipefail` + `ROOT_DIR` + `MAVEN_REPO_LOCAL` preamble is still in three
+  klippy scripts. jarvis's `config.sh` copies are **deliberately** not shared — a config file is an
+  inventory a person edits per machine.
+
+- **`junit-jupiter` is declared test-scoped in 36 poms.** The root pom has `dependencyManagement`
+  but no plain `<dependencies>`, so every module repeats the block. Hoisting it removes all 36. One
+  wrinkle: `packages/test-support` documents "no dependencies at all" and would inherit it — still
+  true for its consumers, since test scope is not transitive, but that README sentence needs a word.
+
+- **Probably leave alone:** `SecretGroupController` and `SecretBundleController` score 0.82 and are
+  parallel CRUD over two resources. Generifying a Spring controller usually costs more readability
+  than the duplication does. Noted so the next clone-detection pass does not re-raise it.
+
+- **Small change, small payoff:** ~~`ManagedLogger` and insta's `InstaLogger` share their delegating
+  `log(LogEntry)`~~ — **done, and it was not small**: see the insta entry at the top of this file.
+  `LoggingHttpClientTest` and `ServiceHeaderHttpClientTest` share their
+  `DelegatingHttpClient` pass-through assertions; `truncate`/`truncated` exists in `ApifyClient:356`
+  and `JdbcAuditStore:244`.
+
+Considered and **not** worth doing: the three `ObjectMapper` holders (`SharedJson`, `InstaJson`,
+`ClipboardJson`) each argue for their own existence in javadoc and share only eight lines of body.
+The eight near-identical Dockerfiles are already listed further down this file.
+
+**Done (`client_tokens` is no longer append-only).** A row went in on every login and nothing ever
+took one out, so the table grew for the life of the deployment and every token ever issued stayed
+valid forever. `TokenCleanupJob` now sweeps hourly and deletes a token once it has been superseded
+by a later login for the same identity *and* has gone unused for `AUTH_TOKEN_CLEANUP_IDLE_SECONDS`
+(a day by default). Usage is what `TokenUsage` records on an accepted `/tokens/check` or admin
+call, throttled to one write per token per five minutes so the busiest path in the stack does not
+become a row write per request; `ClientTokenSchemaMigration` adds the `last_used_at` column and
+backfills existing rows to the migration's own clock, so nothing pre-existing is collected before
+it has had a full idle period to prove it is still in use. Two things are knowingly unfinished:
+
+- **This is collection, not expiry.** A token still has no lifetime of its own, and the newest
+  token of an identity is never collected however old it is. There is still no revocation
+  endpoint, so cutting off a leaked credential still means deactivating the identity in the
+  database.
+- **A token in use by a second process holding a superseded credential is kept alive by its own
+  checks**, which is deliberate — but it means two processes sharing one `clientId` keep two live
+  tokens indefinitely. Scoping a token to a session rather than an identity is the real fix.
+
+**Done (auth workspaces, and provisioning is no longer open).** Auth routes moved under a
+workspace segment — `/{workspace}/login`, `/{workspace}/identities`, `/{workspace}/tokens/check` —
+and a `clientId` is now unique within a workspace rather than globally. `def` is the default, so
+every caller that predates this keeps working: `HttpAuthenticationStrategy` uses it unless given
+another, and `AUTH_WORKSPACE` overrides it per app. `admin` is the second built-in name, and it is
+what closed the open-registration hole below: `POST /{workspace}/identities` now requires a bearer
+token issued to an identity in `admin`, checked against the database by `AdminTokenGuard` rather
+than over HTTP against the server itself. The first admin cannot come from the endpoint, so it
+comes from `AUTH_ADMIN_BOOTSTRAP_CLIENT_ID`/`_SECRET` at startup. object-storage-proxy's
+`X-Identity-Provisioning-Key` is gone (the server never checked it); the panel now provisions with
+`AUTH_ADMIN_CLIENT_ID`/`AUTH_ADMIN_SECRET`. Three things are knowingly unfinished:
+
+- ~~**A pre-workspace database needs a manual migration.**~~ **Done since.**
+  `WorkspaceSchemaMigration` now runs at startup, before Hibernate looks at the schema: it adds
+  `workspace`, backfills every existing row to `def`, drops the old single-column unique constraint
+  on `client_id` by shape rather than by the name Hibernate gave it, and adds the composite one. It
+  is skipped on a database that has no such table, and fails startup rather than continuing
+  half-migrated. `ClientTokenSchemaMigration` does the same for `client_tokens.last_used_at`, and
+  both share `SchemaMigrations`.
+- **Desktop clients cannot choose a workspace.** `ClientAuthSession` takes one, but the klippy /
+  keeboarder / gmail entry points never read an env var for it, so those clients are pinned to
+  `def`. Fine today — every one of their identities is there — and a five-line change per client
+  when it stops being true.
+- **Admin is all-or-nothing.** An identity in `admin` may provision into *every* workspace; there
+  is no per-workspace admin. That is the deliberate reading of "an admin token creates identities
+  in any workspace", but it means a workspace cannot own its own provisioning.
+
 **Done (jarvis: split, then standardised on watching).** Two steps. First the split — see
 below. Then frame *intake* was standardised: only `jarvis-hub` takes frames over HTTP, and
 everything else watches its stream through the new `jarvis-frame-client`. That deleted
@@ -60,6 +286,42 @@ entirely, so it is nobody's.) Four things are knowingly unfinished.
   longer window**, not table size: the hub currently base64s every frame to every subscriber, so
   serving links instead is what takes it off the hot path.
 
+**New debt (jarvis-frame-viewer).** A read-only page over `frame_events` — pick a device, see its
+newest frame, step back — plus `POST /api/uploads`, which cuts a video into frames with ffmpeg and
+pushes them to the hub dated across a window the caller names. It reads the table directly rather than
+watching the stream (history is a table question, and it keeps a browser off the hub's heap) but writes
+only through `POST /frames` (the hub stays the only thing that ingests frames). That needed one hub
+change: an optional, producer-asserted `capturedAt` on the ingest envelope. Three things are knowingly
+unfinished.
+
+- ~~**It is unauthenticated, and it is now the sharpest instance of the item above.**~~ **Done.**
+  It authenticates against the auth server through `ViewerAuth`: `POST /login` exchanges credentials
+  for a token via `HttpAuthenticationStrategy` and keeps it in an HttpOnly session cookie, and every
+  route but `/health` re-checks that token with `POST /{workspace}/tokens/check`. A script sends
+  `X-Client-Id` and `Authorization: Bearer` instead, so backfilling from `curl` needs no session.
+  `FRAME_VIEWER_AUTH_BASE_URL` blank leaves it open, which is the local case and says so in the page
+  and the log. It follows `object-storage-proxy`'s `AdminAuthClient` shape rather than inventing a
+  second one — **the shared-module version of that flow is still wanted**, and is now a three-caller
+  duplication (that panel, secrets-manager's, and this) rather than a two-caller one.
+  Two things this deliberately did *not* do. It **caches an accepted token for
+  `FRAME_VIEWER_AUTH_CACHE_SECONDS` (30)**, because one step through the history is three requests
+  and an uncached check would put three blocking POSTs to auth on every arrow-key press — the cost is
+  that a revoked token keeps working here for up to that long, and 0 disables it. And it is **still
+  absent from nginx and still published to `127.0.0.1`**: the login is the guard, the bind address is
+  the backstop, and widening it is now a decision somebody can make rather than one this blocks.
+- **The `frame_events` schema is now known in two places.** The hub owns it through
+  `FrameEventEntity` (Hibernate creates the table), and the viewer reads the same column names as raw
+  SQL strings, as `RetentionSweeper` reads them through `RetentionPolicy`. Renaming a column is
+  therefore a three-place change that only the hub's compiler checks. A shared `jarvis-frame-store`
+  module holding the column names would fix it; it was not worth a module for six strings today, and
+  is worth one the moment a fourth reader appears.
+- **ffmpeg is a subprocess and the image carries it.** It roughly doubles the runtime image and is
+  the app's only non-JVM dependency, so a backfill failure is an exit code and a captured stderr
+  rather than a typed error. Deliberate — JavaCV's natives cost far more and the recorder clients
+  already use ffmpeg — but it means the upload path is untestable without the binary present, and the
+  tests cover the extraction *contract* (via `FRAME_VIEWER_FFMPEG` pointed at a stand-in) rather than
+  real decoding.
+
 **A server-side cursor over-advances by one frame on an unclean disconnect.** The hub writes a
 subscription's `last_delivered_id` when it sends, and a TCP write to a dead peer succeeds until the
 RST lands — so the frame in flight when a watcher dies is recorded as delivered and never reaches
@@ -70,6 +332,53 @@ client-acknowledged cursor (the client sends back what it has processed, which m
 trip or a control channel), or watchers persisting their own position and using `?from=`. Neither
 is free; pick one deliberately rather than leaving the semantics undocumented. The behaviour is
 written up in `apps/jarvis/README.md` under the hub limits.
+
+**New app (health-monitor).** Polls every service's `/health` on a timer and alerts on the transitions:
+two consecutive failures to declare an outage, one success to declare recovery, transitions only, and a
+first-sighting-healthy suppression so restarting it does not fire one "recovered" per target. It reads
+the response *body*, not just the status code, because the repo's endpoints can answer 200 while saying
+`status: unhealthy`. Complements rather than replaces the compose `healthcheck` blocks (which restart a
+container and tell nobody) and `liveness-analyzer` (a dead-man's switch over client heartbeats). Four
+knowingly unfinished things.
+
+- ~~**Nothing watches the watchman.**~~ **Addressed, with a residue.** It publishes a heartbeat after
+  every completed round to its own Loki stream (`stream_type="heartbeat"`, `clientId=health-monitor`),
+  which is the shape `apps/liveness-analyzer` already alerts on the absence of — so the two apps cover
+  each other with a config change and no code. Its own `/health` also answers 503 when no round has
+  completed in three intervals, which is the failure that matters (up, listening, not checking) and
+  makes an external check on that endpoint meaningful. What remains: the heartbeat needs `LOKI_URL`, and
+  if Loki *and* the analyzer are both down nothing is covered. A hosted dead-man's switch would close
+  that last gap at the cost of an external dependency; not done, deliberately undecided.
+- **Latency is measured and never alerted on.** `durationMillis`/`slowestMillis` are exposed, but
+  "slow" needs a per-target baseline this app does not keep. A service that is up and crawling will not
+  wake anybody.
+- **No history and no uptime figure.** Counters since start plus a minute of readings. Answering "what
+  was our uptime last month" needs somewhere to write to, which would mean a datasource this app
+  deliberately does not have.
+- **One URL per target, and nothing else.** No auth headers, no expected-content matching, no POST
+  probes — so an endpoint behind the 401 guard cannot be checked at all. The target syntax is
+  `name=url`, which is why: the moment a target needs a third field it should become a JSON file, the
+  way `jarvis-fixture-detection`'s fixtures did.
+
+**New app (jarvis-fixture-detection).** Lamp/stove/furnace on-off, as a watcher on the hub's stream:
+region photometry with two thresholds, hysteresis and a confirmation count, reporting transitions to
+the log and optionally to `apps/alerting`. Three metrics (`MEAN_LUMINANCE`, `BRIGHT_FRACTION`,
+`SATURATED_BRIGHT_FRACTION`) plus an optional reference region that cancels ambient light, which is
+what makes one threshold hold at noon and at midnight. No ML runtime, no native library, no GPU —
+deliberately, and worth keeping that way. Two knowingly unfinished things.
+
+- **No day/night handling.** A camera switching to infrared makes the frame monochrome, so
+  `SATURATED_BRIGHT_FRACTION` collapses to ~0 and a flame becomes undetectable. Per-fixture day and
+  night threshold sets, selected on overall frame luminance, is the fix; today the answer in the README
+  is "use `BRIGHT_FRACTION` if your camera does that".
+- **State is not persisted.** A restart begins at `unknown` and re-derives each fixture from the next
+  frames, which is fine given the durable subscription but means a restart re-reports every current
+  state as a transition. A tiny state file, or accepting it, are both defensible; it is undecided
+  rather than overlooked.
+
+**`HogPersonDetector` is still untested**, and `jarvis-fixture-detection` is now the worked example of
+what replacing it should look like — measured, configured, and tested against synthetic frames.
+Original note follows.
 
 **`HogPersonDetector` is still untested.** `PersonDetectionServiceTest` now covers the listener
 contract — an undecodable frame is counted rather than thrown, the cooldown collapses a burst to
@@ -112,6 +421,14 @@ now reuses it instead of its own inlined login cache (the §2 "Gmail webhook aut
 in-file dedups landed — `ObjectStorageProxyClient`'s six copy-pasted try/catch blocks collapsed onto a shared
 `call(...)`/`rejected(...)` pair, and `SecretsManagerClient`'s two `execute` overloads merged into one
 deserializer-parameterized method.
+
+Also done since (duplication pass): `DelegatingHttpClient` in `packages/http-client` now carries the
+`HttpClient` pass-through surface, so `ServiceHeaderHttpClient` and `LoggingHttpClient` each lost ~45
+lines of identical delegation and a third wrapper is cheap — documented in
+[`packages/http-client/README.md`](packages/http-client/README.md); and
+`dev.orwell.testing.ObjectProviders.of(...)` replaced the byte-identical 35-line anonymous
+`ObjectProvider<AuthenticationContext>` stub that klippy-server, keeboarder-server and
+object-storage-proxy each carried, which is also what gave `server-test-support` a README.
 
 Also done since: secrets-manager's 23 hand-repeated `requireAdmin()` / `requireAccessor()` calls —
 one per handler, fail-open if you forgot one — are three `@RequireAdmin`/`@RequireAccessor` class
@@ -180,8 +497,11 @@ re-parented to the root.
   `server/README.md` claims a group delete cascades; it does not. `setBundleEnvironmentReferences`
   is the only path that clears dependents first. No test covers any of the three. Also note
   `secret_bundle_entries(env_id)` has no index, so the FK check scans.
-- **`sha256Hex` residual**: `packages/primitives` `Sha256` now exists and both `DetectionService`
-  and `AnalysisWorker` use `Sha256.hex`. Only `LogAnalyzerService.fingerprint`
+- **`sha256Hex` residual**: `packages/primitives` `Sha256` now exists and is used by
+  `AnalysisWorker`, `FrameIngestService`, `FramePayload`, `FrameStreamClient` and insta's
+  `AccountWriter`/`PostWriter`. (This entry used to name `DetectionService`, which the jarvis split
+  deleted; its successor `PersonDetectionService` hashes nothing — it reads `frame.sha256()` off
+  the envelope.) Only `LogAnalyzerService.fingerprint`
   (`LogAnalyzerService:315-317`) still builds its own `MessageDigest` — that one is a private
   fingerprint rather than a shared contract, so switching it is tidiness, not correctness.
 - **Nothing alerts when log shipping stops**: if `LOKI_URL` is unset or Loki is unreachable,
@@ -190,10 +510,17 @@ re-parented to the root.
   silence but is not an alert. Wanted: a deadman check that the stream is still receiving.
   Half-addressed: `LOGGER=loki-with-fallback` means an outage no longer *loses* the records (they
   land in `<log dir>/<app>.jsonl`), but nothing still tells anyone the outage is happening.
-- **Detection alert client**: `DetectionService.detect()` hand-builds its alert POST (no
-  timeout, no blank-URL guard, no transient/terminal outcome split) while `log-analyzer`'s
-  `AlertClient` already encapsulates all of that for the same `/alerts` endpoint. Promote
-  `AlertClient` to a shared module and use it from both. Add connect/request timeouts either way.
+- **Alert client — now three copies, not two.** `PersonDetectionService.sendAlert()` (the class
+  `DetectionService` became in the jarvis split) hand-builds its alert POST with no timeout, no
+  blank-URL guard and no transient/terminal outcome split, while **two** near-identical
+  `AlertClient` classes encapsulate all of that for the same `/alerts` endpoint:
+  `apps/log-analyzer/.../AlertClient.java` and `apps/liveness-analyzer/.../AlertClient.java`, which
+  arrived later as a copy — same `Outcome` enum, same `408 || 429 || >= 500` transient
+  classification, differing only in which keys go in the payload. The alert envelope itself
+  (`event`, `source`, `title`, `message`) is a contract with `apps/alerting` written out three
+  times. Wanted: one `packages/alert-client` holding the envelope, the outcome classification and
+  the cooldown tracker below; the three call sites then differ only in the payload they fill in.
+  Add connect/request timeouts on the way through.
 - **Gmail webhook auth — DONE (partial).** `ClientAuthSession` (token cache + login + 401 refresh) was
   promoted from klippy's client-core into `auth-http-client` (`dev.orwell.auth.http.client`), and
   `GmailService` now reuses it instead of hand-rolling a `LoginHttpResponse` cache. The remaining two
@@ -213,6 +540,22 @@ re-parented to the root.
   call `LoggerSetup.fromConfiguration(name, LOGGER, LOKI_URL, LOKI_TENANT_ID)` in `main` instead
   of constructing `ConsoleLogger`, and close the returned `ManagedLogger` on shutdown. A client is
   also the strongest case for `loki-with-fallback` — it logs from a laptop that is often offline.
+- **Outbound calls are unattributed**: `packages/http-client` now exists, and the reverse proxy
+  logs the `Service` header any caller sends, but no caller sends one yet — every record still
+  identifies its origin by a container address that means something else after the next restart.
+  Adoption is one line per call site (`ServiceHeaderHttpClient.wrap(client, "<app name>")` where
+  the `HttpClient` is built, nothing where requests are made), across roughly fifteen of them:
+  `log-analyzer`/`liveness-analyzer` `AlertClient`, `ObjectStorageProxyClient` and
+  `AdminAuthClient`, `HttpAuthenticationStrategy`, `SecretsManagerClient`, `ClipboardApiClient`,
+  `FrameStreamClient`, `PersonDetectionService`, `WebhookSender`, `ApifyClient`,
+  `HttpPictureSource`/`HttpPictureStore`, `AnalysisWorker`. Deliberately **not**
+  `reverse-proxy`'s `UpstreamClient` — a relay passes the original caller's name through.
+  Its sibling `LoggingHttpClient.wrap(client, logger)` **is** adopted — every outbound client in
+  the repo is now built through it, and a `Logger` was threaded into the call sites that lacked
+  one — so each of these sites is already a line that composes: wrapping the same client in
+  `ServiceHeaderHttpClient` too is a one-word change at each. The three deliberate exceptions
+  documented for the logging wrapper (`UpstreamClient`, `LokiLogger`, `env-http`'s `EnvLoader`)
+  are exceptions here for their own reasons; only `UpstreamClient`'s overlaps.
 - **Route prefixes**: klippy's placeholder is gone. Four `${x.server.route-prefix:}` placeholders
   remain — auth (`orwell.auth.route-prefix`), secrets (`secrets.route-prefix`, on both the admin
   and accessor controllers), the jarvis proxy (`jarvis.server.route-prefix`), and keeboarder
@@ -261,12 +604,12 @@ re-parented to the root.
     `DataIntegrityViolationException` catch already covers it.
   - *Timing side-channel on inactive identities*: the `isActive` check precedes PBKDF2, so
     inactive accounts reject measurably faster and account status leaks remotely.
-  - *`POST /identities` is unauthenticated and publicly reachable* — **the highest-value item, and
-    unlike the rest of this list it is a live authorization gap.** `AuthController` carries no
-    `@RequireAuthentication`, and `nginx/all-services.conf` proxies `/auth/` off the published port,
-    so anyone who can reach the stack can self-register an identity and log in for a token that every
-    client-side service accepts. `admin-auth-server` has no nginx location, so admin is not reachable
-    this way — which is what makes the client server's open registration look like an oversight.
+  - ~~*`POST /identities` is unauthenticated and publicly reachable*~~ — **resolved by workspaces**
+    (see the done note at the top). The route is `POST /{workspace}/identities` and requires a token
+    issued to an identity in the `admin` workspace, so reaching `/auth/` through
+    `nginx/all-services.conf` no longer gets an anonymous caller an identity. The guard is the
+    controller's own (`AdminTokenGuard`), not `@RequireAuthentication`: that annotation authenticates
+    against *another* auth server, and this one must not call itself.
   - *Tokens never expire and cannot be revoked*: `ClientToken` has no `expiresAt` and `checkToken`
     never checks age, so a leaked token is valid until someone deletes the row by hand. Every login
     also inserts a row that nothing ever removes.
@@ -288,16 +631,25 @@ re-parented to the root.
 
 ## 3. Live duplication (folded in from the retired removing-redundant-code.md)
 
-- **Two cooldown-tracker variants**: `apps/jarvis/person-detection/.../CooldownTracker.java` and
-  `apps/log-analyzer/.../AlertCooldownTracker.java` implement the same concept with different
-  code — log-analyzer's has evolved reservation semantics, jarvis's has not. (The third copy that
-  used to live in `apps/alerting` is gone; that app has no cooldown tracker.) Extract one shared
-  implementation, starting from log-analyzer's reservation semantics.
+- **Three cooldown-tracker variants**: `apps/log-analyzer/.../AlertCooldownTracker.java`,
+  `apps/liveness-analyzer/.../AlertCooldownTracker.java` and
+  `apps/jarvis/person-detection/.../CooldownTracker.java` implement the same concept at three
+  different stages of evolution. log-analyzer's is the most developed — reservation semantics plus
+  `evictExpired`, so the map cannot grow without bound. liveness-analyzer's is a later copy of it
+  that **adds** `clear()` (a recovered client re-alerts immediately) but **drops** the eviction, so
+  it leaks an entry per client id seen. jarvis's has neither reservation nor eviction. Extract one
+  implementation with log-analyzer's reservation semantics *and* liveness's `clear()`; it belongs
+  in the same shared module as the alert client above. (The fourth copy that used to live in
+  `apps/alerting` is gone; that app has no cooldown tracker.)
 - **Secrets-manager DTO triplication**: the same response shapes exist as admin records,
   accessor records, and client records
   (`apps/secrets-manager/server/.../admin/*Response.java`, `accessor/*Response.java`,
   `apps/secrets-manager/client/.../dto/*.java`); the create/update request records also pair up
-  near-identically. Merge into shared records.
+  near-identically. Merge into shared records. Note the pairs are not uniformly redundant:
+  `admin/EnvironmentResponse` and `accessor/AccessorEnvironmentResponse` are field-for-field
+  identical and can merge outright, whereas `GroupResponse`/`AccessorGroupResponse` differ by
+  `createdBy` — the accessor surface deliberately withholds it, so that pair is a projection to
+  keep, not a duplicate to collapse.
 - **Maven shade plugin declared unconfigured in 5 klippy client poms**
   (linux/mac/dummy/offline-sync/file-locker). Deferred deliberately: the shade *configuration* already
   lives once in the root `pluginManagement`; what repeats is only the 4-line activation stanza, and the
@@ -307,6 +659,52 @@ re-parented to the root.
 - **Dead code**: DONE — `Flag.java` deleted, along with three other verified-orphan files found in the
   same pass (`packages/env/http/.../HttpExchangeResponses.java`, secrets `admin/GroupDetailResponse.java`,
   secrets-client `PasswordAuthProvider.java`).
+- **Grafana/Loki query duplicated verbatim across the two analyzers.** `LokiHeartbeatClient`
+  (liveness-analyzer, lines 111-156) and `LogAnalyzerService` (log-analyzer, lines 300-375) are the
+  same code with one method renamed: `buildProxyUrl`/`buildGrafanaProxyUrl` assemble the identical
+  datasource-proxy URL behind the identical blank-`GRAFANA_URL`/blank-UID guards, and `asMap`,
+  `asListOfMaps`, `asListOfLists`, `encode`, `encodePathSegment` and `trimTrailingSlash` are copied
+  outright — as is the send-and-check block above them, down to the
+  `"Grafana proxy query failed with status "` message. `GRAFANA_URL`, `GRAFANA_API_TOKEN` and
+  `GRAFANA_LOKI_DATASOURCE_UID` are declared with identical defaults in both `*Envs` classes; the
+  liveness-analyzer copy sets a 10s request timeout and the log-analyzer one does not, which is the
+  drift this shape produces. Wanted: a `LokiQueryClient` (query + window + limit in, rows out) that
+  both poll through, leaving each app only its own interpretation of the lines. `trimTrailingSlash`
+  has a third copy at `apps/jarvis/frame-client/.../FrameStreamOptions.java:80` — a candidate for
+  `packages/primitives` once this collapses the other two.
+- **keeboarder's two desktop clients share ~120 lines of WebSocket lifecycle.**
+  `LinuxKeyboardClient` and `MacKeyboardClient` both carry `authenticate()`, `connect()`, all four
+  `@On*` handlers, `handleRegistered`, `sendRegister`, `buildRegisterPayload`, the broadcast
+  envelope in `sendKeyEvent`, the shutdown hook and the session half of `cleanup()`; the two
+  `Main.java` files differ in three strings. Only the key capture is genuinely per-platform. The
+  seam already exists but is in the wrong module — `KeyboardMonitor` (the `start`/`stop` SPI) lives
+  in `apps/keeboarder/clients/linux`, so mac cannot reach it, and `keeboarder-client-core` holds
+  only `KeeboarderClientConfig` and `KeeboarderClientLog`. klippy's clients are the worked example
+  to copy: `klippy-client-core` owns `DesktopClientRunner`/`DesktopClipboardMonitor` and each
+  platform app is ~90 lines of wiring. Move `KeyboardMonitor` and the session lifecycle into
+  `keeboarder-client-core`.
+- **Eight near-identical Dockerfiles**: klippy, reverse-proxy, log-analyzer, keeboarder/server,
+  secrets-manager/server and the three jarvis services all run the same two-stage
+  `maven:3-eclipse-temurin-25` → `eclipse-temurin:25-jre` build, differing only in the `-pl` path,
+  the service user, the jar name and the port — the three jarvis ones share a verbatim comment
+  block. One parameterized Dockerfile with build args would collapse them, but the
+  `--mount=type=cache` divergence is deliberate and documented (it needs buildx, and without it the
+  build fails outright rather than being slower), so that has to become an arg rather than be
+  flattened away. Low value per line saved; listed so the next person does not re-derive it.
+- **`LOGGER`/`LOKI_URL`/`LOKI_TENANT_ID` declared three times**: `PersonDetectionEnvs:52-54`,
+  `RetentionWorkerEnvs:52-54` and `InstaEnvs` (which gained `LOGGER` when insta moved onto
+  `LoggerSetup`; before that it declared only two of the three, and had no mode key at all).
+  Sanctioned by CLAUDE.md — an `EnvSchema`-only app has no `AppServerEnv` to inherit them from —
+  but a `LoggingEnvs.declareOn(builder)` fragment would remove the triplication without touching
+  `AppServerEnv`. Note the **read** side is duplicated too: `RetentionWorker:69` and
+  `PersonDetectionApplication:83` hold a byte-identical `private static Logger loggerFrom(Env)`.
+  One fragment should carry both halves — `declareOn(builder)` and `loggerFor(appName, env)`.
+- **Ad-hoc `com.sun.net.httpserver` stubs in ~10 test classes across 7 modules**
+  (auth-http-client, object-storage-proxy, jarvis-frame-client, jarvis-person-detection,
+  klippy-client-core, insta, gmail-general), each repeating create/bind/start/stop and
+  response-writing. insta's `ApifyStubServer` is the closest thing to a shared one and is
+  insta-specific. `packages/server-test-support` is the home; the shapes vary enough that this is a
+  design job, not a move.
 - **Unguarded auto-config registry**: nothing tests that the four entries in server-bootstrap's
   `META-INF/spring/...AutoConfiguration.imports` resolve; a typo silently drops the shared
   `/health` endpoint, 401 guard, logger, and auth-strategy beans. Add a `@SpringBootTest`
@@ -429,3 +827,17 @@ globally — the §4.1 constraint change is currently only proved by the migrati
 including `account`, and `GMAIL_WEBHOOK_CLIENTS` as legacy broadcast. `.env.example` carries the
 same warning, and `migrations/001-multi-user.sql` has an optional step 6 for moving broadcast
 receivers onto per-mailbox subscriptions.
+
+## `ApifyException` is thrown by sources that have nothing to do with Apify
+
+`ConnectionsSource` now covers a self-hosted service and a RapidAPI endpoint as well as the three
+Apify actors, but every one of them reports failure as `dev.orwell.insta.apify.ApifyException`.
+That is deliberate for now — `ApifyException.Kind` is what both the chain's failover set and
+`InstaCli`'s exit codes are keyed on, and a parallel exception type would mean two of everything —
+but the name is now a lie for two of the five sources, and `insta`'s exit-code table says "Apify
+could not answer" for a failure that may have come from your own machine.
+
+The fix is a rename plus a home: `ConnectionsException` (or `LookupException`) in
+`dev.orwell.insta.instagram`, with `ApifyClient` throwing it too. Mechanical — it is a Java
+identifier, not a string anybody depends on — but it touches every catch site, so it wants doing in
+one go rather than alongside a feature.

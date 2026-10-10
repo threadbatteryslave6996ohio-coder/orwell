@@ -1,5 +1,5 @@
 #!/bin/bash
-# Configuration file for Keeboarder Ubuntu GNOME recorder.
+# Configuration file for the Jarvis Ubuntu recorder.
 # Customize these settings before running install.sh.
 #
 # This client is RECORD-ONLY. It captures screen, microphone, and system audio
@@ -108,6 +108,10 @@ DEVICE_HOSTNAME="$(hostname)"
 # systemd User Service Settings
 # ============================================================
 
+# Still "keeboarder" for the same reason the mac LaunchAgent label is: this is the name of a unit
+# file in ~/.config/systemd/user on every machine that has run the installer, not a name in code.
+# Renaming it leaves the old unit installed and enabled. Everything reads it from here, so the
+# migration is a one-line change plus a `systemctl --user disable` of the old name.
 SYSTEMD_SERVICE_NAME="keeboarder-recorder"
 
 export RECORDINGS_DIR SCREEN_DIR MIC_DIR SYSTEM_AUDIO_DIR LOGS_DIR SCRIPTS_DIR

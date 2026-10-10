@@ -7,18 +7,21 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 | App | Directory | Purpose |
 |---|---|---|
 | Alerting | `apps/alerting` | Email alert dispatch with per-source cooldowns |
-| Analyzer | `apps/analyzer` | Analysis service |
+| Analyzer | `apps/analyzer` | Receives Gmail messages from `gmail-general` at `POST /analyzer/email` and flags subjects containing `login` |
 | Auth | `apps/auth` | Client identity and token management |
 | Backup | `apps/backup` | Postgres backup runner |
 | Google | `apps/google` | Gmail integration service |
 | Insta | `apps/insta` | CLI for public Instagram follower/following lookups via the Apify marketplace |
-| Jarvis | `apps/jarvis` | Surveillance: frame hub (SSE), person detection, retention worker, recorder clients |
+| Insta scraper | `apps/insta-scraper` | self-hosted follower/following source for `insta`, driving a logged-in Instagram session |
+| Jarvis | `apps/jarvis` | Surveillance: frame hub (SSE), person detection, fixture detection (lamp/stove on-off), retention worker, frame viewer (browse stored frames, backfill videos), recorder clients |
 | Keeboarder | `apps/keeboarder` | Keyboard/message relay |
 | Klippy | `apps/klippy` | Clipboard history sync |
 | Log analyzer | `apps/log-analyzer` | AI-assisted log triage feeding the alerting service |
 | Liveness analyzer | `apps/liveness-analyzer` | Heartbeat dead-man's switch alerting when a client stops running |
+| Health monitor | `apps/health-monitor` | Polls every service's `/health` and alerts on the transitions — the active counterpart to the liveness analyzer's dead-man's switch |
 | Object storage proxy | `apps/object-storage-proxy` | Upload proxy fronting S3-compatible or Azure Blob storage, plus the stream analysis worker |
-| Reverse proxy | `apps/reverse-proxy` | Policy-gated reverse proxy in front of one upstream, logging every request |
+| Reverse proxy | `apps/reverse-proxy` | Policy-gated reverse proxy in front of one upstream, with a queryable `request_audit` trail of every request |
+| API key cycler | `apps/api-key-cycler` | Reverse proxy holding several API keys for one upstream, rotating to the next when one is rate-limited or revoked. Standalone — shares no code with the reverse proxy |
 | Secrets manager | `apps/secrets-manager` | Secret bundle/environment management |
 
 ## Packages
@@ -26,19 +29,22 @@ Multi-module monorepo for a suite of backend services and desktop clients.
 | Package | Directory | Purpose |
 |---|---|---|
 | Env | `packages/env` | Typed environment variable framework |
+| HTTP client | `packages/http-client` | `HttpClient` wrappers: one records every outbound request (used everywhere), one stamps a `Service` header naming the caller (built and tested, not yet wired up — see `ISSUES.md` §2) |
 | Logger | `packages/logger` | Pluggable logging |
 | Primitives | `packages/primitives` | Shared value types |
 | Redis client | `packages/redis-client` | Pooled, prefix-namespaced handle on the shared Redis |
 | Server bootstrap | `packages/server-bootstrap` | Shared Spring Boot wiring |
 | Undertow bootstrap | `packages/undertow-bootstrap` | Shared lightweight HTTP runtime |
 | Server parent | `packages/server-parent` | Parent POM for server modules |
-| Server test support | `packages/server-test-support` | Shared Testcontainers base for integration tests |
+| Server test support | `packages/server-test-support` | Shared Testcontainers base and test doubles for integration tests |
+| Test support | `packages/test-support` | Dependency-free test helpers, so lean client modules can use them too — `JsonStubServer` for tests that need a real HTTP server |
 
 ## Other directories
 
 | Directory | Purpose |
 |---|---|
 | `dashboard` | Local dev UI over the auth, secrets, and klippy servers — see `dashboard/README.md` |
+| `fitness-tracker` | Standalone Next.js / TypeScript app with its own Drizzle migrations. Not in the Maven reactor and not part of the stack — nothing else here builds, tests or deploys it |
 | `benchmarks` | Ad-hoc measurement harnesses and dated result notes |
 | `scripts` | Deploy-host and seeding scripts — see `scripts/README.md` |
 | `db-init` | `all-services.sql`, the single source of the klippy/auth/secrets roles and databases |
@@ -63,10 +69,11 @@ See each app's README for run and configuration details.
 ## Lightweight server engine
 
 The alerting and log-analyzer services can run on either the existing Spring Boot
-web stack or embedded Undertow. (The Jarvis frame hub is Spring-only — it serves
-SSE — while Jarvis person detection and the retention worker are plain programs
-that serve no request routes.) The HTTP contracts and
-business logic are shared; only the server runtime changes.
+web stack or embedded Undertow. The HTTP contracts and business logic are shared; only the server
+runtime changes. Jarvis does not play here: the frame hub is Spring-only because it serves SSE, and
+its four siblings are plain programs — the retention worker serves nothing at all, while person
+detection, fixture detection and the frame viewer serve their routes on the Undertow runtime directly,
+so there is no second engine for them to choose between.
 
 ```bash
 SERVER_ENGINE=undertow java -jar <service>-0.1.0-SNAPSHOT-exec.jar

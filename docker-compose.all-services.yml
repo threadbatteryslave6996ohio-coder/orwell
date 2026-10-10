@@ -1,25 +1,24 @@
-services:
-  # One Postgres instance for the whole stack. It holds one database + login
-  # role per app (klippy/auth/secrets), created by db-init/all-services.sql on
-  # first start. Consolidated from three separate postgres containers — see
-  # that file for the naming rationale.
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - all-services-pg-data:/var/lib/postgresql/data
-      - ./db-init/all-services.sql:/docker-entrypoint-initdb.d/all-services.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
+# The applications, and nothing else. Postgres, Redis and MinIO live in
+# docker-compose.storages.yml — this file used to define `db` and `redis` too, and keeping the same
+# container described in two places meant an edit to one silently recreated the other's container.
+# There is now exactly one definition of each.
+#
+# Both files declare the same project, so they compose into one stack. Bring it up with both —
+# scripts/stack.sh supplies the two -f flags for any subcommand, which is the easy way to remember:
+#
+#   ./scripts/stack.sh up -d
+#   docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml up -d
+#
+# This file on its own will not start: the services below `depends_on` `db` and `redis`, and
+# Compose refuses with "depends on undefined service". That is the intended failure — the
+# alternative, dropping the dependency, would start every service against a database that is not
+# there. Storage on its own is the supported half: `-f docker-compose.storages.yml up -d`.
+#
+# The project name is pinned rather than derived from the directory, so that both files describe
+# the same containers and volumes whatever the checkout is called.
+name: orwell
 
+services:
   auth-server:
     image: klippy-app:local
     build:
@@ -40,6 +39,10 @@ services:
       AUTH_ROUTE_PREFIX: /auth
       AUTH_JPA_HIBERNATE_DDL_AUTO: update
       AUTH_JPA_JDBC_TIME_ZONE: UTC
+      # Seeds the one identity in the `admin` workspace that POST /{workspace}/identities
+      # requires; without it nothing can create an identity here. Unset once real admins exist.
+      AUTH_ADMIN_BOOTSTRAP_CLIENT_ID: "${AUTH_ADMIN_BOOTSTRAP_CLIENT_ID:-}"
+      AUTH_ADMIN_BOOTSTRAP_SECRET: "${AUTH_ADMIN_BOOTSTRAP_SECRET:-}"
     depends_on:
       db:
         condition: service_healthy
@@ -68,6 +71,10 @@ services:
       AUTH_ROUTE_PREFIX: /auth
       AUTH_JPA_HIBERNATE_DDL_AUTO: update
       AUTH_JPA_JDBC_TIME_ZONE: UTC
+      # Its own admin workspace, separate from the client server's: this deployment mints the
+      # panel admins, so whoever provisions them must be an admin here and nowhere else.
+      AUTH_ADMIN_BOOTSTRAP_CLIENT_ID: "${ADMIN_AUTH_ADMIN_BOOTSTRAP_CLIENT_ID:-}"
+      AUTH_ADMIN_BOOTSTRAP_SECRET: "${ADMIN_AUTH_ADMIN_BOOTSTRAP_SECRET:-}"
     depends_on:
       db:
         condition: service_healthy
@@ -157,6 +164,10 @@ services:
       # The /admin panel authenticates against the admin deployment, never this one: an upload
       # identity must not be able to sign in and mint more upload identities.
       OBJECT_STORAGE_ADMIN_AUTH_BASE_URL: http://admin-auth-server/auth
+      # Credentials in the client auth server's `admin` workspace, used only by the panel's
+      # "create identity" form. Unset, that form is refused and everything else still works.
+      AUTH_ADMIN_CLIENT_ID: "${AUTH_ADMIN_CLIENT_ID:-}"
+      AUTH_ADMIN_SECRET: "${AUTH_ADMIN_SECRET:-}"
       OBJECT_STORAGE_SERVER_URL: http://localhost:${ORWELL_HTTP_PORT:-8080}/jarvis
       OBJECT_STORAGE_LOGGING_AUDIT_FILE: /app/logs/audit.log
     # Without this the audit log lives in the container's writable layer and is lost on every
@@ -177,14 +188,77 @@ services:
       retries: 5
       start_period: 30s
 
+  # Copies MinIO's contents to a remote S3 bucket, on a timer. Off by default: it is behind the
+  # `backup` profile, so a stack with no remote bucket configured is unaffected. Start it with
+  #   COMPOSE_PROFILES=backup ./scripts/stack.sh up -d
+  # or `./scripts/stack.sh --profile backup up -d`, which reaches Compose the same way.
+  #
+  # It reads MinIO over the S3 API rather than backing up the all-services-minio-data volume, and
+  # that is deliberate. MinIO's on-disk layout is internal (objects become directories carrying an
+  # xl.meta sidecar), so a file-level copy restores dependably only into the same MinIO version, and
+  # copying it from under a running server gives a torn snapshot. Read over S3 and what lands in the
+  # bucket is plain objects, restorable into MinIO, into real S3, or into neither.
+  #
+  # `mc mirror` is incremental — it lists both ends and transfers the difference — which is why the
+  # remote credentials below cannot be write-only however much one would like them to be. See
+  # .env.example for the policy that replaces them, and for the two settings on the destination
+  # bucket that do the work write-only credentials would have: versioning and object lock.
+  #
+  # `--remove` is deliberately absent and must stay absent. It is what makes mirroring propagate a
+  # deletion, and a backup that faithfully reproduces `rm -rf` is not one. History lives in the
+  # destination bucket's versions instead.
+  minio-backup:
+    image: minio/mc
+    profiles: ["backup"]
+    mem_limit: 128m
+    environment:
+      SRC_BUCKET: "${MINIO_BACKUP_SOURCE_BUCKET:-keeboarder-recordings}"
+      SRC_KEY: "${MINIO_BACKUP_SOURCE_KEY:-minioadmin}"
+      SRC_SECRET: "${MINIO_BACKUP_SOURCE_SECRET:-minioadmin}"
+      DST_ENDPOINT: "${MINIO_BACKUP_REMOTE_ENDPOINT:-}"
+      DST_BUCKET: "${MINIO_BACKUP_REMOTE_BUCKET:-}"
+      DST_PREFIX: "${MINIO_BACKUP_REMOTE_PREFIX:-}"
+      DST_KEY: "${MINIO_BACKUP_REMOTE_KEY:-}"
+      DST_SECRET: "${MINIO_BACKUP_REMOTE_SECRET:-}"
+      INTERVAL: "${MINIO_BACKUP_INTERVAL_SECONDS:-86400}"
+    # A missing destination is a configuration error, not a reason to sit idle looking healthy:
+    # the container exits and says which key is unset. Nothing else in the stack depends on it.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        missing=""
+        [ -n "$$DST_ENDPOINT" ] || missing="$$missing MINIO_BACKUP_REMOTE_ENDPOINT"
+        [ -n "$$DST_BUCKET" ]   || missing="$$missing MINIO_BACKUP_REMOTE_BUCKET"
+        [ -n "$$DST_KEY" ]      || missing="$$missing MINIO_BACKUP_REMOTE_KEY"
+        [ -n "$$DST_SECRET" ]   || missing="$$missing MINIO_BACKUP_REMOTE_SECRET"
+        if [ -n "$$missing" ]; then
+          echo "minio-backup: unset and required:$$missing (see .env.example)" >&2
+          exit 1
+        fi
+        mc alias set src http://minio:9000 "$$SRC_KEY" "$$SRC_SECRET"
+        mc alias set dst "$$DST_ENDPOINT" "$$DST_KEY" "$$DST_SECRET"
+        target="dst/$$DST_BUCKET/$$DST_PREFIX"
+        while true; do
+          echo "minio-backup: mirroring src/$$SRC_BUCKET -> $$target"
+          mc mirror --overwrite "src/$$SRC_BUCKET" "$$target" \
+            || echo "minio-backup: mirror failed, retrying in $${INTERVAL}s" >&2
+          sleep "$$INTERVAL"
+        done
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
   # The frame hub: recorders POST /frames, viewers hold GET /frames/stream open, and frame_events
   # is the replay buffer between them. Spring engine only — see the Dockerfile.
   #
   # NOTE: this needs the `jarvis` role and database from db-init/all-services.sql, which Postgres
   # runs only when the data volume is first initialised. On a volume created before that entry
-  # existed, create them by hand once:
-  #   docker compose exec db psql -U postgres \
-  #     -c "CREATE ROLE jarvis LOGIN PASSWORD 'jarvis'" -c "CREATE DATABASE jarvis OWNER jarvis"
+  # existed, re-run the script — it is idempotent and creates only what is missing:
+  #   ./scripts/stack.sh --storages-only exec -T db \
+  #       psql -U postgres -v ON_ERROR_STOP=1 < db-init/all-services.sql
   jarvis-hub:
     image: jarvis-hub:local
     build:
@@ -254,6 +328,200 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # A page over the frames the hub has already stored: pick a device, see its newest frame, step
+  # back. It reads frame_events directly and never joins the stream — browsing history is a table
+  # question, and keeping it off the hub keeps a browser scrubbing back through an hour of footage
+  # off the heap of the process that has to stay up for the recording to continue.
+  #
+  # It also accepts whole videos (POST /api/uploads?source=&from=&to=), cuts them into frames with
+  # ffmpeg and pushes them to the hub dated across that window. It does NOT write frame_events
+  # itself: the hub is the only thing that ingests frames, which is what keeps a backfilled frame
+  # indistinguishable from a live one — jarvis-person-detection sees them too.
+  #
+  # Access is the auth server's decision (FRAME_VIEWER_AUTH_BASE_URL below): a browser signs in at
+  # POST /login and carries the token in a session cookie, and a script sends X-Client-Id and
+  # Authorization: Bearer. Both matter, because reaching this port is not only about watching the
+  # footage but about adding to it.
+  #
+  # NOTE the published port is still bound to 127.0.0.1, unlike every other service here, and this
+  # service is still deliberately absent from nginx/all-services.conf. The login is the guard; the
+  # bind address is the backstop, and it stays until somebody widens it on purpose.
+  jarvis-frame-viewer:
+    image: jarvis-frame-viewer:local
+    build:
+      context: .
+      dockerfile: apps/jarvis/frame-viewer/Dockerfile
+    env_file:
+      - ./apps/jarvis/frame-viewer/.env.example
+      - path: ./apps/jarvis/frame-viewer/.env
+        required: false
+    ports:
+      - "127.0.0.1:${ORWELL_FRAME_VIEWER_PORT:-9003}:9003"
+    # Bigger than a page server needs, because of uploads: ffmpeg is a subprocess with its own
+    # memory outside the JVM's, and the backfill loop holds one frame at a time on the heap. The
+    # video itself never enters memory — it streams to a temp file — so this does not scale with
+    # FRAME_VIEWER_UPLOAD_MAX_BYTES. Reads are one row at a time by design.
+    mem_limit: 512m
+    environment:
+      LOGGER: "${LOGGER:-}"
+      LOKI_URL: "${LOKI_URL:-}"
+      LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
+      JAVA_TOOL_OPTIONS: "-XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "9003"
+      FRAME_VIEWER_DATASOURCE_URL: jdbc:postgresql://db/jarvis
+      FRAME_VIEWER_DATASOURCE_USERNAME: jarvis
+      FRAME_VIEWER_DATASOURCE_PASSWORD: jarvis
+      FRAME_VIEWER_HUB_URL: http://jarvis-hub:9001
+      # Who may watch. Pointed at admin-auth-server, NOT at the client-facing auth-server: whichever
+      # server accepts a credential decides who sees the recordings, and the client-facing one mints
+      # the identities cameras and upload clients use. Sharing it would make every camera a viewer of
+      # every camera. secrets-manager and object-storage-proxy split theirs the same way.
+      #
+      # Provision a viewer with that server's admin credentials:
+      #   curl -X POST http://admin-auth-server/auth/def/identities \
+      #     -H "X-Client-Id: $ADMIN" -H "Authorization: Bearer $TOKEN" \
+      #     -H 'Content-Type: application/json' -d '{"clientId":"watcher","secret":"..."}'
+      FRAME_VIEWER_AUTH_BASE_URL: http://admin-auth-server/auth
+      FRAME_VIEWER_AUTH_WORKSPACE: def
+    depends_on:
+      db:
+        condition: service_healthy
+      # Only uploads need the hub, and the route says so itself when it is missing — but starting
+      # after it avoids offering a feature that fails for the first minute of a cold start.
+      jarvis-hub:
+        condition: service_healthy
+      # Sign-ins fail until this is up. service_started rather than service_healthy because it has
+      # no health check; a viewer whose auth server is still starting shows a refused sign-in.
+      admin-auth-server:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9003 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  # Polls every service's /health and reports when one stops answering: one alert when it goes down,
+  # one when it comes back, and a single place to see the whole stack at once.
+  #
+  # This does NOT replace the per-service healthcheck blocks in this file. Those restart a container
+  # and tell nobody; this tells somebody. It is also distinct from liveness-analyzer, which watches
+  # Loki for heartbeats from desktop *clients* that nothing can reach to poll.
+  #
+  # NOTE /health is at the ROOT of every service, never under its route prefix — auth-server has
+  # AUTH_ROUTE_PREFIX=/auth and its health endpoint is still /health. nginx/all-services.conf is the
+  # authoritative list, and these urls are taken from it.
+  #
+  # depends_on is deliberately absent: a monitor that waits for the things it monitors to be healthy
+  # cannot report that they are not. It starts first and says what it finds.
+  health-monitor:
+    image: health-monitor:local
+    build:
+      context: .
+      dockerfile: apps/health-monitor/Dockerfile
+    env_file:
+      - ./apps/health-monitor/.env.example
+      - path: ./apps/health-monitor/.env
+        required: false
+    ports:
+      - "127.0.0.1:${ORWELL_HEALTH_MONITOR_PORT:-9005}:9005"
+    # A schedule, an HTTP client and a state machine per target. No database, no buffers.
+    mem_limit: 192m
+    environment:
+      LOGGER: "${LOGGER:-}"
+      LOKI_URL: "${LOKI_URL:-}"
+      LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
+      JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "9005"
+      HEALTH_MONITOR_TARGETS: "auth=http://auth-server:80/health,admin-auth=http://admin-auth-server:80/health,clipboard=http://clipboard-server:80/health,secrets-manager=http://secrets-manager:8085/health,object-storage-proxy=http://object-storage-proxy:5000/health,alerting=http://alerting:80/health,log-analyzer=http://log-analyzer:80/health,keeboarder=http://keeboarder-server:8025/health,reverse-proxy=http://reverse-proxy:9300/health,api-key-cycler=http://api-key-cycler:9310/health,jarvis-hub=http://jarvis-hub:9001/health,jarvis-person-detection=http://jarvis-person-detection:9002/health,jarvis-frame-viewer=http://jarvis-frame-viewer:9003/health,jarvis-fixture-detection=http://jarvis-fixture-detection:9004/health"
+      # Where a transition is sent so it becomes an EMAIL. apps/alerting is the email service: it
+      # records every alert and mails it when ALERT_EMAIL_ENABLED=true, ALERT_EMAIL_TO is set and the
+      # SMTP_* settings are filled in — all three on THAT service, in apps/alerting/.env. Without
+      # them it still answers 200 and quietly sends nothing, which this app notices and warns about
+      # (see emailsSentTotal and lastAlertProblem on /health).
+      #
+      # Pointed at alerting by default. Set ORWELL_HEALTH_ALERT_URL= (empty) in the root .env to go
+      # back to logging only — worth doing if you run a partial stack, since a service you never
+      # started reads as one that went down.
+      HEALTH_MONITOR_ALERT_URL: "${ORWELL_HEALTH_ALERT_URL-http://alerting/alerts}"
+    # Its own health only — it stays healthy while targets are down, on purpose. Reporting unhealthy
+    # because something it watches is unhealthy would have Docker restart the monitor at the exact
+    # moment it is doing its job.
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9005 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # Is the lamp on, is the burner lit. A second watcher on the hub's stream, measuring configured
+  # rectangles of each frame and reporting when one crosses a threshold.
+  #
+  # It carries no model and no native library: for a camera that does not move, a fixture's state is
+  # a threshold over a region, which is arithmetic on a JPEG the JDK already decodes. That is why
+  # this is the smallest container in jarvis while doing the most specific job.
+  #
+  # It watches NOTHING until fixtures are configured, and says so at startup. Put them in a JSON
+  # file and mount it — see apps/jarvis/fixture-detection/fixtures.example.json, and that app's
+  # README for how to calibrate the thresholds against the preview route rather than guess them.
+  jarvis-fixture-detection:
+    image: jarvis-fixture-detection:local
+    build:
+      context: .
+      dockerfile: apps/jarvis/fixture-detection/Dockerfile
+    env_file:
+      - ./apps/jarvis/fixture-detection/.env.example
+      - path: ./apps/jarvis/fixture-detection/.env
+        required: false
+    # The calibration routes only. Bound to 127.0.0.1 because the preview returns a frame of your
+    # house; /health and /fixtures carry no imagery, but they are on the same port.
+    ports:
+      - "127.0.0.1:${ORWELL_FIXTURE_DETECTION_PORT:-9004}:9004"
+    # One decoded frame at a time on the stream client's reader thread, and a few thousand pixels of
+    # arithmetic per fixture. Smaller than person-detection because nothing scans the whole image.
+    mem_limit: 256m
+    environment:
+      LOGGER: "${LOGGER:-}"
+      LOKI_URL: "${LOKI_URL:-}"
+      LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
+      JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "9004"
+      FIXTURE_DETECTION_HUB_URL: http://jarvis-hub:9001
+      FIXTURE_DETECTION_SUBSCRIPTION: fixture-detection
+      # To switch the detector on: create apps/jarvis/fixture-detection/fixtures.json (copy the
+      # .example beside it) and set ORWELL_FIXTURE_DEFINITIONS_FILE=/app/config/fixtures.json in the
+      # root .env. Unset, this runs and watches nothing, and says so at startup.
+      #
+      # Left unset on purpose. Shipped thresholds would be somebody else's lamp, and a fixture pointed
+      # at the wrong rectangle reports the state of a wall with complete confidence.
+      FIXTURE_DETECTION_DEFINITIONS_FILE: "${ORWELL_FIXTURE_DEFINITIONS_FILE:-}"
+      # Set to http://alerting/alerts to have transitions delivered as well as logged.
+      FIXTURE_DETECTION_ALERT_URL: "${ORWELL_FIXTURE_ALERT_URL:-}"
+    # The app's own directory, read-only, so fixtures.json can be edited and the container restarted
+    # without a rebuild. The *directory* rather than the file: a bind whose source does not exist has
+    # Docker create a directory in its place, so mounting the file directly would break the stack for
+    # everyone who has not created one yet.
+    volumes:
+      - ./apps/jarvis/fixture-detection:/app/config:ro
+    depends_on:
+      # It watches the hub rather than being called by it, so the hub must be up first. The stream
+      # client would retry with backoff anyway; this avoids a minute of reconnect noise on a cold
+      # start.
+      jarvis-hub:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9004 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
       start_period: 20s
     restart: unless-stopped
 
@@ -343,25 +611,6 @@ services:
       - alerting
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    # Persistence is explicit rather than inherited from the image defaults, which snapshot at
-    # best every 60s. insta caches paid Apify results here and they never expire, so losing them
-    # on a restart costs real money; AOF bounds that loss to a second. Note the one-time cost of turning this
-    # on: Redis prefers the AOF on startup, so the first restart after this change begins with an
-    # empty store and both caches (keeboarder's `ws:`, insta's `insta:`) refill from cold.
-    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
-    ports:
-      - "6379:6379"
-    volumes:
-      - all-services-redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
   keeboarder-server:
     image: keeboarder-server:local
     build:
@@ -419,7 +668,115 @@ services:
       - ./nginx/all-services.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
 
+  # The outermost layer: a policy-gated, fully audited front door onto nginx. Everything it
+  # admits reaches the same routes as port 8080 does, so this is a second way in rather than a
+  # replacement — it exists to record every request (and refuse some) before nginx dispatches it.
+  #
+  # Every request lands in `request_audit` in the `proxy` database, so the trail is queryable:
+  #   docker compose exec db psql -U proxy -d proxy \
+  #     -c "SELECT service, count(*) FROM request_audit GROUP BY service ORDER BY 2 DESC"
+  #
+  # NOTE: this needs the `proxy` role and database from db-init/all-services.sql, which Postgres
+  # runs only when the data volume is first initialised — so a stack created before that entry
+  # existed upgrades into a proxy that cannot connect, and because everything here gates on
+  # `depends_on: service_healthy`, that stops more than just this service. The script is
+  # re-runnable, so repairing any missing role or database is one command against a live db:
+  #   ./scripts/stack.sh --storages-only exec -T db \
+  #       psql -U postgres -v ON_ERROR_STOP=1 < db-init/all-services.sql
+  # It creates only what is absent and never resets a password.
+  #
+  # PROXY_BLOCKED_PATTERNS is empty here on purpose: a local stack that silently refused a path
+  # would be debugged as a broken service. Set it in a gitignored .env to try a blocklist.
+  reverse-proxy:
+    image: orwell-reverse-proxy:local
+    build:
+      context: .
+      dockerfile: apps/reverse-proxy/Dockerfile
+    # See the object-storage-proxy env_file note: committed defaults, optional gitignored override.
+    env_file:
+      - ./apps/reverse-proxy/.env.example
+      - path: ./apps/reverse-proxy/.env
+        required: false
+    # It buffers one request body and one response body per in-flight request (10 MiB each at the
+    # default PROXY_MAX_BODY_BYTES), and holds nothing between requests. Raise this alongside that
+    # setting, not on its own.
+    mem_limit: 384m
+    environment:
+      LOGGER: "${LOGGER:-}"
+      LOKI_URL: "${LOKI_URL:-}"
+      LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
+      JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "9300"
+      # The .env.example value is a loopback address for running the jar by hand; inside the
+      # network the upstream is the stack's own edge.
+      PROXY_UPSTREAM_URL: http://nginx
+      PROXY_BLOCKED_PATTERNS: ""
+      PROXY_AUDIT_DATASOURCE_URL: jdbc:postgresql://db/proxy
+      PROXY_AUDIT_DATASOURCE_USERNAME: proxy
+      PROXY_AUDIT_DATASOURCE_PASSWORD: proxy
+      PROXY_AUDIT_RETENTION_DAYS: "30"
+    ports:
+      - "${ORWELL_PROXY_PORT:-9300}:9300"
+    depends_on:
+      db:
+        condition: service_healthy
+      nginx:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9300 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # The second, separate reverse proxy. It shares no code with reverse-proxy above — it holds
+  # several API keys for one upstream and rotates to the next when one is refused, which is a
+  # different job from recording and refusing requests.
+  #
+  # Here it points at reverse-proxy rather than straight at nginx, because that is the arrangement
+  # worth being able to try: a rotated request lands in `request_audit` with its `attempts` column
+  # saying how many keys it took, and neither app knows the other exists.
+  #
+  # NOTE: CYCLER_API_KEYS holds the placeholder values from .env.example, so the stack starts
+  # without real credentials — nginx ignores the Authorization header these produce. Real keys do
+  # not belong in this file or in a .env: launch with the `url` argument to load the environment
+  # from the secrets manager instead. See apps/api-key-cycler/README.md.
+  api-key-cycler:
+    image: orwell-api-key-cycler:local
+    build:
+      context: .
+      dockerfile: apps/api-key-cycler/Dockerfile
+    # See the object-storage-proxy env_file note: committed defaults, optional gitignored override.
+    env_file:
+      - ./apps/api-key-cycler/.env.example
+      - path: ./apps/api-key-cycler/.env
+        required: false
+    # Same shape as reverse-proxy's: one request body and one response body per in-flight request.
+    # A retry replays the body it already holds rather than buffering a second copy, so rotation
+    # costs latency, not memory.
+    mem_limit: 384m
+    environment:
+      LOGGER: "${LOGGER:-}"
+      LOKI_URL: "${LOKI_URL:-}"
+      LOKI_TENANT_ID: "${LOKI_TENANT_ID:-}"
+      JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC -XX:+UseCompactObjectHeaders -XX:MaxRAMPercentage=75.0"
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: "9310"
+      CYCLER_UPSTREAM_URL: http://reverse-proxy:9300
+    ports:
+      - "${ORWELL_CYCLER_PORT:-9310}:9310"
+    depends_on:
+      reverse-proxy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9310 && printf 'GET /health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200' <&3"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
-  all-services-pg-data:
   all-services-proxy-audit-logs:
-  all-services-redis-data:

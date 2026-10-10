@@ -51,6 +51,27 @@ Edit `config.sh` first if you need a different capture backend, display, screen 
 - Local recording and remote streaming run as independent FFmpeg jobs, so a failure in one does not stop the other.
 - `manage.sh` starts/stops the recorder service, checks status, tails logs, and cleans old local files.
 
+### Shared with the macOS client
+
+Only the capture itself is written per platform. Logging, the shutdown trap, the restart loop each
+capture runs under, and the ffmpeg segment/streaming argument tails live in
+[`../lib/recorder.sh`](../lib/recorder.sh); the colours, print helpers and retention sweep the
+management script uses live in [`../lib/console.sh`](../lib/console.sh). What stays in
+`start_recorder.sh` is the part macOS has no equivalent for: choosing between x11grab and GNOME
+Shell's PipeWire screencast service, and finding a PulseAudio monitor source.
+
+`install.sh` copies the library next to the recorder as `~/scripts/recorder-lib.sh`, because the
+install layout is flat. `start_recorder.sh` looks for it under both names, so it runs the same from
+a repo checkout and from an install.
+
+`config.sh` is deliberately **not** shared: it is an inventory a person edits per machine, and
+splitting it across two files to save a few repeated defaults would cost more than it saves.
+
+[`../lib/recorder-smoke-test.sh`](../lib/recorder-smoke-test.sh) runs this recorder against stub
+binaries and asserts the argv each capture is launched with, that a dead capture restarts, and that
+a stop signal takes every capture down. Nothing here is in the Maven reactor, so `mvn test` proves
+nothing about it — run that script after changing either recorder.
+
 ## Uploads
 
 Uploading recordings is **not** this client's job. Point the **syncer** client at
@@ -67,6 +88,18 @@ See that client's README for configuration and the recommended timer interval.
 ├── system-audio/
 └── logs/
     └── recorder.log
+```
+
+In the repo:
+
+```text
+apps/jarvis/clients/
+├── lib/
+│   ├── recorder.sh              shared by both recorders
+│   ├── console.sh               shared by both manage.sh scripts
+│   └── recorder-smoke-test.sh   runs both recorders against stubs
+├── linux/                       this client
+└── mac/
 ```
 
 ## Common Commands

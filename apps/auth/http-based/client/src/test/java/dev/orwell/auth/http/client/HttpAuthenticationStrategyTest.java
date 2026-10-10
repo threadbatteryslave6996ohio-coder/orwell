@@ -1,30 +1,29 @@
 package dev.orwell.auth.http.client;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import dev.orwell.auth.http.api.CreateIdentityHttpResponse;
 import dev.orwell.auth.http.api.LoginHttpResponse;
+import dev.orwell.testing.http.JsonStubServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static dev.orwell.testing.http.JsonStubServer.readBody;
+import static dev.orwell.testing.http.JsonStubServer.respond;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HttpAuthenticationStrategyTest {
-    private HttpServer server;
+    private JsonStubServer server;
 
     @AfterEach
     void stopServer() {
         if (server != null) {
-            server.stop(0);
+            server.close();
         }
     }
 
@@ -32,17 +31,16 @@ class HttpAuthenticationStrategyTest {
     void loginPostsCredentialsAndParsesTheResponse() throws IOException {
         AtomicReference<String> method = new AtomicReference<>();
         AtomicReference<String> body = new AtomicReference<>();
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/login", exchange -> {
+        server = JsonStubServer.start();
+        server.on("/def/login", exchange -> {
             method.set(exchange.getRequestMethod());
             body.set(readBody(exchange));
             respond(exchange, 200, """
                     {"clientId":"client-a","token":"token-123"}
                     """);
         });
-        server.start();
 
-        HttpAuthenticationStrategy client = new HttpAuthenticationStrategy(baseUrl());
+        HttpAuthenticationStrategy client = new HttpAuthenticationStrategy(server.baseUrl());
         LoginHttpResponse response = client.login("client-a", "super-secret");
 
         assertEquals(new LoginHttpResponse("client-a", "token-123"), response);
@@ -55,17 +53,16 @@ class HttpAuthenticationStrategyTest {
     void isTokenValidForClientPostsToCheckEndpoint() throws IOException {
         AtomicReference<String> method = new AtomicReference<>();
         AtomicReference<String> body = new AtomicReference<>();
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/tokens/check", exchange -> {
+        server = JsonStubServer.start();
+        server.on("/def/tokens/check", exchange -> {
             method.set(exchange.getRequestMethod());
             body.set(readBody(exchange));
             respond(exchange, 200, """
                     {"valid":true,"clientId":"client-a"}
                     """);
         });
-        server.start();
 
-        HttpAuthenticationStrategy client = new HttpAuthenticationStrategy(baseUrl());
+        HttpAuthenticationStrategy client = new HttpAuthenticationStrategy(server.baseUrl());
 
         assertTrue(client.isTokenValidForClient("client-a", "token-123"));
         assertEquals("POST", method.get());
@@ -75,11 +72,10 @@ class HttpAuthenticationStrategyTest {
 
     @Test
     void loginWrapsServerErrors() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/login", exchange -> respond(exchange, 503, "unavailable"));
-        server.start();
+        server = JsonStubServer.start();
+        server.on("/def/login", exchange -> respond(exchange, 503, "unavailable"));
 
-        HttpAuthenticationStrategy client = new HttpAuthenticationStrategy(baseUrl());
+        HttpAuthenticationStrategy client = new HttpAuthenticationStrategy(server.baseUrl());
 
         HttpAuthenticationException exception = assertThrows(HttpAuthenticationException.class,
                 () -> client.login("client-a", "super-secret"));
@@ -89,33 +85,62 @@ class HttpAuthenticationStrategyTest {
 
     @Test
     void tokenCheckReturnsFalseWhenResponseDoesNotMatchClientId() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/tokens/check", exchange -> respond(exchange, 200, """
+        server = JsonStubServer.start();
+        server.on("/def/tokens/check", exchange -> respond(exchange, 200, """
                 {"valid":true,"clientId":"different-client"}
                 """));
-        server.start();
 
-        HttpAuthenticationStrategy client = new HttpAuthenticationStrategy(baseUrl());
+        HttpAuthenticationStrategy client = new HttpAuthenticationStrategy(server.baseUrl());
 
         assertFalse(client.isTokenValidForClient("client-a", "token-123"));
     }
 
-    private String baseUrl() {
-        return "http://localhost:%d".formatted(server.getAddress().getPort());
+    @Test
+    void everyCallGoesThroughTheConfiguredWorkspace() throws IOException {
+        AtomicReference<String> path = new AtomicReference<>();
+        server = JsonStubServer.start();
+        server.on("/team-a/login", exchange -> {
+            path.set(exchange.getRequestURI().getPath());
+            respond(exchange, 200, """
+                    {"clientId":"client-a","token":"token-123"}
+                    """);
+        });
+
+        new HttpAuthenticationStrategy(server.baseUrl(), "team-a").login("client-a", "super-secret");
+
+        assertEquals("/team-a/login", path.get());
     }
 
-    private static String readBody(HttpExchange exchange) throws IOException {
-        try (InputStream inputStream = exchange.getRequestBody()) {
-            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-        }
+    @Test
+    void createIdentityPresentsTheAdminCredentialAndParsesTheResponse() throws IOException {
+        AtomicReference<String> clientIdHeader = new AtomicReference<>();
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> body = new AtomicReference<>();
+        server = JsonStubServer.start();
+        server.on("/team-a/identities", exchange -> {
+            clientIdHeader.set(exchange.getRequestHeaders().getFirst("X-Client-Id"));
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            body.set(readBody(exchange));
+            respond(exchange, 201, """
+                    {"workspace":"team-a","clientId":"client-a","createdAt":"2026-06-26T00:00:00Z"}
+                    """);
+        });
+
+        CreateIdentityHttpResponse response = new HttpAuthenticationStrategy(server.baseUrl(), "team-a")
+                .createIdentity("ops-admin", "admin-token", "client-a", "super-secret");
+
+        assertEquals("team-a", response.workspace());
+        assertEquals("client-a", response.clientId());
+        assertEquals(Instant.parse("2026-06-26T00:00:00Z"), response.createdAt());
+        assertEquals("ops-admin", clientIdHeader.get());
+        assertEquals("Bearer admin-token", authorization.get());
+        assertTrue(body.get().contains("\"secret\":\"super-secret\""));
     }
 
-    private static void respond(HttpExchange exchange, int statusCode, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(statusCode, bytes.length);
-        try (OutputStream outputStream = exchange.getResponseBody()) {
-            outputStream.write(bytes);
-        }
+    /** Caught at construction rather than as a 400 per call: the name cannot become valid later. */
+    @Test
+    void refusesAWorkspaceNameTheServerWouldReject() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new HttpAuthenticationStrategy("http://localhost:1", "Team A"));
     }
 }

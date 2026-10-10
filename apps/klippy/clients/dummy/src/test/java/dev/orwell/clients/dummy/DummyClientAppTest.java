@@ -23,7 +23,9 @@ class DummyClientAppTest {
         // IllegalStateException. sendCommand must swallow it and report a normal failure.
         URI endpoint = URI.create("http://127.0.0.1:1/clipboard");
         ClientAuthSession noCredentials = new ClientAuthSession(null, "dummy", null, null);
-        ClipboardApiClient apiClient = new ClipboardApiClient(endpoint, noCredentials, Duration.ofMillis(100));
+        ClipboardApiClient apiClient = new ClipboardApiClient(
+                endpoint, noCredentials, Duration.ofMillis(100), entry -> {
+                });
         DummyClientApp app = new DummyClientApp(apiClient, endpoint, "dummy", entry -> {
         });
 

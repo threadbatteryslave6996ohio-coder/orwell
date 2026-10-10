@@ -24,7 +24,7 @@ For Docker Compose, use the whole-stack file at the repository root, which runs
 this server behind the shared Nginx entrypoint alongside the other services:
 
 ```bash
-docker compose -f docker-compose.all-services.yml up --build
+docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml up --build
 ```
 
 The launcher loads `.env` from the current directory or any parent, then applies

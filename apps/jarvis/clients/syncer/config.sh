@@ -1,5 +1,5 @@
 #!/bin/bash
-# Configuration for the Keeboarder "syncer" client.
+# Configuration for the Jarvis "syncer" client.
 #
 # The syncer drains completed recording segments to the object storage proxy. For every
 # recording type it leaves the single most recent (still in-progress) segment

@@ -1,5 +1,8 @@
 package dev.orwell.insta.graph;
 
+import dev.orwell.http.LoggingHttpClient;
+import dev.orwell.logging.Logger;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -12,10 +15,14 @@ public final class HttpPictureSource implements PictureSource {
     /** Profile pictures are tens of kilobytes; anything this large is not one. */
     private static final int MAX_BYTES = 8 * 1024 * 1024;
 
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
+    private final HttpClient http;
+
+    public HttpPictureSource(Logger logger) {
+        this.http = LoggingHttpClient.wrap(HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build(), logger);
+    }
 
     @Override
     public byte[] fetch(String url) throws Exception {

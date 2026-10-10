@@ -70,6 +70,48 @@ public final class LokiLogger implements Logger, AutoCloseable {
     private volatile boolean running = true;
     private final Thread worker;
 
+    /**
+     * The {@code stream_type} every ordinary log record is labelled with.
+     *
+     * <p>It is a label rather than a field because it is what a consumer <em>selects</em> on:
+     * {@code apps/log-analyzer} queries {@code {stream_type="app"} | json | level="ERROR"}, and a
+     * selector on a field would make Loki read every stream to find it. Cardinality is fine — this
+     * takes a handful of values across the whole deployment, which is exactly what a label is for.
+     */
+    public static final String APP_STREAM = "app";
+
+    /**
+     * A stream that is not the app log.
+     *
+     * <p>For records that are <strong>high-volume and low-information</strong>, where mixing them into
+     * the app stream would swamp the thing that reads it. A liveness heartbeat is the case this exists
+     * for: one line per interval per process is thousands a day, all of them saying "still here", and
+     * the app stream is what gets triaged for errors. A separate label keeps each stream worth reading
+     * and lets a consumer select only what it wants.
+     *
+     * <p>Everything else about it is a normal {@link LokiLogger}: same batching, same bounded queue,
+     * same never-blocks-the-caller guarantee. Only the label differs.
+     *
+     * @param streamType the label value, e.g. {@code heartbeat}. Letters, digits, {@code _} and
+     *                   {@code -} only — a value with a quote or a brace in it would produce a stream
+     *                   nothing can write a selector for.
+     */
+    public static LokiLogger onStream(String streamType, String appName, URI endpoint,
+            String tenantId) {
+        return new LokiLogger(appName, endpoint, tenantId, DEFAULT_QUEUE_CAPACITY, DEFAULT_BATCH_SIZE,
+                DEFAULT_FLUSH_INTERVAL,
+                HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT).build(), null,
+                validStreamType(streamType));
+    }
+
+    private static String validStreamType(String streamType) {
+        if (streamType == null || !streamType.matches("[A-Za-z0-9_-]+")) {
+            throw new IllegalArgumentException(
+                    "a stream_type must be letters, digits, _ or -, got '" + streamType + "'");
+        }
+        return streamType;
+    }
+
     public LokiLogger(String appName, URI endpoint, String tenantId) {
         this(appName, endpoint, tenantId, null);
     }
@@ -103,17 +145,41 @@ public final class LokiLogger implements Logger, AutoCloseable {
             HttpClient http,
             Logger fallback
     ) {
+        this(appName, endpoint, tenantId, queueCapacity, batchSize, flushInterval, http, fallback,
+                APP_STREAM);
+    }
+
+    /**
+     * The one that actually builds it. Private because {@code streamType} is not a per-app choice —
+     * an app's own records belong on {@link #APP_STREAM}, and anything else goes through
+     * {@link #onStream}, which is where the reason for a second stream is written down.
+     */
+    private LokiLogger(
+            String appName,
+            URI endpoint,
+            String tenantId,
+            int queueCapacity,
+            int batchSize,
+            Duration flushInterval,
+            HttpClient http,
+            Logger fallback,
+            String streamType
+    ) {
         this.fallback = fallback;
         this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
         this.tenantId = tenantId == null || tenantId.isBlank() ? null : tenantId;
-        this.baseLabels = Map.of("app", Objects.requireNonNull(appName, "appName"), "stream_type", "app");
+        this.baseLabels = Map.of(
+                "app", Objects.requireNonNull(appName, "appName"),
+                "stream_type", Objects.requireNonNull(streamType, "streamType"));
         this.queue = new ArrayBlockingQueue<>(queueCapacity);
         this.batchSize = batchSize;
         this.flushInterval = Objects.requireNonNull(flushInterval, "flushInterval");
         this.http = Objects.requireNonNull(http, "http");
         this.mapper = new ObjectMapper();
         this.worker = Thread.ofPlatform()
-                .name("loki-logger-" + appName)
+                // The stream is in the name: a process with a heartbeat channel runs two of these,
+                // and "loki-logger-health-monitor" twice in a thread dump says nothing.
+                .name("loki-logger-" + appName + "-" + streamType)
                 .daemon(true)
                 .start(this::drainLoop);
     }

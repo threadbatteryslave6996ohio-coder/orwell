@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jarvis — stored frames</title>
+<!--
+  The palette and the shape of this page follow apps/insta's viewer, which is the repo's other
+  read-only UI: same CSS variables, same header-and-aside layout, so the two look like they came
+  from the same place.
+
+  The script is a separate resource rather than a block in here, which is the one deliberate
+  difference. The Content-Security-Policy this page is served with says `script-src 'self'`, and it
+  says that because a frame is arbitrary bytes from whoever can reach the hub's ingest endpoint —
+  with no inline script permitted, a payload that somehow arrived as markup still could not run.
+-->
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --line: #262b35;
+    --ink: #e6e9ef; --dim: #8b93a3;
+    --active: #4c8dff; --warn: #ffcf5c; --gone: #ff5c7a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+           padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  h1 { font-size: 14px; font-weight: 600; margin: 0 8px 0 0; letter-spacing: .02em; }
+  h1 span { color: var(--dim); font-weight: 400; }
+  select, input, button { background: #10131a; color: var(--ink); border: 1px solid var(--line);
+           border-radius: 6px; padding: 5px 8px; font: inherit; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: #3a4252; }
+  button:disabled { opacity: .4; cursor: default; }
+  label { color: var(--dim); display: flex; gap: 6px; align-items: center; }
+  .spacer { margin-left: auto; }
+  .hint { color: var(--dim); font-size: 12px; }
+  kbd { background: #10131a; border: 1px solid var(--line); border-bottom-width: 2px;
+        border-radius: 4px; padding: 0 4px; font: 11px/1.6 ui-monospace, monospace; }
+
+  main { display: flex; height: calc(100vh - 53px); }
+  #stage { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #frameWrap { flex: 1; position: relative; display: flex; align-items: center;
+               justify-content: center; background: #08090c; overflow: hidden; }
+  /* Letterboxed rather than stretched: a frame is evidence, and its aspect ratio is part of it. */
+  #frame { max-width: 100%; max-height: 100%; object-fit: contain; display: none;
+           image-rendering: auto; }
+  #empty { color: var(--dim); text-align: center; padding: 24px; }
+  #empty code { color: var(--ink); }
+
+  #controls { display: flex; gap: 8px; align-items: center; padding: 10px 14px;
+              background: var(--panel); border-top: 1px solid var(--line); flex-wrap: wrap; }
+  #controls button { min-width: 92px; }
+  #position { color: var(--dim); font-variant-numeric: tabular-nums; }
+  #status { color: var(--dim); font-size: 12px; }
+  #status.error { color: var(--gone); }
+  #status.live { color: var(--warn); }
+
+  aside { width: 340px; border-left: 1px solid var(--line); background: var(--panel);
+          overflow-y: auto; padding: 12px 14px; flex-shrink: 0; }
+  aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+             color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+  aside h2:not(:first-child) { margin-top: 20px; }
+  dl { display: grid; grid-template-columns: 96px 1fr; gap: 4px 10px; margin: 0; font-size: 13px; }
+  dt { color: var(--dim); }
+  dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  dd.mono { font: 12px/1.5 ui-monospace, monospace; color: var(--dim); }
+
+  #list { display: flex; flex-direction: column; }
+  #list button { text-align: left; border: 0; border-bottom: 1px solid var(--line);
+                 border-radius: 0; background: transparent; padding: 7px 4px; width: 100%;
+                 display: flex; gap: 8px; align-items: baseline; }
+  #list button:hover { background: #10131a; }
+  #list button[aria-current="true"] { color: var(--active); }
+  #list .id { font: 12px/1.5 ui-monospace, monospace; color: var(--dim); }
+  #list button[aria-current="true"] .id { color: var(--active); }
+  #list .when { flex: 1; }
+  #more { margin-top: 10px; width: 100%; }
+
+  .warning { padding: 7px 14px; background: #2a1c1c; color: var(--warn);
+             border-bottom: 1px solid var(--line); font-size: 12px; }
+
+  #upload { display: grid; gap: 8px; }
+  #upload label { display: grid; grid-template-columns: 66px 1fr; gap: 8px; align-items: center; }
+  #upload input { min-width: 0; }
+  #upload input[type="file"] { padding: 4px; }
+  #uploadStart { width: 100%; }
+  #uploadNote { color: var(--dim); font-size: 12px; }
+  #uploadStatus { font-size: 12px; }
+  #uploadStatus.error { color: var(--gone); }
+  #uploadStatus.done { color: var(--active); }
+  /* Progress as a plain bar: one div growing inside another needs no library and no canvas. */
+  .bar { height: 4px; background: #10131a; border: 1px solid var(--line); border-radius: 999px;
+         overflow: hidden; margin-top: 6px; }
+  .bar > span { display: block; height: 100%; background: var(--active); width: 0; }
+  #uploads { display: flex; flex-direction: column; font-size: 12px; }
+  #uploads > div { padding: 6px 4px; border-bottom: 1px solid var(--line); color: var(--dim); }
+  #uploads b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!--
+  Shown only when the server reports authRequired=false on /health — an unguarded viewer should say
+  so where somebody will see it, and a guarded one should not cry wolf. The script unhides it.
+-->
+<div class="warning" id="openWarning" hidden>
+  No authentication — anything that can reach this port can watch every stored frame.
+  Set <code>FRAME_VIEWER_AUTH_BASE_URL</code> to require a sign-in.
+</div>
+
+<header>
+  <h1>jarvis <span>stored frames</span></h1>
+  <label for="source">device</label>
+  <select id="source"><option value="">all sources</option></select>
+  <label><input type="checkbox" id="live"> follow latest</label>
+  <span class="spacer"></span>
+  <span class="hint"><kbd>←</kbd> back &middot; <kbd>→</kbd> forward &middot;
+    <kbd>Home</kbd> latest &middot; <kbd>End</kbd> oldest</span>
+  <!-- A form rather than a fetch: signing out is a POST that should still work if the script has
+       failed, and `form-action 'self'` in the CSP is already open for the sign-in form. -->
+  <form method="post" action="logout" id="signOut" hidden>
+    <button type="submit">Sign out</button>
+  </form>
+</header>
+
+<main>
+  <div id="stage">
+    <div id="frameWrap">
+      <img id="frame" alt="The selected stored frame">
+      <div id="empty">Nothing stored yet. Push a frame to the hub&rsquo;s
+        <code>POST /frames</code> and reload.</div>
+    </div>
+    <div id="controls">
+      <button id="back" type="button" disabled>&larr; Back</button>
+      <button id="forward" type="button" disabled>Forward &rarr;</button>
+      <button id="oldest" type="button">Oldest</button>
+      <button id="latest" type="button">Latest</button>
+      <span id="position"></span>
+      <span class="spacer"></span>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <aside>
+    <h2>This frame</h2>
+    <dl id="meta">
+      <dt>frame id</dt><dd id="metaId">&mdash;</dd>
+      <dt>source</dt><dd id="metaSource">&mdash;</dd>
+      <dt>captured</dt><dd id="metaCaptured">&mdash;</dd>
+      <dt>ago</dt><dd id="metaAgo">&mdash;</dd>
+      <dt>frame index</dt><dd id="metaIndex">&mdash;</dd>
+      <dt>size</dt><dd id="metaBytes">&mdash;</dd>
+      <dt>sha256</dt><dd id="metaSha" class="mono">&mdash;</dd>
+    </dl>
+
+    <h2>Backfill a video</h2>
+    <!--
+      The video is uploaded as the raw request body with the window in the query string, so there is
+      no form element here and nothing is form-encoded: the file goes to fetch() as it came off the
+      picker. `from` and `to` are datetime-local, which means the operator types their own wall clock
+      and the script converts to UTC — asking somebody to type an ISO-8601 instant with a Z on it is
+      how a five-minute window ends up an hour out.
+    -->
+    <div id="upload">
+      <label>video <input type="file" id="uploadFile" accept="video/*"></label>
+      <label>source <input type="text" id="uploadSource" placeholder="cam1"></label>
+      <label>from <input type="datetime-local" id="uploadFrom" step="1"></label>
+      <label>to <input type="datetime-local" id="uploadTo" step="1"></label>
+      <label>fps <input type="number" id="uploadFps" min="0.1" max="60" step="0.1"></label>
+      <button id="uploadStart" type="button">Upload and backfill</button>
+      <div id="uploadNote">Frames are dated evenly across the window, oldest first.</div>
+      <div id="uploadStatus"></div>
+      <div class="bar" id="uploadBar" hidden><span id="uploadBarFill"></span></div>
+    </div>
+
+    <h2>Recent backfills</h2>
+    <div id="uploads"></div>
+
+    <h2>All frames <span id="listCount" class="hint"></span></h2>
+    <div id="list"></div>
+    <button id="more" type="button" hidden>Load older</button>
+  </aside>
+</main>
+
+<script src="viewer.js"></script>
+</body>
+</html>

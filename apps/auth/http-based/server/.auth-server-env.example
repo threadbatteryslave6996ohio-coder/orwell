@@ -3,3 +3,13 @@ AUTH_DATASOURCE_USERNAME=your-db-username
 AUTH_DATASOURCE_PASSWORD=replace-with-your-db-password
 SERVER_ADDRESS=0.0.0.0
 SERVER_PORT=8081
+# Seeds the first identity in the `admin` workspace, which is what POST /{workspace}/identities
+# requires. Remove both once a real admin exists. The secret must be at least 8 characters.
+AUTH_ADMIN_BOOTSTRAP_CLIENT_ID=
+AUTH_ADMIN_BOOTSTRAP_SECRET=
+# Collects login tokens that a later login replaced and that nobody has used for a day, so
+# client_tokens stops growing for the life of the deployment. The defaults below are what an unset
+# server uses; set AUTH_TOKEN_CLEANUP_ENABLED=false to leave the table append-only.
+AUTH_TOKEN_CLEANUP_ENABLED=true
+AUTH_TOKEN_CLEANUP_INTERVAL_SECONDS=3600
+AUTH_TOKEN_CLEANUP_IDLE_SECONDS=86400

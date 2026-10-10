@@ -143,6 +143,10 @@
     <div class="grid">
       <div class="card">
         <h2>Register identity</h2>
+        <label>Workspace</label>
+        <input id="reg-workspace" placeholder="def" value="def">
+        <label>Admin session (an identity in the <code>admin</code> workspace)</label>
+        <select id="reg-session"></select>
         <label>Client ID</label>
         <input id="reg-clientId" placeholder="e.g. mac-clip">
         <label>Secret (8-256 chars)</label>
@@ -152,6 +156,8 @@
 
       <div class="card">
         <h2>Log in</h2>
+        <label>Workspace</label>
+        <input id="login-workspace" placeholder="def" value="def">
         <label>Client ID</label>
         <input id="login-clientId" placeholder="e.g. mac-clip">
         <label>Secret</label>
@@ -163,6 +169,8 @@
 
       <div class="card">
         <h2>Check token</h2>
+        <label>Workspace</label>
+        <input id="check-workspace" placeholder="def" value="def">
         <label>Client ID</label>
         <input id="check-clientId" placeholder="client id">
         <label>Token</label>
@@ -382,7 +390,7 @@ function renderSessions() {
       <td><button class="btn small danger" onclick="removeSession(${i})">remove</button></td>
     </tr>`).join('');
 
-  for (const selId of ['secrets-session', 'klippy-session']) {
+  for (const selId of ['reg-session', 'secrets-session', 'klippy-session']) {
     const sel = document.getElementById(selId);
     const prev = sel.value;
     sel.innerHTML = '<option value="">-- select session --</option>' +
@@ -437,11 +445,21 @@ function copyValue(id, btn) {
 renderSessions();
 
 // ---------- AUTH TAB ----------
+// The workspace an auth call is scoped to; blank means the default one.
+function workspace(inputId) {
+  return document.getElementById(inputId).value.trim() || 'def';
+}
+
 async function registerIdentity() {
   const clientId = document.getElementById('reg-clientId').value.trim();
   const secret = document.getElementById('reg-secret').value;
+  // Provisioning needs a token from the `admin` workspace, so this reuses a saved session the
+  // same way the Secrets and Klippy tabs do — log in as the admin first, then register from it.
+  const admin = activeSession('reg-session');
+  if (!admin) { log('auth', 'Select an admin session first (log in as an identity in the `admin` workspace).'); return; }
   try {
-    const data = await api('POST', '/api/auth/identities', { body: { clientId, secret } });
+    const data = await api('POST', `/api/auth/${workspace('reg-workspace')}/identities`,
+      { token: admin.token, clientId: admin.clientId, body: { clientId, secret } });
     log('auth', 'Registered: ' + JSON.stringify(data));
   } catch (e) { log('auth', 'ERROR registering: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
 }
@@ -451,7 +469,7 @@ async function doLogin() {
   const secret = document.getElementById('login-secret').value;
   const label = document.getElementById('login-label').value.trim() || clientId;
   try {
-    const data = await api('POST', '/api/auth/login', { body: { clientId, secret } });
+    const data = await api('POST', `/api/auth/${workspace('login-workspace')}/login`, { body: { clientId, secret } });
     const sessions = getSessions();
     const existingIdx = sessions.findIndex(s => s.label === label);
     const entry = { label, clientId: data.clientId, token: data.token };
@@ -466,7 +484,7 @@ async function checkToken() {
   const clientId = document.getElementById('check-clientId').value.trim();
   const token = document.getElementById('check-token').value.trim();
   try {
-    const data = await api('POST', '/api/auth/tokens/check', { body: { clientId, token } });
+    const data = await api('POST', `/api/auth/${workspace('check-workspace')}/tokens/check`, { body: { clientId, token } });
     log('auth', 'Check result: ' + JSON.stringify(data));
   } catch (e) { log('auth', 'ERROR checking token: ' + (e.data ? JSON.stringify(e.data) : e.message)); }
 }

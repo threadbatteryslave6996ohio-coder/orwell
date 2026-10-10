@@ -1,0 +1,116 @@
+# The storage layer: Postgres, Redis and MinIO, with no application on top.
+#
+#   ./scripts/stack.sh --storages-only up -d
+#   docker compose -f docker-compose.storages.yml up -d
+#
+# This is the *only* definition of `db` and `redis` in the repo — docker-compose.all-services.yml
+# holds the applications and nothing else. It used to define them too, and two descriptions of one
+# container is a drift waiting to happen: an edit to the image, a port or a volume in one file made
+# `up` on the other silently recreate the container. See CLAUDE.md's "exactly one Postgres and one
+# Redis" rule, which this arrangement now enforces structurally rather than by hand.
+#
+# Bring the whole stack up with both files — they declare the same project, so they merge.
+# scripts/stack.sh supplies both -f flags for any subcommand:
+#
+#   ./scripts/stack.sh up -d
+#   docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml up -d
+#
+# Storage alone is the supported half, for running a service from your IDE or a jar by hand against
+# real storage. The applications alone are not: they `depends_on` `db` and `redis`, so Compose
+# refuses that with "depends on undefined service".
+#
+# The project name is pinned rather than derived from the directory name, so both files describe
+# the same containers and volumes whatever the checkout is called.
+#
+# ONE-TIME MIGRATION, only on a checkout whose directory is not named `orwell`: named volumes are
+# prefixed with the project name, so the stack switches from `<dirname>_all-services-pg-data` to
+# `orwell_all-services-pg-data` and comes up on an empty Postgres that re-runs db-init. The old
+# volume is orphaned, not deleted — copy it across before the first `up`:
+#   docker run --rm -v <dirname>_all-services-pg-data:/from -v orwell_all-services-pg-data:/to \
+#     alpine sh -c 'cd /from && cp -a . /to'
+# A checkout already named `orwell` — which is what the repo assumes — changes nothing.
+#
+# MinIO is the S3-compatible bucket the object-storage-proxy uploads to. It has no application
+# here to create a bucket for it, so do that once after first start:
+#
+#   docker run --rm --network=host --entrypoint sh minio/mc -c \
+#     "mc alias set local http://localhost:9000 minioadmin minioadmin && \
+#      mc mb -p local/keeboarder-recordings && mc ls local"
+#
+# Nothing here copies MinIO anywhere. The `minio-backup` service in
+# docker-compose.all-services.yml mirrors a bucket to a remote S3 one on a timer; it is behind the
+# `backup` profile, so it stays out of the way until configured. See that file and .env.example.
+#
+# NOTE: apps/object-storage-proxy/scripts/local-stack.sh starts its own standalone MinIO
+# container (`klippy-minio`) on these same ports with its own data volume. Use one or the other,
+# not both.
+name: orwell
+
+services:
+  # One Postgres instance for the whole stack. It holds one database + login
+  # role per app (klippy/auth/secrets), created by db-init/all-services.sql on
+  # first start. Consolidated from three separate postgres containers — see
+  # that file for the naming rationale.
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - all-services-pg-data:/var/lib/postgresql/data
+      - ./db-init/all-services.sql:/docker-entrypoint-initdb.d/all-services.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # Persistence is explicit rather than inherited from the image defaults, which snapshot at
+    # best every 60s. insta caches paid Apify results here and they never expire, so losing them
+    # on a restart costs real money; AOF bounds that loss to a second. Note the one-time cost of turning this
+    # on: Redis prefers the AOF on startup, so the first restart after this change begins with an
+    # empty store and both caches (keeboarder's `ws:`, insta's `insta:`) refill from cold.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - all-services-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # S3-compatible object storage: :9000 is the S3 API, :9001 the web console
+  # (http://localhost:9001, sign in with the root credentials below). The defaults match
+  # apps/object-storage-proxy/scripts/local-stack.sh, so the proxy's local run needs no change;
+  # override them in a gitignored .env for anything that is not a throwaway local stack.
+  minio:
+    image: minio/minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - all-services-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  all-services-pg-data:
+  all-services-redis-data:
+  all-services-minio-data:

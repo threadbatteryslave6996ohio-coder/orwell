@@ -15,7 +15,7 @@ mvn -pl apps/jarvis -am package
 The recorder clients under `clients/` remain standalone shell applications.
 The log analyzer is now a standalone app; see `apps/log-analyzer`.
 
-## The three processes
+## The five processes
 
 Jarvis used to be one service, `jarvis-detection`, serving `/detect`, `/motion` and `/frames` from
 a single jar. They were always unrelated jobs sharing a port, and they did not cost the same to
@@ -30,11 +30,14 @@ them at all.
 
 ```
 recorders ──POST /frames──> hub ──SSE──┬──> person-detection ──> apps/alerting
-                                       ├──> any other watcher
-                                       │
-                                  frame_events ──replay──> a watcher that reconnects
-                                       │
-                        jarvis-retention-worker (no port) trims it to budget
+     ▲                                 ├──> fixture-detection ──> apps/alerting
+     │                                 ├──> any other watcher
+     │                                 │
+     │                            frame_events ──replay──> a watcher that reconnects
+     │                                 │   │
+     │            jarvis-retention-worker   └──read──> jarvis-frame-viewer (a page you browse)
+     │            (no port) trims it to budget                    │
+     └──────────── a video uploaded to the viewer, cut into frames ┘
 ```
 
 | Directory | artifactId | Port | Serves | Needs Postgres |
@@ -42,6 +45,8 @@ recorders ──POST /frames──> hub ──SSE──┬──> person-detecti
 | `hub` | `jarvis-hub` | 9001 | `POST /frames`, `GET /frames/stream`, `GET /frames` | **yes** |
 | `person-detection` | `jarvis-person-detection` | 9002 | `GET /health` only — it *watches* | no |
 | `retention-worker` | `jarvis-retention-worker` | **none** | — | **yes** |
+| `frame-viewer` | `jarvis-frame-viewer` | 9003 | the page, `GET /api/*`, `POST /api/uploads` | **yes** |
+| `fixture-detection` | `jarvis-fixture-detection` | 9004 | `/health`, `/fixtures`, the preview — it *watches* | no |
 
 And three libraries, which are not deployable:
 
@@ -51,8 +56,16 @@ And three libraries, which are not deployable:
 | `frame-client` | `jarvis-frame-client` | The stream **consumer**: SSE framing, resume, backoff, decode |
 | `retention` | `jarvis-retention` | The generic table sweeper the worker applies to `frame_events` |
 
-The hub is Spring-only (it serves SSE). Person detection and the retention worker are plain Java
-programs — no Spring, no `SERVER_ENGINE` — because neither serves request routes.
+The hub is Spring-only (it serves SSE). Everything else is a plain Java program — no Spring, no `SERVER_ENGINE`. The first two serve no request routes at
+all; the viewer serves a page and five JSON routes, which the Undertow runtime in
+`packages/undertow-bootstrap` handles without a container.
+
+**The viewer is the one process that is neither a producer nor a watcher.** It reads `frame_events`
+after the fact, the way the retention worker does, because "what did this camera look like a minute
+ago" is a question about history rather than about frames arriving — subscribing would mean receiving
+every frame of every camera in order to display one of them on demand. Its *uploads* go the other
+way and do respect the rule above: a video becomes frames by being pushed to the hub, never by being
+written to the table. See [`frame-viewer/README.md`](frame-viewer/README.md).
 
 ### Watching the stream: `jarvis-frame-client`
 
@@ -158,11 +171,11 @@ recorders ──POST /frames──> hub ──┬──SSE──> clients connec
 ```
 
 `POST /frames` takes the frame envelope — `frameBase64`, optional `frameSha256`,
-`source`, `frameIndex`, `timestamp` — and answers
+`source`, `frameIndex`, `timestamp`, `capturedAt` — and answers
 
 ```json
 {"success":true,"source":"cam1","frameIndex":42,"timestamp":"2026-08-10T12:00:00Z",
- "stored":true,"frameId":91,"recipients":2}
+ "capturedAt":"2026-08-10T12:00:00Z","stored":true,"frameId":91,"recipients":2}
 ```
 
 — so a camera can tell nobody is watching without polling anything (`frameIndex` and `timestamp`
@@ -171,6 +184,24 @@ recipients is still stored, so a client connecting later can still replay it. Th
 validated (base64, and `frameSha256` against the bytes if sent) but the bytes are not. Ingest
 returns as soon as the frame is queued for each client, never after they have received it, so a
 producer's frame rate is never coupled to the slowest viewer.
+
+**`capturedAt` is optional, and a live camera should leave it out.** Absent, the hub stamps the
+frame with its own clock on arrival — a frame pushed now was captured now, and the receiver's clock is
+the more trustworthy of the two. Present, the hub stores the time the producer claims. That exists for
+**backfill**: frames cut out of a recording made an hour ago belong at the time they were recorded,
+otherwise an hour of footage lands in the table as a single instant and every query expressed in
+capture time — `GET /frames` below, the retention worker's age bound — reads it wrongly.
+
+It is asserted, not verified. Nothing can check whether a frame was really captured when a producer
+says, exactly as nothing checks `source`. Two consequences worth knowing rather than discovering: a
+frame dated far enough in the past may be deleted by the next retention sweep before anyone sees it,
+and one dated in the future is hidden from a `to`-bounded range query until then. Neither is
+prevented, because backfilling genuinely old footage is the point. A value that is present but not
+ISO-8601 is a 400, so a mistyped backfill fails loudly instead of silently landing at "now".
+
+The **id is unaffected** either way and still comes from the ingest sequence, so id order stays
+arrival order however far back a backfill is dated — which is what keeps the stream's `Last-Event-ID`
+resume and the viewer's back button exact while one is running.
 
 **The frame is broadcast before it is written.** Its id comes from a Postgres sequence allocated in
 blocks up front, so the SSE event id exists before the row does and the live stream never waits on
@@ -294,19 +325,31 @@ read forward by id, that shows up as a short page, never as a repeat.
 #### Running it from the stack
 
 ```bash
-docker compose -f docker-compose.all-services.yml up -d \
-    jarvis-hub jarvis-retention-worker jarvis-person-detection
+docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml up -d \
+    jarvis-hub jarvis-retention-worker jarvis-person-detection jarvis-frame-viewer \
+    jarvis-fixture-detection
 ```
 
-Three containers where there was one. Only the hub takes traffic: `/hub/` accepts frames and serves
-the stream, `/person-detection/health` is read-only observability, and the retention worker gets no
-route at all because it has no port.
+Five containers where there was one. Through nginx, only the hub takes traffic: `/hub/` accepts frames
+and serves the stream, `/person-detection/health` is read-only observability, and the retention worker
+gets no route at all because it has no port.
+
+`jarvis-fixture-detection` is likewise not behind nginx, for a milder version of the same reason:
+`/health` and `/fixtures` carry no imagery, but the preview route returns a frame of your house and it
+is on the same port. It publishes `127.0.0.1:9004` (override with `ORWELL_FIXTURE_DETECTION_PORT`).
+
+**The frame viewer is deliberately not behind nginx.** It does authenticate — a sign-in against
+`admin-auth-server`, see [`frame-viewer/README.md`](frame-viewer/README.md#who-may-watch) — but nginx
+listens on `0.0.0.0:8080`, and putting recorded footage plus an endpoint that can inject frames on the
+LAN is a decision to make deliberately rather than by adding a `location` block. It publishes its own
+port bound to `127.0.0.1` (`http://127.0.0.1:9003`, override with `ORWELL_FRAME_VIEWER_PORT`): the
+login is the guard, the bind address is the backstop.
 
 ```bash
 curl http://localhost:8080/hub/health
 # Is detection actually watching? `connected` and `lastFrameId` are the fields that matter.
 curl http://localhost:8080/person-detection/health
-docker compose -f docker-compose.all-services.yml logs -f jarvis-retention-worker   # no /health
+docker compose -f docker-compose.storages.yml -f docker-compose.all-services.yml logs -f jarvis-retention-worker   # no /health
 
 curl -N http://localhost:8080/hub/frames/stream              # -N: don't buffer the stream
 
@@ -335,7 +378,7 @@ runs **only when its data volume is first initialised**. On a volume created bef
 existed, create them once by hand:
 
 ```bash
-docker compose -f docker-compose.all-services.yml exec db psql -U postgres \
+docker compose -f docker-compose.storages.yml exec db psql -U postgres \
   -c "CREATE ROLE jarvis LOGIN PASSWORD 'jarvis'" \
   -c "CREATE DATABASE jarvis OWNER jarvis"
 ```
@@ -361,6 +404,93 @@ reconnect and `?from=` returns nothing, forever. The symptoms are `framesUnstore
 the `POST /frames` ack no longer carries `changed`, `firstFrame`, `changedCells` or `changedFraction`.
 A consumer branching on `frame.changed` reads undefined rather than failing, so it goes quiet
 instead of erroring — grep your viewers for those field names before upgrading.
+
+### Frame viewer — `jarvis-frame-viewer`
+
+**A page over the frames the hub has already stored**, on port 9003: pick a device, see its newest
+frame, step back one frame at a time. It also accepts whole videos and backfills them as frames dated
+across a window you name. Full detail in [`frame-viewer/README.md`](frame-viewer/README.md); what
+matters here is where it sits relative to the hub.
+
+**It requires a sign-in.** `POST /login` exchanges credentials for a token from the auth server and
+keeps it in a session cookie; a script sends `X-Client-Id` and `Authorization: Bearer` instead. Which
+auth deployment it points at is the access-control decision, so the stack points it at
+`admin-auth-server` rather than the client-facing one that mints camera identities.
+
+**It reads the table; it does not watch the stream.** The repo's rule is that anything wanting frames
+watches the hub through `jarvis-frame-client` — but that rule is about frames *arriving*, and this app
+is not waiting for frames. It answers "what did camera 1 look like ninety seconds ago", and history is
+a table. Reading it directly is one indexed seek per navigation step, and it keeps a browser scrubbing
+back through an hour of footage off the heap of the process that has to stay up for the recording to
+continue.
+
+**But its uploads go through the hub.** `POST /api/uploads` cuts the video into frames and pushes each
+one to `POST /frames` with an explicit `capturedAt`. It never writes `frame_events` itself — its
+datasource is opened read-only. Writing rows here would allocate ids outside the hub's sequence and
+skip the live fan-out, so `jarvis-person-detection` would never see a backfilled frame. Going through
+ingest means a backfilled frame is indistinguishable from a live one, which is the whole point of
+backfilling it.
+
+Why the hub does not serve this page itself: it has no route for "the latest frame from this camera",
+none for "the one before this", and none for the device list — a source exists only as a value in a
+column. `GET /frames` pages *forward* from a time window, which is the wrong shape for a viewer that
+opens on the newest frame and walks backwards, and serving one frame from it means fetching a page of
+base64 to display one image out of it.
+
+```bash
+# Browse. The compose service requires a sign-in with an identity admin-auth-server issued, and
+# publishes to 127.0.0.1 only.
+open http://127.0.0.1:9003
+
+# Backfill a recording. The body is the video, raw; the window is in the query string.
+curl -X POST --data-binary @clip.mp4 \
+  'http://127.0.0.1:9003/api/uploads?source=back-door&from=2026-08-17T09:00:00Z&to=2026-08-17T09:05:00Z&fps=2'
+# -> 202 {"upload":{"uploadId":"1-49ddf1a1",...},"statusUrl":"api/uploads/1-49ddf1a1"}
+curl http://127.0.0.1:9003/api/uploads/1-49ddf1a1
+```
+
+Frames are spread evenly across the window, oldest first, and land inside `[from, to)` — so a
+`GET /frames?from=…&to=…` on the hub with the same two bounds returns exactly the frames the upload
+created.
+
+### Fixture detection — `jarvis-fixture-detection`
+
+**Is the lamp on, is the burner lit.** A second watcher on the stream, measuring a configured
+rectangle of each frame and reporting when it crosses a threshold. Full detail in
+[`fixture-detection/README.md`](fixture-detection/README.md).
+
+**Photometry, not a model.** For a camera that does not move, a fixture's state is a threshold over a
+region: deterministic, testable against synthetic frames, microseconds per frame, no GPU, and it
+cannot hallucinate. It carries no ML runtime and no native library, which is why it is the smallest
+container in jarvis. A vision model is the right tool for *is anything unusual happening here* and the
+wrong one for *is this rectangle brighter than 40*.
+
+Separate from `person-detection` because the two answer unrelated questions with unrelated
+configuration: one asks whether something appeared, the other tracks the state of named things that
+were always there. It also reports differently — a **transition**, with hysteresis and a confirmation
+count and no cooldown, where a person is an event that needs a timer.
+
+```bash
+# What it is looking at, and whether the rectangle is on the fixture. Green region, blue reference.
+open http://127.0.0.1:9004/fixtures/living-room-lamp/preview
+
+# What it reads now, plus the last minute — how thresholds get chosen rather than guessed.
+curl -s http://127.0.0.1:9004/fixtures | jq '.fixtures[0] | {value, observedMin, observedMax}'
+```
+
+Two things from that README are worth repeating, because they are the difference between a detector
+that works and one that reports nonsense:
+
+- **Use a `reference` region.** Absolute brightness cannot tell a lamp from the sun — a region reading
+  40 at night with the lamp on reads 180 at noon with it off. A reference patch that daylight reaches
+  and the lamp does not moves with the ambient and cancels out of the difference.
+- **A flame is coloured light, not warm light.** Gas burns blue, a coil glows red, an LED is whatever
+  colour it is. `SATURATED_BRIGHT_FRACTION` is what separates a lit hob from the kitchen light coming
+  on over the same hob.
+
+`HogPersonDetector` in `person-detection` remains a brightness heuristic and is unrelated to this app
+despite the name — see `CODE_REFACTOR.md`. This is the repo's first detector that measures something
+specific on purpose.
 
 ### Retention — `jarvis-retention-worker`
 

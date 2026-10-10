@@ -1,5 +1,7 @@
 package dev.orwell.reverseproxy;
 
+import dev.orwell.http.RequestId;
+
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -81,14 +83,32 @@ public final class UpstreamClient {
                 values.forEach(value -> builder.header(name, value));
             }
         });
+        // The one header this relay adds. A caller that sent no id gets the one the proxy resolved
+        // for it, so the id in `request_audit` is the id the upstream logs — without this the
+        // upstream mints a third, and the hop this column exists to span is exactly the hop it
+        // cannot follow. setHeader, not header: the inbound copy above may already have set it.
+        //
+        // Note this is not the same as wrapping in ServiceHeaderHttpClient, which must not happen
+        // here: `Service` has to stay the original caller's name across the hop.
+        builder.setHeader(RequestId.HEADER, request.requestId());
         HttpResponse<byte[]> response = http.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
         return new ProxyResponse(response.statusCode(), relayableHeaders(response), response.body());
     }
 
+    /**
+     * The upstream's response headers, minus the hop-by-hop ones and minus {@code X-Request-Id}.
+     *
+     * <p>That last one is dropped because {@code RequestIdFilter} has already set it on the
+     * response, and an upstream that is itself an orwell service echoes back the id this client
+     * just sent it. Relaying it would append a second, identical value, and the client would be
+     * told its request id twice.
+     */
     private static Map<String, List<String>> relayableHeaders(HttpResponse<byte[]> response) {
         Map<String, List<String>> headers = new LinkedHashMap<>();
         response.headers().map().forEach((name, values) -> {
-            if (!HOP_BY_HOP.contains(name.toLowerCase(Locale.ROOT))) {
+            String lowercased = name.toLowerCase(Locale.ROOT);
+            if (!HOP_BY_HOP.contains(lowercased)
+                    && !RequestId.HEADER.toLowerCase(Locale.ROOT).equals(lowercased)) {
                 headers.put(name, values);
             }
         });

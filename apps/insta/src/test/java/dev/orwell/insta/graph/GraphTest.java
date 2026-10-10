@@ -1,14 +1,11 @@
 package dev.orwell.insta.graph;
 
+import dev.orwell.testing.PostgresJdbcTest;
 import dev.orwell.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -24,27 +21,22 @@ import java.util.List;
  * the SQL — upsert conflict targets, the {@code xmax = 0} new-row trick, partial indexes. None of
  * that survives translation to another dialect.
  */
-@Testcontainers
-public abstract class GraphTest {
+public abstract class GraphTest extends PostgresJdbcTest {
     public static final Logger NO_OP_LOGGER = entry -> {
     };
-
-    @Container
-    private static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
 
     protected Connection connection;
 
     @BeforeEach
     void openSchema() throws SQLException {
-        connection = DriverManager.getConnection(
-                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        connection = connection();
         // Every table the schema creates, or rows leak between tests through the shared container.
         // Adding a table to schema.sql means adding it here too.
         try (PreparedStatement drop = connection.prepareStatement(
                 "DROP TABLE IF EXISTS post_media, post_metric, post_caption, post, unfollows,"
-                        + " follows, follow_edge, account_profile_picture, account_bio,"
-                        + " account_username, account CASCADE")) {
+                        + " follows, follow_edge, scrape_run_member, scrape_run, scrape_block,"
+                        + " account_profile_picture, account_bio, account_username,"
+                        + " account CASCADE")) {
             drop.execute();
         }
         GraphSchema.apply(connection);

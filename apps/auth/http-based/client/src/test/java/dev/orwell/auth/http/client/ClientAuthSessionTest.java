@@ -1,15 +1,10 @@
 package dev.orwell.auth.http.client;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import dev.orwell.testing.http.JsonStubServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,12 +13,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClientAuthSessionTest {
-    private HttpServer server;
+    private JsonStubServer server;
 
     @AfterEach
     void stopServer() {
         if (server != null) {
-            server.stop(0);
+            server.close();
         }
     }
 
@@ -38,17 +33,12 @@ class ClientAuthSessionTest {
 
     @Test
     void refreshesTokenFromAuthServerWhenNeeded() throws IOException {
-        AtomicReference<String> body = new AtomicReference<>();
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/login", exchange -> {
-            body.set(readBody(exchange));
-            respond(exchange, 200, """
-                    {"clientId":"client-a","token":"token-456"}
-                    """);
-        });
-        server.start();
+        server = JsonStubServer.start();
+        AtomicReference<String> body = server.stub("/def/login", 200, """
+                {"clientId":"client-a","token":"token-456"}
+                """);
 
-        ClientAuthSession session = new ClientAuthSession(baseUrl(), "client-a", "super-secret", null);
+        ClientAuthSession session = new ClientAuthSession(server.baseUrl(), "client-a", "super-secret", null);
 
         assertEquals("token-456", session.token());
         assertTrue(body.get().contains("\"clientId\":\"client-a\""));
@@ -57,26 +47,24 @@ class ClientAuthSessionTest {
 
     @Test
     void reportsALoginResponseWithoutATokenAsAnAuthenticationFailure() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        server = JsonStubServer.start();
         // A 200 that omits "token" entirely. LoginHttpResponse.token is a nullable record
         // component, so this parses cleanly and only fails when the value is used.
-        server.createContext("/login", exchange -> respond(exchange, 200, """
+        server.stub("/def/login", 200, """
                 {"clientId":"client-a"}
-                """));
-        server.start();
+                """);
 
-        ClientAuthSession session = new ClientAuthSession(baseUrl(), "client-a", "super-secret", null);
+        ClientAuthSession session = new ClientAuthSession(server.baseUrl(), "client-a", "super-secret", null);
 
         assertThrows(HttpAuthenticationException.class, session::refresh);
     }
 
     @Test
     void reportsAnEmptyLoginResponseBodyAsAnAuthenticationFailure() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/login", exchange -> respond(exchange, 200, ""));
-        server.start();
+        server = JsonStubServer.start();
+        server.stub("/def/login", 200, "");
 
-        ClientAuthSession session = new ClientAuthSession(baseUrl(), "client-a", "super-secret", null);
+        ClientAuthSession session = new ClientAuthSession(server.baseUrl(), "client-a", "super-secret", null);
 
         assertThrows(HttpAuthenticationException.class, session::refresh);
     }
@@ -88,24 +76,5 @@ class ClientAuthSessionTest {
         IllegalStateException exception = assertThrows(IllegalStateException.class, session::token);
 
         assertTrue(exception.getMessage().contains("An initial token is required"));
-    }
-
-    private String baseUrl() {
-        return "http://localhost:%d".formatted(server.getAddress().getPort());
-    }
-
-    private static String readBody(HttpExchange exchange) throws IOException {
-        try (InputStream inputStream = exchange.getRequestBody()) {
-            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
-
-    private static void respond(HttpExchange exchange, int statusCode, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(statusCode, bytes.length);
-        try (OutputStream outputStream = exchange.getResponseBody()) {
-            outputStream.write(bytes);
-        }
     }
 }

@@ -1,14 +1,13 @@
 package dev.orwell.logging;
 
+import dev.orwell.testing.http.JsonStubServer;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -86,7 +85,7 @@ class LoggerSetupTest {
     void lokiWithFallbackWritesOnlyWhatLokiRefused(@TempDir Path directory) throws Exception {
         Path logFile = directory.resolve("app.jsonl");
         CountDownLatch pushed = new CountDownLatch(1);
-        HttpServer loki = stubLoki(503, pushed);
+        JsonStubServer loki = stubLoki(503, pushed);
 
         try (ManagedLogger logger = build(LoggerMode.LOKI_WITH_FALLBACK, endpointOf(loki), logFile)) {
             logger.error("Sweep failed.", Map.of("table", "frame_events"));
@@ -95,7 +94,7 @@ class LoggerSetupTest {
             String line = awaitFirstLine(logFile);
             assertEquals("Sweep failed.", MAPPER.readTree(line).get("message").asText());
         } finally {
-            loki.stop(0);
+            loki.close();
         }
     }
 
@@ -103,13 +102,13 @@ class LoggerSetupTest {
     void lokiWithFallbackLeavesTheFileEmptyWhileLokiIsHealthy(@TempDir Path directory) throws Exception {
         Path logFile = directory.resolve("app.jsonl");
         CountDownLatch pushed = new CountDownLatch(1);
-        HttpServer loki = stubLoki(204, pushed);
+        JsonStubServer loki = stubLoki(204, pushed);
 
         try (ManagedLogger logger = build(LoggerMode.LOKI_WITH_FALLBACK, endpointOf(loki), logFile)) {
             logger.info("Shipped.");
             assertTrue(pushed.await(5, TimeUnit.SECONDS), "Loki never received a push");
         } finally {
-            loki.stop(0);
+            loki.close();
         }
 
         // The whole point of the mode: a healthy Loki costs no disk I/O at all.
@@ -120,14 +119,14 @@ class LoggerSetupTest {
     void bothWritesToDiskWhetherOrNotLokiIsHealthy(@TempDir Path directory) throws Exception {
         Path logFile = directory.resolve("app.jsonl");
         CountDownLatch pushed = new CountDownLatch(1);
-        HttpServer loki = stubLoki(204, pushed);
+        JsonStubServer loki = stubLoki(204, pushed);
 
         try (ManagedLogger logger = build(LoggerMode.BOTH, endpointOf(loki), logFile)) {
             logger.info("Two copies.");
             assertTrue(pushed.await(5, TimeUnit.SECONDS), "Loki never received a push");
             assertEquals("Two copies.", MAPPER.readTree(awaitFirstLine(logFile)).get("message").asText());
         } finally {
-            loki.stop(0);
+            loki.close();
         }
     }
 
@@ -173,19 +172,18 @@ class LoggerSetupTest {
         return sink.toString(StandardCharsets.UTF_8);
     }
 
-    private static String endpointOf(HttpServer server) {
-        return "http://127.0.0.1:" + server.getAddress().getPort() + "/loki/api/v1/push";
+    private static String endpointOf(JsonStubServer server) {
+        return server.baseUrl() + "/loki/api/v1/push";
     }
 
-    private static HttpServer stubLoki(int status, CountDownLatch pushed) throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/loki/api/v1/push", exchange -> {
+    private static JsonStubServer stubLoki(int status, CountDownLatch pushed) throws IOException {
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/loki/api/v1/push", exchange -> {
             exchange.getRequestBody().readAllBytes();
             exchange.sendResponseHeaders(status, -1);
             exchange.close();
             pushed.countDown();
         });
-        server.start();
         return server;
     }
 

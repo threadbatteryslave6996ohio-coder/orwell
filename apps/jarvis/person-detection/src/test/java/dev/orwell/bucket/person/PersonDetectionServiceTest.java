@@ -1,6 +1,6 @@
 package dev.orwell.bucket.person;
 
-import com.sun.net.httpserver.HttpServer;
+import dev.orwell.testing.http.JsonStubServer;
 import dev.orwell.bucket.frame.client.Frame;
 import dev.orwell.bucket.frame.FrameFixtures;
 import org.junit.jupiter.api.AfterEach;
@@ -8,7 +8,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -27,29 +26,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * busy camera must not turn into an alert storm.
  */
 class PersonDetectionServiceTest {
-    private HttpServer alerting;
+    private JsonStubServer alerting;
     private final List<String> alerts = new CopyOnWriteArrayList<>();
 
     @BeforeEach
     void startAlerting() throws Exception {
-        alerting = HttpServer.create(new InetSocketAddress(0), 0);
-        alerting.createContext("/alerts", exchange -> {
+        alerting = JsonStubServer.start();
+        alerting.on("/alerts", exchange -> {
             try (InputStream body = exchange.getRequestBody()) {
                 alerts.add(new String(body.readAllBytes(), StandardCharsets.UTF_8));
             }
             exchange.sendResponseHeaders(200, -1);
             exchange.close();
         });
-        alerting.start();
     }
 
     @AfterEach
     void stopAlerting() {
-        alerting.stop(0);
+        alerting.close();
     }
 
     private PersonDetectionService service(int cooldownSeconds) {
-        String url = "http://127.0.0.1:" + alerting.getAddress().getPort() + "/alerts";
+        String url = alerting.baseUrl() + "/alerts";
         // minConfidence 0 so the heuristic detector reports on a synthetic frame.
         return new PersonDetectionService(url, cooldownSeconds, 0.0, entry -> { });
     }

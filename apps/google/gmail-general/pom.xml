@@ -11,6 +11,15 @@
         <start-class>dev.orwell.google.gmail.GmailApplication</start-class>
     </properties>
     <dependencies>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>logger</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>auth-core</artifactId></dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>auth-http-client</artifactId></dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>env-core</artifactId></dependency>
@@ -19,6 +28,12 @@
         <!-- IMAP IDLE needs the concrete Angus IMAPFolder; the starter pulls angus-mail at runtime only. -->
         <dependency><groupId>org.eclipse.angus</groupId><artifactId>angus-mail</artifactId></dependency>
         <dependency><groupId>dev.orwell</groupId><artifactId>server-test-support</artifactId><scope>test</scope></dependency>
+        <!-- JsonStubServer, for the tests that stand a real HTTP server up on a loopback port. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency><groupId>com.icegreen</groupId><artifactId>greenmail</artifactId><version>2.1.3</version><scope>test</scope></dependency>
     </dependencies>
     <build>

@@ -36,6 +36,7 @@ public final class InstaEnvs {
     public static final EnvOption<String> REDIS_HOST;
     public static final EnvOption<Integer> REDIS_PORT;
     public static final EnvOption<Boolean> INSTA_LOG_CONSOLE;
+    public static final EnvOption<String> LOGGER;
     public static final EnvOption<String> LOKI_URL;
     public static final EnvOption<String> LOKI_TENANT_ID;
     public static final EnvOption<String> LOGGING_FILE_NAME;
@@ -48,6 +49,19 @@ public final class InstaEnvs {
     public static final EnvOption<String> INSTA_BUCKET_TOKEN;
     public static final EnvOption<Integer> INSTA_MAX_RETIRE_PERCENT;
     public static final EnvOption<Integer> INSTA_SKIP_ABOVE_FOLLOWERS;
+    public static final EnvOption<String> INSTA_SELFHOSTED_URL;
+    public static final EnvOption<String> INSTA_SELFHOSTED_TOKEN;
+    public static final EnvOption<Boolean> INSTA_SELFHOSTED_PAGINATES;
+    public static final EnvOption<String> INSTA_RAPIDAPI_HOST;
+    public static final EnvOption<String> INSTA_RAPIDAPI_KEY;
+    public static final EnvOption<String> INSTA_RAPIDAPI_FOLLOWERS_PATH;
+    public static final EnvOption<String> INSTA_RAPIDAPI_FOLLOWING_PATH;
+    public static final EnvOption<String> INSTA_RAPIDAPI_USER_PARAM;
+    public static final EnvOption<String> INSTA_RAPIDAPI_LIMIT_PARAM;
+    public static final EnvOption<String> INSTA_RAPIDAPI_CURSOR_PARAM;
+    public static final EnvOption<Boolean> INSTA_RAPIDAPI_PAGINATES;
+    public static final EnvOption<Boolean> INSTA_RAPIDAPI_READS_FOLLOWING;
+    public static final EnvOption<Integer> INSTA_HTTP_TIMEOUT_SECONDS;
     public static final EnvOption<String> INSTA_UI_ADDRESS;
     public static final EnvOption<Integer> INSTA_UI_PORT;
 
@@ -63,6 +77,44 @@ public final class InstaEnvs {
         // adapter in the code. Known: scraping-solutions, datadoping, logical-scrapers.
         APIFY_CONNECTIONS_ACTORS = BUILDER.optional(
                 "APIFY_CONNECTIONS_ACTORS", EnvType.string(), "scraping-solutions");
+
+        // Your own scraper. First in the chain is usually where it belongs — it is the only source
+        // that costs nothing per result.
+        INSTA_SELFHOSTED_URL = BUILDER.optional(
+                "INSTA_SELFHOSTED_URL", EnvType.string(), "");
+        INSTA_SELFHOSTED_TOKEN = BUILDER.optional(
+                "INSTA_SELFHOSTED_TOKEN", EnvType.string(), "");
+        // Defaults true, unlike the RapidAPI one: this is our contract, and it specifies a cursor.
+        // Set false if yours truncates without one — it will then add followers but never retire.
+        INSTA_SELFHOSTED_PAGINATES = BUILDER.optional(
+                "INSTA_SELFHOSTED_PAGINATES", EnvType.bool(), true);
+
+        // RapidAPI is a marketplace of many different Instagram APIs, so every part of the request
+        // is configurable. The defaults follow the common instagram-scraper-api2 shape.
+        INSTA_RAPIDAPI_HOST = BUILDER.optional("INSTA_RAPIDAPI_HOST", EnvType.string(), "");
+        INSTA_RAPIDAPI_KEY = BUILDER.optional("INSTA_RAPIDAPI_KEY", EnvType.string(), "");
+        INSTA_RAPIDAPI_FOLLOWERS_PATH = BUILDER.optional(
+                "INSTA_RAPIDAPI_FOLLOWERS_PATH", EnvType.string(), "/v1/followers");
+        INSTA_RAPIDAPI_FOLLOWING_PATH = BUILDER.optional(
+                "INSTA_RAPIDAPI_FOLLOWING_PATH", EnvType.string(), "/v1/following");
+        INSTA_RAPIDAPI_USER_PARAM = BUILDER.optional(
+                "INSTA_RAPIDAPI_USER_PARAM", EnvType.string(), "username_or_id_or_url");
+        INSTA_RAPIDAPI_LIMIT_PARAM = BUILDER.optional(
+                "INSTA_RAPIDAPI_LIMIT_PARAM", EnvType.string(), "count");
+        INSTA_RAPIDAPI_CURSOR_PARAM = BUILDER.optional(
+                "INSTA_RAPIDAPI_CURSOR_PARAM", EnvType.string(), "pagination_token");
+        // Both default false, and deliberately so. A source that cannot prove it reached the end of
+        // a list must never be allowed to end one, and a source that cannot read a following list
+        // must be skipped for that direction rather than sent a request it answers with something
+        // else. Turn either on only after checking your vendor's docs.
+        INSTA_RAPIDAPI_PAGINATES = BUILDER.optional(
+                "INSTA_RAPIDAPI_PAGINATES", EnvType.bool(), false);
+        INSTA_RAPIDAPI_READS_FOLLOWING = BUILDER.optional(
+                "INSTA_RAPIDAPI_READS_FOLLOWING", EnvType.bool(), false);
+        // Shared by both HTTP sources. Apify's own budget is APIFY_RUN_TIMEOUT_SECONDS, which
+        // covers a whole actor run rather than one request, so it is a different number.
+        INSTA_HTTP_TIMEOUT_SECONDS = BUILDER.optional(
+                "INSTA_HTTP_TIMEOUT_SECONDS", EnvType.integer(), 60);
         // Only the logical-scrapers adapter uses these, and only if you set them: they are a live
         // Instagram session handed to a third-party actor.
         INSTA_INSTAGRAM_COOKIES = BUILDER.optional(
@@ -80,10 +132,13 @@ public final class InstaEnvs {
         // Same keys keeboarder-server uses, pointing at the one Redis in the stack.
         REDIS_HOST = BUILDER.optional("REDIS_HOST", EnvType.string(), "localhost");
         REDIS_PORT = BUILDER.optional("REDIS_PORT", EnvType.integer(), 6379);
-        // Where log records go. See InstaLogger: unset means console only, which for a program
-        // someone runs by hand is the ordinary case rather than a misconfiguration.
+        // Whether records reach the terminal at all. Not a LoggerMode value on purpose — see
+        // InstaLogger for why a server's console is never configurable away and a CLI's is.
         INSTA_LOG_CONSOLE = BUILDER.optional("INSTA_LOG_CONSOLE", EnvType.bool(), true);
         // The same keys the Spring services use, so a deployment configures one app like another.
+        // LOGGER names the sink tree — console, disk, loki, loki-with-fallback, both — and unset
+        // means "whatever the keys below imply", which is what every pre-LOGGER insta setup gets.
+        LOGGER = BUILDER.optional("LOGGER", EnvType.string(), "");
         LOKI_URL = BUILDER.optional("LOKI_URL", EnvType.string(), "");
         LOKI_TENANT_ID = BUILDER.optional("LOKI_TENANT_ID", EnvType.string(), "");
         LOGGING_FILE_NAME = BUILDER.optional("LOGGING_FILE_NAME", EnvType.string(), "");

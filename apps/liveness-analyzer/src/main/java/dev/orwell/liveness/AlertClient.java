@@ -7,12 +7,15 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Posts liveness alerts to the alert service. Mirrors the log-analyzer client's retry semantics. */
 final class AlertClient implements Alerter {
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+
     private final String alertUrl;
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -49,6 +52,10 @@ final class AlertClient implements Alerter {
                         + "s ago.");
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(alertUrl))
+                // Bounds an alerting service that accepts the request and then stalls.
+                // Both analyzers single-flight their run, so an unbounded wait here
+                // stops the service doing its job at all, not just this one alert.
+                .timeout(REQUEST_TIMEOUT)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
                 .build();

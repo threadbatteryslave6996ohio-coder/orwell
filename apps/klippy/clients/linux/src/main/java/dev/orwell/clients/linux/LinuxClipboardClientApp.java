@@ -17,6 +17,7 @@ import dev.orwell.clients.filelocker.OfflineFileLockerClient;
 import dev.orwell.clients.linux.clipboard.LinuxClipboardReader;
 import dev.orwell.clients.linux.clipboard.LinuxClipboardReaderFactory;
 import dev.orwell.env.Env;
+import dev.orwell.http.LoggingHttpClient;
 import dev.orwell.logging.ConsoleLogger;
 import dev.orwell.logging.Logger;
 
@@ -43,7 +44,8 @@ public final class LinuxClipboardClientApp {
             Logger logger
     ) {
         ClipboardApiClient apiClient = new ClipboardApiClient(
-                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(),
+                LoggingHttpClient.wrap(
+                        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(), logger),
                 endpoint,
                 authSession,
                 Duration.ofSeconds(10),
@@ -56,7 +58,7 @@ public final class LinuxClipboardClientApp {
     public static void main(String[] args) throws IOException {
         Logger logger = new ConsoleLogger("klippy-linux-client");
         Env env = ClientEnvs.load();
-        ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("linux-"));
+        ClientConfig config = ClientConfig.load(env, ClientIdentity.hostnameOrRandom("linux-"), logger);
         long pollIntervalMs = PollInterval.resolve(env);
         long heartbeatIntervalMs = env.get(ClientEnvs.CLIENT_HEARTBEAT_INTERVAL_MS);
         LinuxClipboardReader clipboardReader = LinuxClipboardReaderFactory.create(env);

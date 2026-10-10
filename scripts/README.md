@@ -1,7 +1,25 @@
 # scripts
 
-Two operational scripts. Both carry usage details in their own header comments — this file only
-covers the context that isn't in the code.
+Two scripts. Both carry usage details in their own header comments — this file only covers the
+context that isn't in the code.
+
+## `stack.sh`
+
+Runs `docker compose` against both compose files. `./scripts/stack.sh` with no arguments is
+`up -d`; anything else is passed through, so `logs -f auth-server`, `ps`, `down` and
+`up -d --build` all work.
+
+**Why it exists.** The stack is two files — `docker-compose.storages.yml` (Postgres, Redis, MinIO)
+and `docker-compose.all-services.yml` (the applications) — and *every* subcommand needs both, not
+just `up`: the applications `depends_on` `db` and `redis`, so Compose refuses the applications file
+alone with "depends on undefined service". Forgetting the second `-f` is the easy mistake, and this
+is the whole of what the script prevents. It prints the command it runs, so nothing is hidden.
+
+`--storages-only` starts just the storage half, which is the supported way to run a service from
+your IDE or a jar by hand against real Postgres.
+
+`rebuild-and-run-docker.sh` at the repo root is an alias for `stack.sh up -d --build
+--remove-orphans`.
 
 ## `redeploy-on-update.sh`
 
@@ -16,12 +34,18 @@ Running it on a dev machine will rebuild and restart whatever stack that machine
 It refuses to run if the checkout has diverged from the branch, and exits 0 without touching the
 stack when there is nothing new.
 
-## `seed-secrets.sh`
+## There is no secrets-manager seed script
 
-Populates a running secrets manager with the env vars used across the repo, grouped per service
-and collected into bundles.
+`seed-secrets.sh` **was deleted deliberately** — don't recreate it, and ignore references to it in
+older commits.
 
-**Ordering constraint:** it authenticates as an existing admin, so the secrets manager must
-already be up *and* an admin user must already exist before this runs. The script cannot create
-that user. Export `SECRETS_ADMIN_TOKEN` (a bearer token for that admin) before invoking it;
-without it the script exits immediately.
+It created the secrets manager's groups, envs and bundles from a hardcoded inventory of every
+variable in the repo, and it had gone wrong in a way that was not worth repairing: it aborted
+partway through on a variable renamed out from under it, it was not re-runnable after that (the
+admin API answers `409` for a group that already exists, and `curl -sf` under `set -e` stops the
+script), and 44 of the envs it created reached no bundle at all — so five services' configuration
+was seeded into a place nothing loads from.
+
+A fresh secrets manager is populated through its own `/admin` API or UI. Nothing else in the repo
+depended on the script: `EnvLoader`'s `url` mode fetches a bundle by id and does not care how that
+bundle came to exist.

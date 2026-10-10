@@ -138,6 +138,91 @@ CREATE INDEX IF NOT EXISTS unfollows_edge_idx ON unfollows (edge_id, at);
 -- The alert dispatcher's entire working set.
 CREATE INDEX IF NOT EXISTS unfollows_unnotified_idx ON unfollows (at) WHERE notified_at IS NULL;
 
+-- ─── scrape blocks ─────────────────────────────────────────────────────────────────────────────
+
+-- Accounts we have decided not to walk. One row per account *per direction*, so "don't read who
+-- follows this shop, but do read who it follows" is expressible and "neither" is two rows.
+--
+-- This suppresses the walk and nothing else. The profile lookup still runs on every sync: it is one
+-- dataset item against a list's hundreds, it keeps counts, bios and the free twelve posts current,
+-- and it is the only thing that could ever notice a blocked account has stopped being private. A
+-- block that skipped the profile too would freeze the account at whatever it looked like the day it
+-- was blocked, which is the opposite of what a watch list is for.
+--
+-- Keyed on the account id like everything else, which means an account must have been *seen* before
+-- it can be blocked — insta cannot know an id without paying for a lookup. That is not a limitation
+-- in practice: the accounts worth blocking are the ones a walk has already put in `account`.
+--
+-- Unlike every other table here it keeps no history: lifting a block deletes the row. This is a
+-- decision rather than an observation, and what matters is what the next run is willing to pay for.
+CREATE TABLE IF NOT EXISTS scrape_block (
+    account_id TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+    direction  TEXT NOT NULL,
+    reason     TEXT,
+    blocked_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (account_id, direction),
+    CONSTRAINT scrape_block_direction_key CHECK (direction IN ('FOLLOWERS', 'FOLLOWING'))
+);
+
+-- ─── run snapshots ─────────────────────────────────────────────────────────────────────────────
+
+-- What each sync actually saw, kept verbatim.
+--
+-- This overlaps with follow_edge on purpose, and the overlap is the point. The edge table holds a
+-- *derived* view: current membership plus the follows/unfollows events inferred from it. That
+-- inference is deliberately conservative — an incomplete walk retires nothing, and a walk that
+-- would retire more than INSTA_MAX_RETIRE_PERCENT refuses to act — so the graph is, by design, not
+-- a record of what any particular run returned. It is a record of what we were willing to believe.
+--
+-- These two tables are the other half: the raw membership of one walk at one instant, before any
+-- of that judgement was applied. That makes three questions answerable which the edge table cannot
+-- answer at all: what a run returned on a day its diff was refused, whether two runs disagreed,
+-- and what the list looked like at a moment in the past without replaying every event to get there.
+--
+-- COST. One row per account per run — a walk is bounded by INSTA_SKIP_ABOVE_FOLLOWERS (1500 by
+-- default), so a run costs at most that many rows, but nothing prunes them and they accumulate per
+-- run rather than per change. Syncing 100 accounts daily is on the order of 50M rows a year. There
+-- is no retention sweep here yet; if that starts to bite, drop scrape_run_member rows past a
+-- horizon and keep the scrape_run rows, which are one per run and carry the counts.
+CREATE TABLE IF NOT EXISTS scrape_run (
+    id             BIGSERIAL PRIMARY KEY,
+    subject_id     TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+    direction      TEXT NOT NULL,
+    -- The walk's watermark and the instant its result was recorded. Both are kept because the
+    -- span between them is how long a walk took, and a long one is how a stale page gets in.
+    started_at     TIMESTAMPTZ NOT NULL,
+    finished_at    TIMESTAMPTZ NOT NULL,
+    -- A run that never walked is still a run: it means "we looked and chose not to", which reads
+    -- identically to "we did not run at all" if it is simply absent. skipped_reason says which of
+    -- the block, the follower ceiling or a private account ended it.
+    walked         BOOLEAN NOT NULL,
+    skipped_reason TEXT,
+    -- Whether the walk reached the end of the list. A snapshot from an incomplete walk is a
+    -- sample, not a census, and must not be read as one — the same distinction that decides
+    -- whether follow_edge is allowed to retire anything.
+    complete       BOOLEAN NOT NULL DEFAULT FALSE,
+    seen           INT NOT NULL DEFAULT 0,
+    skipped_no_id  INT NOT NULL DEFAULT 0,
+    added          INT NOT NULL DEFAULT 0,
+    retired        INT NOT NULL DEFAULT 0,
+    CONSTRAINT scrape_run_direction_key CHECK (direction IN ('FOLLOWERS', 'FOLLOWING'))
+);
+CREATE INDEX IF NOT EXISTS scrape_run_subject_idx
+    ON scrape_run (subject_id, direction, finished_at DESC);
+
+-- The membership itself. Named `member` rather than `follower` because a FOLLOWING run stores the
+-- accounts the subject follows; which it is, is scrape_run.direction.
+--
+-- Accounts with no Instagram id are absent, exactly as they are from follow_edge — an unkeyable row
+-- cannot be stored, which is also why scrape_run.skipped_no_id is worth keeping next to seen.
+CREATE TABLE IF NOT EXISTS scrape_run_member (
+    run_id     BIGINT NOT NULL REFERENCES scrape_run(id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+    PRIMARY KEY (run_id, account_id)
+);
+-- "every run that saw this account", which is the per-account history the edge table flattens.
+CREATE INDEX IF NOT EXISTS scrape_run_member_account_idx ON scrape_run_member (account_id);
+
 -- ─── posts ─────────────────────────────────────────────────────────────────────────────────────
 
 -- Identity plus the facts that cannot change after publication.

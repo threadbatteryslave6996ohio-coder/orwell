@@ -370,7 +370,12 @@ class InstagramServiceTest {
 
         new InstagramService(
                 new ApifyClient(apify.baseUrl(), "test-token", 120, NO_OP_LOGGER), cache,
-                PROFILE_ACTOR, List.of(new DataDopingAdapter()), 100, 500, NO_OP_LOGGER)
+                PROFILE_ACTOR,
+                List.of(new ApifyConnectionsSource(
+                        new DataDopingAdapter(),
+                        new ApifyClient(apify.baseUrl(), "test-token", 120, NO_OP_LOGGER),
+                        NO_OP_LOGGER)),
+                100, 500, NO_OP_LOGGER)
                 .connections("nasa", ConnectionType.FOLLOWERS, 50, null);
 
         assertThat(cache.entries().keySet()).allSatisfy(key -> assertThat(key).doesNotContain(":all"));
@@ -520,7 +525,9 @@ class InstagramServiceTest {
     private InstagramService service() {
         ApifyClient client = new ApifyClient(apify.baseUrl(), "test-token", 120, NO_OP_LOGGER);
         return new InstagramService(
-                client, cache, PROFILE_ACTOR, List.of(new ScrapingSolutionsAdapter()),
+                client, cache, PROFILE_ACTOR,
+                List.of(new ApifyConnectionsSource(
+                        new ScrapingSolutionsAdapter(), client, NO_OP_LOGGER)),
                 100, 500, NO_OP_LOGGER);
     }
 }

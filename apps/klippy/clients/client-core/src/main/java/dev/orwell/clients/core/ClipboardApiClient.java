@@ -2,6 +2,8 @@ package dev.orwell.clients.core;
 
 import dev.orwell.auth.http.client.ClientAuthSession;
 import dev.orwell.auth.http.client.HttpAuthenticationException;
+import dev.orwell.http.LoggingHttpClient;
+import dev.orwell.logging.Logger;
 
 import java.io.IOException;
 import java.net.URI;
@@ -19,8 +21,10 @@ public final class ClipboardApiClient {
     private final Duration requestTimeout;
     private final AuthRefreshListener refreshListener;
 
-    public ClipboardApiClient(URI endpoint, ClientAuthSession authSession, Duration requestTimeout) {
-        this(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(),
+    public ClipboardApiClient(
+            URI endpoint, ClientAuthSession authSession, Duration requestTimeout, Logger logger) {
+        this(LoggingHttpClient.wrap(
+                        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build(), logger),
                 endpoint, authSession, requestTimeout, AuthRefreshListener.NONE);
     }
 

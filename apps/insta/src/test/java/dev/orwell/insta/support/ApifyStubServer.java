@@ -1,13 +1,14 @@
 package dev.orwell.insta.support;
 
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import dev.orwell.testing.http.JsonStubServer;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+
+import static dev.orwell.testing.http.JsonStubServer.respond;
 
 /**
  * A stand-in for {@code api.apify.com} that records what was asked of it and replies with canned
@@ -24,22 +25,20 @@ public final class ApifyStubServer implements AutoCloseable {
     public static final String DATASET_ID = "dataset-1";
     public static final String KEY_VALUE_STORE_ID = "kvs-1";
 
-    private final HttpServer server;
+    private final JsonStubServer server;
     private final List<Request> requests = new CopyOnWriteArrayList<>();
     private volatile int datasetStatus = 200;
     private volatile String datasetBody = "[]";
     private volatile String outputBody;
     private volatile String runStatus = "SUCCEEDED";
 
-    private ApifyStubServer(HttpServer server) {
+    private ApifyStubServer(JsonStubServer server) {
         this.server = server;
     }
 
     public static ApifyStubServer start() throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        ApifyStubServer stub = new ApifyStubServer(server);
-        server.createContext("/", stub::handle);
-        server.start();
+        ApifyStubServer stub = new ApifyStubServer(JsonStubServer.start());
+        stub.server.on("/", stub::handle);
         return stub;
     }
 
@@ -60,7 +59,7 @@ public final class ApifyStubServer implements AutoCloseable {
     }
 
     public String baseUrl() {
-        return "http://127.0.0.1:" + server.getAddress().getPort();
+        return server.baseUrl();
     }
 
     public List<Request> requests() {
@@ -86,7 +85,7 @@ public final class ApifyStubServer implements AutoCloseable {
 
     @Override
     public void close() {
-        server.stop(0);
+        server.close();
     }
 
     private void handle(HttpExchange exchange) throws IOException {
@@ -128,13 +127,6 @@ public final class ApifyStubServer implements AutoCloseable {
                 + "\",\"defaultKeyValueStoreId\":\"" + KEY_VALUE_STORE_ID + "\"}}";
     }
 
-    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(status, bytes.length);
-        exchange.getResponseBody().write(bytes);
-        exchange.close();
-    }
 
     public record Request(String method, String path, String query, String authorization, String body) {
     }

@@ -27,7 +27,7 @@ repository has exactly one PostgreSQL; it serves the `klippy`, `auth`, and
 `secrets` databases on port `5432` and is provisioned by `db-init/all-services.sql`:
 
 ```bash
-docker compose -f docker-compose.all-services.yml up -d db
+docker compose -f docker-compose.storages.yml up -d db
 ```
 
 The client reads configuration from `.env` in the repository root:

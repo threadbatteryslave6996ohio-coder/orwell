@@ -58,7 +58,7 @@ public final class DesktopClientRunner {
     private void startHeartbeat(ClientConfig config) {
         long timeoutMs = Math.min(Math.max(heartbeatIntervalMs, HeartbeatScheduler.MINIMUM_INTERVAL_MS), 3000L);
         ClipboardApiClient heartbeatApiClient =
-                new ClipboardApiClient(config.endpoint(), config.authSession(), Duration.ofMillis(timeoutMs));
+                new ClipboardApiClient(config.endpoint(), config.authSession(), Duration.ofMillis(timeoutMs), logger);
         new HeartbeatScheduler(
                 heartbeatApiClient, config.endpoint().resolve("heartbeat"), config.clientId(),
                 heartbeatIntervalMs, logger).start();

@@ -3,6 +3,7 @@ package dev.orwell.insta.apify;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.orwell.insta.InstaJson;
+import dev.orwell.http.LoggingHttpClient;
 import dev.orwell.logging.Logger;
 
 import java.net.URI;
@@ -51,8 +52,7 @@ public class ApifyClient {
     private static final long POLL_FLOOR_MILLIS = 250;
 
     private final ObjectMapper json = InstaJson.mapper();
-    private final HttpClient http = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10)).build();
+    private final HttpClient http;
     private final String baseUrl;
     private final String token;
     private final int runTimeoutSeconds;
@@ -64,6 +64,8 @@ public class ApifyClient {
         this.token = Objects.requireNonNull(token, "token");
         this.runTimeoutSeconds = Math.max(runTimeoutSeconds, 1);
         this.logger = Objects.requireNonNull(logger, "logger");
+        this.http = LoggingHttpClient.wrap(
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build(), logger);
     }
 
     /**

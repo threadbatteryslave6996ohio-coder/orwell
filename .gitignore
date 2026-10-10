@@ -69,3 +69,7 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .coverage
+
+# Fixture definitions describe where things are in somebody's home, and are theirs, not the repo's.
+# fixtures.example.json is committed; the real one is not.
+apps/jarvis/fixture-detection/fixtures.json

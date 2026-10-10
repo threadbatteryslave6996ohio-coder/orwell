@@ -1,31 +1,29 @@
 package dev.orwell.objectstorage.proxy.client;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import dev.orwell.testing.http.JsonStubServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static dev.orwell.testing.http.JsonStubServer.readBody;
+import static dev.orwell.testing.http.JsonStubServer.respond;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ObjectStorageProxyClientTest {
-    private HttpServer server;
+    private JsonStubServer server;
 
     @AfterEach
     void stopServer() {
         if (server != null) {
-            server.stop(0);
+            server.close();
         }
     }
 
@@ -33,17 +31,16 @@ class ObjectStorageProxyClientTest {
     void loginPostsJsonAndParsesResponse() throws IOException {
         AtomicReference<String> method = new AtomicReference<>();
         AtomicReference<String> body = new AtomicReference<>();
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/login", exchange -> {
+        server = JsonStubServer.start();
+        server.on("/login", exchange -> {
             method.set(exchange.getRequestMethod());
             body.set(readBody(exchange));
             respond(exchange, 200, """
                     {"success":true,"clientId":"client-a","token":"token-123","tokenType":"Bearer"}
                     """);
         });
-        server.start();
 
-        ObjectStorageProxyClient client = new ObjectStorageProxyClient(baseUrl());
+        ObjectStorageProxyClient client = new ObjectStorageProxyClient(server.baseUrl());
         ObjectStorageProxyClient.LoginResponse response = client.login("client-a", "secret");
 
         assertTrue(response.success());
@@ -59,8 +56,8 @@ class ObjectStorageProxyClientTest {
         AtomicReference<String> clientId = new AtomicReference<>();
         AtomicReference<String> contentType = new AtomicReference<>();
         AtomicReference<String> body = new AtomicReference<>();
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/upload", exchange -> {
+        server = JsonStubServer.start();
+        server.on("/upload", exchange -> {
             auth.set(exchange.getRequestHeaders().getFirst("Authorization"));
             clientId.set(exchange.getRequestHeaders().getFirst("X-Client-Id"));
             contentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
@@ -69,12 +66,11 @@ class ObjectStorageProxyClientTest {
                     {"success":true,"message":"ok","key":"uploads/file.txt","etag":"etag-1"}
                     """);
         });
-        server.start();
 
         Path file = Files.createTempFile("proxy-client-", ".txt");
         Files.writeString(file, "hello", StandardCharsets.UTF_8);
         try {
-            ObjectStorageProxyClient client = new ObjectStorageProxyClient(baseUrl());
+            ObjectStorageProxyClient client = new ObjectStorageProxyClient(server.baseUrl());
             ObjectStorageProxyClient.UploadResponse response = client.upload("client-a", "token-123", file, "uploads", "file.txt");
 
             assertTrue(response.success());
@@ -92,13 +88,12 @@ class ObjectStorageProxyClientTest {
 
     @Test
     void listParsesNestedFileRecords() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/list/uploads", exchange -> respond(exchange, 200, """
+        server = JsonStubServer.start();
+        server.on("/list/uploads", exchange -> respond(exchange, 200, """
                 {"success":true,"folder":"uploads","files":[{"key":"uploads/a.txt","size":12,"lastModified":"2026-07-02T11:00:00Z"}]}
                 """));
-        server.start();
 
-        ObjectStorageProxyClient client = new ObjectStorageProxyClient(baseUrl());
+        ObjectStorageProxyClient client = new ObjectStorageProxyClient(server.baseUrl());
         ObjectStorageProxyClient.ListResponse response = client.list("client-a", "token-123", "uploads");
 
         assertTrue(response.success());
@@ -110,16 +105,15 @@ class ObjectStorageProxyClientTest {
     @Test
     void deleteEncodesSlashSeparatedKey() throws IOException {
         AtomicReference<String> path = new AtomicReference<>();
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/delete/folder/object.txt", exchange -> {
+        server = JsonStubServer.start();
+        server.on("/delete/folder/object.txt", exchange -> {
             path.set(exchange.getRequestURI().getPath());
             respond(exchange, 200, """
                     {"success":true,"message":"deleted","key":"folder/object.txt"}
                     """);
         });
-        server.start();
 
-        ObjectStorageProxyClient client = new ObjectStorageProxyClient(baseUrl());
+        ObjectStorageProxyClient client = new ObjectStorageProxyClient(server.baseUrl());
         ObjectStorageProxyClient.DeleteResponse response = client.delete("client-a", "token-123", "folder/object.txt");
 
         assertTrue(response.success());
@@ -128,35 +122,18 @@ class ObjectStorageProxyClientTest {
 
     @Test
     void loginExposesHttpStatusOnFailure() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.createContext("/login", exchange -> respond(exchange, 401, """
+        server = JsonStubServer.start();
+        server.on("/login", exchange -> respond(exchange, 401, """
                 {"success":false,"error":"Invalid username or password"}
                 """));
-        server.start();
 
-        ObjectStorageProxyClient client = new ObjectStorageProxyClient(baseUrl());
+        ObjectStorageProxyClient client = new ObjectStorageProxyClient(server.baseUrl());
         ObjectStorageProxyClientException exception = assertThrows(ObjectStorageProxyClientException.class,
                 () -> client.login("client-a", "wrong"));
 
         assertEquals(401, exception.statusCode());
     }
 
-    private String baseUrl() {
-        return "http://localhost:%d".formatted(server.getAddress().getPort());
-    }
 
-    private static String readBody(HttpExchange exchange) throws IOException {
-        try (InputStream inputStream = exchange.getRequestBody()) {
-            return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
 
-    private static void respond(HttpExchange exchange, int statusCode, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(statusCode, bytes.length);
-        try (OutputStream outputStream = exchange.getResponseBody()) {
-            outputStream.write(bytes);
-        }
-    }
 }

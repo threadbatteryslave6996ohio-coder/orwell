@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Keeboarder macOS - LaunchAgent Setup Script
+# Jarvis macOS recorder - LaunchAgent setup.
 # Standalone script to setup/reload LaunchAgent for auto-start
 
 set -e
@@ -17,13 +17,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Keeboarder LaunchAgent Manager${NC}"
+echo -e "${BLUE}Jarvis LaunchAgent Manager${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
 # Paths
 LAUNCHAGENT_DIR="$HOME/Library/LaunchAgents"
-LAUNCHAGENT_PLIST="$LAUNCHAGENT_DIR/com.keeboarder.recorder.plist"
+LAUNCHAGENT_PLIST="$LAUNCHAGENT_DIR/$LAUNCHAGENT_LABEL.plist"
 
 # ============================================================
 # Functions
@@ -33,7 +33,7 @@ load_launchagent() {
     echo -e "${YELLOW}Loading LaunchAgent...${NC}"
     
     # First unload if already loaded
-    if launchctl list | grep -q "com.keeboarder.recorder"; then
+    if launchctl list | grep -q "$LAUNCHAGENT_LABEL"; then
         echo "Unloading existing LaunchAgent..."
         launchctl unload "$LAUNCHAGENT_PLIST" 2>/dev/null || true
         sleep 1
@@ -48,7 +48,7 @@ load_launchagent() {
     sleep 2
     
     # Check status
-    if launchctl list | grep -q "com.keeboarder.recorder"; then
+    if launchctl list | grep -q "$LAUNCHAGENT_LABEL"; then
         echo -e "${GREEN}✓ LaunchAgent is active${NC}"
         return 0
     else
@@ -84,7 +84,7 @@ status_launchagent() {
     echo -e "${YELLOW}Checking LaunchAgent status...${NC}"
     echo ""
     
-    if launchctl list | grep -q "com.keeboarder.recorder"; then
+    if launchctl list | grep -q "$LAUNCHAGENT_LABEL"; then
         echo -e "${GREEN}✓ LaunchAgent is loaded and active${NC}"
     else
         echo -e "${RED}✗ LaunchAgent is not loaded${NC}"
@@ -92,7 +92,7 @@ status_launchagent() {
     
     echo ""
     echo "LaunchAgent details:"
-    launchctl list 2>/dev/null | grep -A5 "com.keeboarder.recorder" || echo "  (Not loaded)"
+    launchctl list 2>/dev/null | grep -A5 "$LAUNCHAGENT_LABEL" || echo "  (Not loaded)"
     
     echo ""
     echo "FFmpeg processes:"
@@ -115,7 +115,7 @@ create_launchagent_plist() {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.keeboarder.recorder</string>
+    <string>@LAUNCHAGENT_LABEL@</string>
 
     <key>ProgramArguments</key>
     <array>
@@ -149,6 +149,7 @@ EOF
 
     # Replace placeholders
     sed -i '' "s|@SCRIPTS_DIR@|$SCRIPTS_DIR|g" "$LAUNCHAGENT_PLIST"
+    sed -i '' "s|@LAUNCHAGENT_LABEL@|$LAUNCHAGENT_LABEL|g" "$LAUNCHAGENT_PLIST"
     sed -i '' "s|@LOGS_DIR@|$LOGS_DIR|g" "$LAUNCHAGENT_PLIST"
     
     echo -e "${GREEN}✓ LaunchAgent plist created:${NC}"

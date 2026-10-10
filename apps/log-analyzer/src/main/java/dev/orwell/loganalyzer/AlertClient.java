@@ -7,11 +7,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 final class AlertClient {
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+
     /**
      * Result of an alert delivery attempt. {@code REJECTED} is a terminal error (most 4xx)
      * that will keep failing for the same payload, so the caller should not retry it;
@@ -55,6 +58,10 @@ final class AlertClient {
         payload.put("logs", logLines);
 
         HttpRequest request = HttpRequest.newBuilder(URI.create(alertUrl))
+                // Bounds an alerting service that accepts the request and then stalls.
+                // Both analyzers single-flight their run, so an unbounded wait here
+                // stops the service doing its job at all, not just this one alert.
+                .timeout(REQUEST_TIMEOUT)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
                 .build();

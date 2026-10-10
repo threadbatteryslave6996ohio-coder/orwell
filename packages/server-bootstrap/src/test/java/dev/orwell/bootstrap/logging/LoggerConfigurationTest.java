@@ -1,15 +1,14 @@
 package dev.orwell.bootstrap.logging;
 
+import dev.orwell.testing.http.JsonStubServer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpServer;
 import dev.orwell.logging.LogFiles;
 import dev.orwell.logging.Logger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,9 +30,9 @@ class LoggerConfigurationTest {
     void defaultSinkPushesStructuredEntriesToLoki() throws Exception {
         List<String> bodies = new CopyOnWriteArrayList<>();
         CountDownLatch received = new CountDownLatch(1);
-        HttpServer loki = stubLoki(bodies, received);
+        JsonStubServer loki = stubLoki(bodies, received);
         try {
-            String url = "http://127.0.0.1:" + loki.getAddress().getPort() + "/loki/api/v1/push";
+            String url = loki.baseUrl() + "/loki/api/v1/push";
             Logger logger = new LoggerConfiguration().logger("", "auth-server", url, "");
 
             logger.info("Login request received.", Map.of("clientId", "linux-clip"));
@@ -47,7 +46,7 @@ class LoggerConfigurationTest {
             assertEquals("Login request received.", line.get("message").asText());
             assertEquals("linux-clip", line.get("clientId").asText());
         } finally {
-            loki.stop(0);
+            loki.close();
         }
     }
 
@@ -115,15 +114,14 @@ class LoggerConfigurationTest {
         }
     }
 
-    private static HttpServer stubLoki(List<String> bodies, CountDownLatch received) throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/loki/api/v1/push", exchange -> {
+    private static JsonStubServer stubLoki(List<String> bodies, CountDownLatch received) throws IOException {
+        JsonStubServer server = JsonStubServer.start();
+        server.on("/loki/api/v1/push", exchange -> {
             bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             exchange.sendResponseHeaders(200, -1);
             exchange.close();
             received.countDown();
         });
-        server.start();
         return server;
     }
 }

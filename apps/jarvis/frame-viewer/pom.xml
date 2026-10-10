@@ -1,0 +1,127 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>dev.orwell</groupId>
+        <artifactId>jarvis</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>jarvis-frame-viewer</artifactId>
+
+    <properties>
+        <mainClass>dev.orwell.bucket.viewer.FrameViewerApplication</mainClass>
+    </properties>
+
+    <!--
+      A read-only browser over frame_events, on plain JDBC and the repo's Undertow runtime.
+
+      No Spring and no jarvis-frame-client: this is not a watcher and it never joins the stream.
+      It reads the table the hub already wrote, which is the whole reason it can be its own
+      deployable — a browser scrubbing back through history costs the hub nothing.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>env-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>logger</artifactId>
+        </dependency>
+        <!-- The routes, and its JSON helpers. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>undertow-bootstrap</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- LoggingHttpClient, for the backfill's pushes to the hub: every outbound client in the
+             repo is wrapped in it, and this one is no exception. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>http-client</artifactId>
+        </dependency>
+        <!-- The auth server client: login and token check. It is the repo's one implementation of
+             that protocol, used by object-storage-proxy's and secrets-manager's admin panels too, so
+             a fourth hand-rolled copy of the route shapes is the thing being avoided here.
+
+             It costs spring-web, which is a real weight for a program with no Spring context — but a
+             RestClient is standalone, and next to the ffmpeg layer in this image it is noise. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>auth-http-client</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Sha256, so a backfilled frame carries the hash the hub verifies it against. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>primitives</artifactId>
+        </dependency>
+        <!-- Declared rather than taken transitively through undertow-bootstrap: the backfill builds
+             and reads JSON of its own. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <!-- Compile scope, not runtime: PGSimpleDataSource is constructed directly, as in
+             jarvis-retention-worker. A pool would be dead weight for a viewer somebody has open
+             in one tab. -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- JsonStubServer: a real HTTP server on a loopback port, so the auth tests check what
+             actually goes on the wire rather than what a mock was told to expect. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- PostgresJdbcTest: a real Postgres over plain JDBC, with no Spring context. -->
+        <dependency>
+            <groupId>dev.orwell</groupId>
+            <artifactId>server-test-support</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- A plain program, so the runnable artifact is the shaded
+                 jarvis-frame-viewer-<version>-exec.jar — the same shape as person-detection and
+                 the retention worker. There is no Spring context to repackage. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <configuration>
+                    <shadedArtifactAttached>true</shadedArtifactAttached>
+                    <shadedClassifierName>exec</shadedClassifierName>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

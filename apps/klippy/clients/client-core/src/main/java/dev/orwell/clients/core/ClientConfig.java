@@ -1,8 +1,10 @@
 package dev.orwell.clients.core;
 
+import dev.orwell.auth.http.api.AuthWorkspaces;
 import dev.orwell.auth.http.client.ClientAuthSession;
 import dev.orwell.clients.core.env.ClientEnvs;
 import dev.orwell.env.Env;
+import dev.orwell.logging.Logger;
 
 import java.net.URI;
 import java.util.Objects;
@@ -21,12 +23,13 @@ public record ClientConfig(
         Objects.requireNonNull(authSession, "authSession");
     }
 
-    public static ClientConfig load(Env env, String defaultClientId) {
+    public static ClientConfig load(Env env, String defaultClientId, Logger logger) {
         String authServerUrl = optional(env, ClientEnvs.AUTH_SERVER_URL);
         String clientId = env.has(ClientEnvs.CLIENT_ID) ? env.get(ClientEnvs.CLIENT_ID) : defaultClientId;
         String clientSecret = optional(env, ClientEnvs.CLIENT_SECRET);
         String clientToken = optional(env, ClientEnvs.CLIENT_TOKEN);
-        ClientAuthSession authSession = new ClientAuthSession(authServerUrl, clientId, clientSecret, clientToken);
+        ClientAuthSession authSession = new ClientAuthSession(
+                authServerUrl, AuthWorkspaces.DEFAULT, clientId, clientSecret, clientToken, logger);
         return new ClientConfig(
                 ClipboardEndpoint.from(env.get(ClientEnvs.REMOTE_SERVER_URL)),
                 authServerUrl,

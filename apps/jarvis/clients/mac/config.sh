@@ -1,5 +1,5 @@
 #!/bin/bash
-# Configuration file for Keeboarder macOS recorder
+# Configuration file for the Jarvis macOS recorder
 # Customize these settings before running install.sh
 
 # ============================================================
@@ -105,7 +105,14 @@ DEVICE_HOSTNAME="$(hostname)"
 # LaunchAgent Settings
 # ============================================================
 
-# Service label for LaunchAgent
+# Service label for the LaunchAgent, and the name of its plist in ~/Library/LaunchAgents.
+#
+# It still says "keeboarder" because this is not a name in the code — it is a file on every
+# machine that has ever run this installer, and the handle launchctl knows the job by. Renaming it
+# would orphan the running agent rather than rename it: the old plist would keep loading at login
+# and nothing would remove it. Changing it means shipping an unload-old-then-load-new migration,
+# which is worth doing deliberately and not as part of a tidy-up. Everything that refers to the
+# label reads it from here, so that migration is a one-line change when someone chooses to make it.
 LAUNCHAGENT_LABEL="com.keeboarder.recorder"
 
 # Restart interval if service crashes (seconds)

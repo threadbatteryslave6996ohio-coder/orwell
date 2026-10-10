@@ -1,7 +1,6 @@
 package dev.orwell.google.gmail;
 
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
 import dev.orwell.google.gmail.entity.EmailMessageEntity;
 import dev.orwell.google.gmail.entity.UserEntity;
 import dev.orwell.google.gmail.entity.WebhookSubscriptionEntity;
@@ -11,12 +10,12 @@ import dev.orwell.google.gmail.repository.EmailMessageRepository;
 import dev.orwell.google.gmail.repository.EmailRawSourceRepository;
 import dev.orwell.google.gmail.repository.WebhookSubscriptionRepository;
 import dev.orwell.logging.Logger;
+import dev.orwell.testing.http.JsonStubServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -25,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static dev.orwell.testing.http.JsonStubServer.respond;
 import static dev.orwell.google.gmail.GmailTestFixtures.user;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -47,8 +47,8 @@ class GmailServiceWebhookTest {
     private static final Logger NO_OP_LOGGER = entry -> {
     };
 
-    private HttpServer authServer;
-    private HttpServer webhookServer;
+    private JsonStubServer authServer;
+    private JsonStubServer webhookServer;
     private final AtomicInteger logins = new AtomicInteger();
     private final Map<String, List<String>> received = new ConcurrentHashMap<>();
     private final Map<String, List<String>> authorizations = new ConcurrentHashMap<>();
@@ -71,22 +71,20 @@ class GmailServiceWebhookTest {
         when(subscriptions.findByUserIdAndActiveTrueOrderByIdAsc(any())).thenReturn(List.of());
         user = user(1L, "owner@example.com", "owner-client");
 
-        authServer = HttpServer.create(new InetSocketAddress(0), 0);
-        authServer.createContext("/login", exchange -> {
+        authServer = JsonStubServer.start();
+        authServer.on("/def/login", exchange -> {
             exchange.getRequestBody().readAllBytes();
             respond(exchange, 200, "{\"clientId\":\"gmail-general\",\"token\":\"token-%d\"}"
                     .formatted(logins.incrementAndGet()));
         });
-        authServer.start();
 
-        webhookServer = HttpServer.create(new InetSocketAddress(0), 0);
-        webhookServer.start();
+        webhookServer = JsonStubServer.start();
     }
 
     @AfterEach
     void stopServers() {
-        authServer.stop(0);
-        webhookServer.stop(0);
+        authServer.close();
+        webhookServer.close();
     }
 
     @Test
@@ -187,7 +185,7 @@ class GmailServiceWebhookTest {
 
     private GmailService service(String broadcastClients) {
         WebhookSender sender = new WebhookSender(
-                "http://127.0.0.1:" + authServer.getAddress().getPort(),
+                "http://127.0.0.1:" + authServer.port(),
                 "gmail-general", "gmail-secret", NO_OP_LOGGER);
         return new GmailService(broadcastClients, repository, headers, attachments, rawSources,
                 subscriptions, sender, GmailTestFixtures.payloads(),
@@ -206,7 +204,7 @@ class GmailServiceWebhookTest {
     }
 
     private void webhook(String path, StatusDecider status) {
-        webhookServer.createContext(path, exchange -> {
+        webhookServer.on(path, exchange -> {
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
             authorizations.computeIfAbsent(path, ignored -> new CopyOnWriteArrayList<>())
                     .add(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -220,16 +218,9 @@ class GmailServiceWebhookTest {
     }
 
     private String url(String path) {
-        return "http://127.0.0.1:" + webhookServer.getAddress().getPort() + path;
+        return "http://127.0.0.1:" + webhookServer.port() + path;
     }
 
-    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(status, bytes.length);
-        exchange.getResponseBody().write(bytes);
-        exchange.close();
-    }
 
     @FunctionalInterface
     private interface StatusDecider {
