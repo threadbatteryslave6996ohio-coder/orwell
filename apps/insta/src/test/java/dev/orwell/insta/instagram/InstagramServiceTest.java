@@ -149,7 +149,7 @@ class InstagramServiceTest {
 
         service().connections("nasa", ConnectionType.FOLLOWING, 60, null);
 
-        assertThat(actorInput().get("dataToScrape").asText()).isEqualTo("Following");
+        assertThat(actorInput().get("dataToScrape").asText()).isEqualTo("Followings");
     }
 
     /**
