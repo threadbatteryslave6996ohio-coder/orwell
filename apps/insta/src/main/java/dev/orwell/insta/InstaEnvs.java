@@ -8,6 +8,7 @@ import dev.orwell.env.EnvSchema;
 import dev.orwell.env.EnvType;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * Everything this program reads from the environment.
@@ -178,6 +179,11 @@ public final class InstaEnvs {
      *                                               does not parse.
      */
     public static Env load() throws IOException {
-        return SCHEMA.from(EnvFiles.load());
+        return from(EnvFiles.load());
+    }
+
+    /** The same parse as {@link #load}, over a map instead of the process environment. */
+    public static Env from(Map<String, String> source) {
+        return SCHEMA.from(source);
     }
 }

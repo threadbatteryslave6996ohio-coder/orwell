@@ -18,7 +18,8 @@ java -jar apps/insta/target/insta-0.1.0-SNAPSHOT-exec.jar profile nasa
 insta profile   <username>
 insta followers <username> [--limit N] [--all] [--cursor C] [--json]
 insta following <username> [--limit N] [--all] [--cursor C] [--json]
-insta sync      <username> [--limit N]
+insta sync      <username> [--limit N] [--followers|--following|--both]
+insta sync-all  [--max-accounts N] [--limit N] [--followers|--following|--both]
 insta block     <username> [--followers|--following|--both] [--reason R]
 insta unblock   <username> [--followers|--following|--both]
 insta blocks
@@ -31,7 +32,8 @@ insta ui
 | `--all` | keep fetching pages until the list is exhausted |
 | `--cursor C` | resume from a previous run's cursor |
 | `--json` | print raw JSON instead of a readable list |
-| `--followers` / `--following` / `--both` | which list a block covers (default `--both`) |
+| `--followers` / `--following` / `--both` | which list a block or sync covers (default `--both`; `--followers` for `sync`) |
+| `--max-accounts N` | `sync-all` only: stop after N accounts, least recently synced first |
 | `--reason R` | why an account is blocked, kept on the row |
 
 The username may be given with or without a leading `@` and is case-insensitive.
@@ -101,11 +103,13 @@ account with no followers look identical. Run `profile` and read `private` to te
 ## The follow graph — `insta sync`
 
 `sync` walks an account's followers and records them in Postgres, so you can ask what changed
-since last time.
+since last time. `--following` walks the accounts it follows instead, `--both` walks both lists
+after one profile lookup.
 
 ```console
 $ insta sync nasa
-nasa: 500 followers seen, 3 new, 1 unfollowed, 12 posts
+nasa: profile and 12 posts recorded
+nasa: 500 followers seen, 3 new, 1 unfollowed
 ```
 
 The tables, created automatically on first run (`CREATE … IF NOT EXISTS`, so there is no
@@ -269,7 +273,8 @@ decision is reported as one:
 
 ```console
 $ insta sync someshop
-someshop: follower walk is blocked (shop, list is noise) — profile and 12 posts recorded.
+someshop: profile and 12 posts recorded
+someshop: follower walk is blocked (shop, list is noise)
 ```
 
 Blocking costs nothing: the handle is resolved to an account id out of `account_username`, from
@@ -280,6 +285,48 @@ a walk already put in `account`.
 
 Lifting a block deletes the row. Unlike every other table here it keeps no history: a block is a
 decision rather than an observation, and what matters is what the next run is willing to pay for.
+
+### Every account at once — `insta sync-all`
+
+`sync-all` runs `sync --both` over every account already in the `account` table: one profile
+lookup each, then the follower and the following walk, under the same block, ceiling and private
+checks as a single `sync`. `INSTA_SKIP_ABOVE_FOLLOWERS` applies to whichever list is being walked,
+so a following walk is skipped above that many *following*.
+
+```console
+$ insta sync-all --max-accounts 200
+alice: profile and 12 posts recorded
+alice: 312 followers seen, 4 new, 0 unfollowed
+alice: 280 following seen, 1 new, 2 unfollowed
+bob is private: follower list not walked.
+bob is private: following list not walked.
+gone: skipped — No public Instagram profile was found for that username.
+…
+sync-all: 199 of 200 accounts synced, 1 failed
+failed: gone
+```
+
+Progress (`[17/200] alice`) goes to stderr like the other commands.
+
+- **One transaction per account**, not per run. A run that stops on account 300 keeps the 299 before
+  it.
+- **Least recently synced first**, accounts never synced before all of them. A run cut short by
+  `--max-accounts` or by credit picks up next time where it stopped, instead of paying for the same
+  first accounts again.
+- **A failure about one account is skipped**: a missing profile, a failed or timed-out actor run. The
+  run carries on and exits `4` at the end if anything failed. **A failure about the Apify account
+  stops it**: out of credit (`5`), a rejected token, or a rate limit. Every remaining account would
+  fail the same way, and each one would still cost a profile lookup.
+- **Only accounts with a recorded handle.** The profile lookup takes a username. An account known
+  only by id is left out, and the run says how many there were.
+
+**One run is one hop. Running it again goes one hop further.** The run uses the accounts that were
+in the table when it started. The followers and followings it finds are written to the table, so
+the *next* run visits them too. Run it nightly and that is the followers-of-followers crawl from
+[What it costs](#what-it-costs-and-what-isnt-built-yet), reached one night at a time. Its cost grows
+with the table: about two thirds of a personal list is private and costs only the profile lookup,
+but every public account costs two walks. `--max-accounts`, `insta block` and
+`INSTA_SKIP_ABOVE_FOLLOWERS` are the levers.
 
 ### TODO: warn when an account goes from private to public
 
@@ -326,8 +373,9 @@ reason to lose the follow data collected in the same sync.
 
 Each walk is billed per follower returned (from $0.60/1,000), so a daily sync of a 500-follower
 account is roughly $9/month. Crawling *followers of followers* is a different order of magnitude —
-about $150 per full pass at depth 2 and $75,000 at depth 3 — so there is deliberately no recursive
-crawl here.
+about $150 per full pass at depth 2 and $75,000 at depth 3. So nothing here crawls recursively
+inside one run. [`sync-all`](#every-account-at-once--insta-sync-all) visits only the accounts
+already recorded, and repeating it is how the crawl gets deeper. You decide that per run.
 
 Not built yet: the alert dispatcher (`unfollow_notified_at` is written and indexed for it, but
 nothing sends mail), the [gone-public warning](#todo-warn-when-an-account-goes-from-private-to-public)
