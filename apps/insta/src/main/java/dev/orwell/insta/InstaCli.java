@@ -31,6 +31,8 @@ import java.util.Locale;
  * insta profile   &lt;username&gt;
  * insta followers &lt;username&gt; [--limit N] [--all] [--cursor C] [--json]
  * insta following &lt;username&gt; [--limit N] [--all] [--cursor C] [--json]
+ * insta sync      &lt;username&gt; [--followers|--following|--both]
+ * insta sync-all  [--max-accounts N] [--followers|--following|--both]
  * </pre>
  *
  * <p>Results go to stdout and nothing else does, so {@code --json} composes with {@code jq}.
@@ -55,6 +57,7 @@ public final class InstaCli {
               followers <username>            the accounts following them
               following <username>            the accounts they follow
               sync      <username>            walk the followers and record them in Postgres
+              sync-all                        sync every account already in Postgres, both lists
               block     <username>            stop syncing this account's lists
               unblock   <username>            start syncing them again
               blocks                          list every blocked account
@@ -66,15 +69,18 @@ public final class InstaCli {
               --cursor C    resume from a previous run's nextCursor
               --json        print raw JSON instead of a readable list
 
-            options (block / unblock):
-              --followers   only the follower list
+            options (block / unblock / sync / sync-all):
+              --followers   only the follower list (the default for sync)
               --following   only the following list
-              --both        both lists (the default)
+              --both        both lists (the default for block, unblock and sync-all)
               --reason R    why, kept alongside the block (block only)
 
+            options (sync-all):
+              --max-accounts N  stop after N accounts, least recently synced first
+
             APIFY_TOKEN must be set, in the environment or a .env file.
-            `sync`, `block`, `unblock` and `blocks` also need INSTA_DATABASE_URL. `sync` always
-            walks the whole list, because a partial walk cannot tell an unfollow from a page it
+            `sync`, `sync-all`, `block`, `unblock` and `blocks` also need INSTA_DATABASE_URL.
+            `sync` always walks the whole list, because a partial walk cannot tell an unfollow from a page it
             never reached. A block stops the walk, not the profile lookup.
             """;
 
@@ -129,8 +135,11 @@ public final class InstaCli {
                         instagram, arguments, ConnectionType.FOLLOWERS, out, err);
                 case FOLLOWING -> printConnections(
                         instagram, arguments, ConnectionType.FOLLOWING, out, err);
-                case SYNC -> new SyncCommand(env, instagram, logger)
-                        .run(arguments.username(), arguments.limit(), out, err);
+                case SYNC -> new SyncCommand(env, instagram, logger).run(
+                        arguments.username(), arguments.directions(), arguments.limit(), out, err);
+                case SYNC_ALL -> new SyncCommand(env, instagram, logger).runAll(
+                        arguments.directions(), arguments.limit(), arguments.maxAccounts(),
+                        out, err);
                 case BLOCK -> new BlockCommand(env, logger).run(
                         BlockCommand.Action.BLOCK, arguments.username(),
                         arguments.directions(), arguments.reason(), out, err);
@@ -279,7 +288,7 @@ public final class InstaCli {
     }
 
     enum Command {
-        PROFILE, FOLLOWERS, FOLLOWING, SYNC, BLOCK, UNBLOCK, BLOCKS, UI
+        PROFILE, FOLLOWERS, FOLLOWING, SYNC, SYNC_ALL, BLOCK, UNBLOCK, BLOCKS, UI
     }
 
     /**
@@ -288,27 +297,31 @@ public final class InstaCli {
      */
     record Arguments(
             Command command, String username, Integer limit, boolean all, String cursor,
-            boolean json, List<ConnectionType> directions, String reason, boolean help) {
+            boolean json, List<ConnectionType> directions, String reason, Integer maxAccounts,
+            boolean help) {
 
         static Arguments parse(String[] args) {
             if (args.length == 0 || "--help".equals(args[0]) || "-h".equals(args[0])) {
                 return new Arguments(
-                        Command.PROFILE, null, null, false, null, false, List.of(), null, true);
+                        Command.PROFILE, null, null, false, null, false, List.of(), null, null,
+                        true);
             }
             Command command = switch (args[0]) {
                 case "profile" -> Command.PROFILE;
                 case "followers" -> Command.FOLLOWERS;
                 case "following" -> Command.FOLLOWING;
                 case "sync" -> Command.SYNC;
+                case "sync-all" -> Command.SYNC_ALL;
                 case "block" -> Command.BLOCK;
                 case "unblock" -> Command.UNBLOCK;
                 case "blocks" -> Command.BLOCKS;
                 case "ui" -> Command.UI;
                 default -> throw new IllegalArgumentException("Unknown command: " + args[0]);
             };
-            // `ui` and `blocks` both read whatever is already in the database, so neither names an
-            // account.
-            boolean needsUsername = command != Command.UI && command != Command.BLOCKS;
+            // `ui`, `blocks` and `sync-all` all start from whatever is already in the database, so
+            // none of them names an account.
+            boolean needsUsername = command != Command.UI && command != Command.BLOCKS
+                    && command != Command.SYNC_ALL;
             if (needsUsername && (args.length < 2 || args[1].startsWith("-"))) {
                 throw new IllegalArgumentException("Missing username for '" + args[0] + "'.");
             }
@@ -318,6 +331,7 @@ public final class InstaCli {
             boolean json = false;
             String cursor = null;
             String reason = null;
+            Integer maxAccounts = null;
             // Null until a flag names one, so "the default is both" and "the user asked for both"
             // stay distinguishable while the other options are being validated.
             List<ConnectionType> directions = null;
@@ -325,7 +339,9 @@ public final class InstaCli {
                 switch (args[index]) {
                     case "--all" -> all = true;
                     case "--json" -> json = true;
-                    case "--limit" -> limit = positive(value(args, ++index, "--limit"));
+                    case "--limit" -> limit = positive(value(args, ++index, "--limit"), "--limit");
+                    case "--max-accounts" -> maxAccounts =
+                            positive(value(args, ++index, "--max-accounts"), "--max-accounts");
                     case "--cursor" -> cursor = value(args, ++index, "--cursor");
                     case "--reason" -> reason = value(args, ++index, "--reason");
                     case "--followers" -> directions = List.of(ConnectionType.FOLLOWERS);
@@ -343,9 +359,16 @@ public final class InstaCli {
             boolean blockCommand =
                     command == Command.BLOCK || command == Command.UNBLOCK
                             || command == Command.BLOCKS;
-            if (!blockCommand && (directions != null || reason != null)) {
-                throw new IllegalArgumentException("--followers, --following, --both and --reason "
-                        + "only apply to 'block' and 'unblock'.");
+            boolean syncCommand = command == Command.SYNC || command == Command.SYNC_ALL;
+            if (!blockCommand && reason != null) {
+                throw new IllegalArgumentException("--reason only applies to 'block'.");
+            }
+            if (!blockCommand && !syncCommand && directions != null) {
+                throw new IllegalArgumentException("--followers, --following and --both only "
+                        + "apply to 'block', 'unblock', 'sync' and 'sync-all'.");
+            }
+            if (command != Command.SYNC_ALL && maxAccounts != null) {
+                throw new IllegalArgumentException("--max-accounts only applies to 'sync-all'.");
             }
             if (blockCommand && (limit != null || all || cursor != null || json)) {
                 throw new IllegalArgumentException(
@@ -367,17 +390,22 @@ public final class InstaCli {
                 throw new IllegalArgumentException("'ui' takes no options; configure it with "
                         + "INSTA_UI_ADDRESS and INSTA_UI_PORT.");
             }
-            if (command == Command.SYNC && (all || cursor != null)) {
+            if (syncCommand && (all || cursor != null)) {
                 // Resuming or half-walking would produce a diff that reports unfollows for pages
                 // it simply never read, so sync only ever walks the whole list.
                 throw new IllegalArgumentException(
-                        "'sync' always walks the whole list; --all and --cursor do not apply.");
+                        "'" + args[0] + "' always walks the whole list; --all and --cursor do not "
+                                + "apply.");
             }
             if (directions == null) {
-                directions = List.of(ConnectionType.FOLLOWERS, ConnectionType.FOLLOWING);
+                // `sync` predates following walks and keeps its followers-only default, so an
+                // existing cron line does not start paying for a second list.
+                directions = command == Command.SYNC
+                        ? List.of(ConnectionType.FOLLOWERS)
+                        : List.of(ConnectionType.FOLLOWERS, ConnectionType.FOLLOWING);
             }
-            return new Arguments(
-                    command, username, limit, all, cursor, json, directions, reason, false);
+            return new Arguments(command, username, limit, all, cursor, json, directions, reason,
+                    maxAccounts, false);
         }
 
         private static String value(String[] args, int index, String option) {
@@ -387,15 +415,15 @@ public final class InstaCli {
             return args[index];
         }
 
-        private static Integer positive(String raw) {
+        private static Integer positive(String raw, String option) {
             int value;
             try {
                 value = Integer.parseInt(raw);
             } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("--limit must be a number, got: " + raw);
+                throw new IllegalArgumentException(option + " must be a number, got: " + raw);
             }
             if (value <= 0) {
-                throw new IllegalArgumentException("--limit must be greater than zero.");
+                throw new IllegalArgumentException(option + " must be greater than zero.");
             }
             return value;
         }

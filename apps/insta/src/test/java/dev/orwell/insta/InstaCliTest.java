@@ -1,5 +1,6 @@
 package dev.orwell.insta;
 
+import dev.orwell.insta.instagram.ConnectionType;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -63,6 +64,45 @@ class InstaCliTest {
                 new String[]{"profile", "nasa", "--limit", "50"}))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("profile");
+    }
+
+    /** It starts from the database, so it names no account, and it reads both lists by default. */
+    @Test
+    void parsesASyncOfEveryKnownAccount() {
+        InstaCli.Arguments arguments = InstaCli.Arguments.parse(
+                new String[]{"sync-all", "--max-accounts", "50"});
+
+        assertThat(arguments.command()).isEqualTo(InstaCli.Command.SYNC_ALL);
+        assertThat(arguments.username()).isNull();
+        assertThat(arguments.maxAccounts()).isEqualTo(50);
+        assertThat(arguments.directions())
+                .containsExactly(ConnectionType.FOLLOWERS, ConnectionType.FOLLOWING);
+    }
+
+    /** A cron line written before following walks existed must not start paying for them. */
+    @Test
+    void keepsPlainSyncToFollowersUnlessAskedForMore() {
+        assertThat(InstaCli.Arguments.parse(new String[]{"sync", "nasa"}).directions())
+                .containsExactly(ConnectionType.FOLLOWERS);
+        assertThat(InstaCli.Arguments.parse(new String[]{"sync", "nasa", "--both"}).directions())
+                .containsExactly(ConnectionType.FOLLOWERS, ConnectionType.FOLLOWING);
+        assertThat(InstaCli.Arguments.parse(new String[]{"sync-all", "--following"}).directions())
+                .containsExactly(ConnectionType.FOLLOWING);
+    }
+
+    @Test
+    void refusesOptionsSyncAllCannotHonour() {
+        assertThatThrownBy(() -> InstaCli.Arguments.parse(new String[]{"sync-all", "--all"}))
+                .hasMessageContaining("always walks the whole list");
+        assertThatThrownBy(() -> InstaCli.Arguments.parse(
+                new String[]{"sync", "nasa", "--max-accounts", "5"}))
+                .hasMessageContaining("only applies to 'sync-all'");
+        assertThatThrownBy(() -> InstaCli.Arguments.parse(
+                new String[]{"sync-all", "--max-accounts", "0"}))
+                .hasMessageContaining("--max-accounts must be greater than zero");
+        assertThatThrownBy(() -> InstaCli.Arguments.parse(
+                new String[]{"followers", "nasa", "--both"}))
+                .hasMessageContaining("only apply to");
     }
 
     @Test
